@@ -1,88 +1,85 @@
-# Metodología de Web Scraping Robusto de Noticias (Google News)
+# Cómo extraemos las noticias de Google News
 
-Esta subcarpeta contiene la implementación del pipeline de recolección automatizada del corpus de prensa para las 19 localidades urbanas de Bogotá durante el periodo **2022–2025**, evolucionado a partir de la metodología de investigación desarrollada en *Perception-and-legitimacy*.
+En esta carpeta está el código para descargar las noticias de seguridad en las 19 localidades urbanas de Bogotá entre 2022 y 2025. 
 
----
-
-## 1. Fundamentación Técnica: ¿Por qué Google News SERP y no solo RSS?
-
-Las fuentes públicas RSS de Google News ofrecen únicamente una ventana temporal reciente (habitualmente entre 30 y 60 días hacia atrás). Dado que este proyecto requiere reconstruir una serie longitudinal de 4 años calendario completos (**01/01/2022 al 31/12/2025**), es indispensable consultar el motor histórico de Google News (*Search Engine Results Page* - SERP) bajo el parámetro especializado `tbm=nws` y el rango de fechas personalizado `tbs=cdr:1,cd_min:...,cd_max:...`.
+El método viene de la experiencia del repositorio *Perception-and-legitimacy*, pero le metimos varias mejoras para que el proceso no se caiga a mitad de camino y no tengamos que volver a empezar si se interrumpe la conexión.
 
 ---
 
-## 2. Diagrama de la Metodología de Scraping
+## 1. ¿Por qué buscar en la web de Google Noticias y no solo en el feed RSS?
+
+El feed RSS de Google News solo guarda noticias de las últimas semanas (generalmente 30 a 60 días). Como nuestro análisis abarca 4 años completos (**desde enero de 2022 hasta diciembre de 2025**), necesitamos buscar directamente en el portal web de Google Noticias (`tbm=nws`) usando el filtro de fechas personalizadas.
+
+---
+
+## 2. Diagrama del flujo de scraping
 
 ```mermaid
 flowchart TD
-    A["1. Formulación Booleana Estricta<br/>(+seguridad +Bogotá +localidad +hurtos +LOCALIDAD)"] --> B["2. Chunking Temporal Mensual<br/>(Bloques MM/DD/YYYY: 2022 a 2025)"]
-    B --> C{"3. Verificación de Checkpoint<br/>¿Existe chunk en data/raw/noticias/?"}
-    C -- Sí --> D["Omitir y continuar al siguiente mes<br/>(Sin peticiones redundantes)"]
-    C -- No --> E["4. Navegación con RSelenium<br/>(Chrome con flags de evasión)"]
-    E --> F["5. Aceptación de Cookies y<br/>Selectores CSS en cascada"]
-    F --> G["6. Extracción SERP Fase 1<br/>(Titular, medio, URL, fecha, resumen)"]
-    G --> H["7. Extracción de Cuerpo Fase 2<br/>(httr GET timeout 5s + rvest)"]
-    H --> I{"¿Éxito HTTP 200 y párrafos?"}
-    I -- Sí --> J["Almacenar texto completo"]
-    I -- No / Paywall --> K["Fallback automático:<br/>Conservar texto del Resumen"]
-    J & K --> L["8. Guardar Checkpoint Parquet<br/>data/raw/noticias/chunk_*.parquet"]
-    L --> M["9. Consolidación y Filtro Territorial<br/>noticias_google_news_consolidado.parquet"]
+    A["1. Búsqueda con operador +<br/>(+seguridad +Bogotá +localidad +hurtos +LOCALIDAD)"] --> B["2. Búsqueda mes por mes<br/>(Bloques MM/DD/YYYY: 2022 a 2025)"]
+    B --> C{"3. ¿Ya descargamos este mes?<br/>(Revisar data/raw/noticias/)"}
+    C -- Sí --> D["Saltar mes<br/>(No gastamos tiempo ni peticiones)"]
+    C -- No --> E["4. Abrir Chrome con RSelenium<br/>(Con pausas y sin marcas de bot)"]
+    E --> F["5. Aceptar cookies de Google<br/>y leer resultados"]
+    F --> G["6. Fase 1: guardar titular,<br/>medio, fecha, enlace y resumen"]
+    G --> H["7. Fase 2: intentar leer la<br/>noticia completa (timeout 5s)"]
+    H --> I{"¿Pudimos leer los párrafos?"}
+    I -- Sí --> J["Guardar texto completo"]
+    I -- No o muro de pago --> K["Plan de respaldo:<br/>usar el resumen que dio Google"]
+    J & K --> L["8. Guardar lote del mes en Parquet<br/>data/raw/noticias/chunk_*.parquet"]
+    L --> M["9. Unir todo y filtrar por localidad<br/>noticias_google_news_consolidado.parquet"]
 ```
 
 ---
 
-## 3. Pilares Metodológicos en Detalle
+## 3. Los 6 trucos para que el scraping funcione bien
 
-### 3.1 Consultas Booleanas con Operador Estricto (`+`)
-Google News aplica por defecto expansiones semánticas y sinónimos automáticos, lo que suele desviar los resultados hacia otras ciudades (ej. Medellín, Cali) o hacia delitos diferentes a hurtos. Para forzar un **AND Booleano estricto**:
-* Se antepone el operador `+` a cada término temático: `+seguridad +Bogotá +localidad +hurtos`.
-* Se aplica una función que descompone el nombre de cada localidad y antepone `+` a cada una de sus palabras (ej. `+ANTONIO +NARIÑO`, `+BARRIOS +UNIDOS`, `+CIUDAD +BOLÍVAR`).
-* **Resultado:** Google restringe obligatoriamente los resultados a artículos que contengan explícitamente todas las palabras clave y el nombre territorial de la localidad. Se excluye la localidad rural de Sumapaz.
+### 1. El truco del operador `+` (búsqueda estricta)
+Google suele cambiar palabras por sinónimos o mostrar noticias de otras ciudades. Si buscamos simplemente `hurto Kennedy`, a veces aparecen noticias de robos en Medellín o noticias políticas de la localidad. 
 
-### 3.2 Partición Temporal Mensual (*Date Chunking*)
-Google Search impone un límite de truncamiento de ~300 resultados (30 páginas de 10 noticias) por consulta si se solicita un rango muy amplio. Si se consultara de golpe el periodo 2022–2025, se perdería más del 80% del archivo de noticias.  
-* **Solución:** El script divide el intervalo en **bloques mensuales exactos** (48 meses por localidad = 912 ventanas de consulta).
-* **Formato de fecha:** Google requiere el formato estadounidense `MM/DD/YYYY` en el parámetro `cd_min` y `cd_max`.
+Para obligar a Google a que la noticia hable exactamente de seguridad en esa localidad de Bogotá, le ponemos un `+` a cada palabra obligatoria:
+* Base de búsqueda: `+seguridad +Bogotá +localidad +hurtos`
+* Localidad con más de una palabra: se separa con un `+` en cada término (por ejemplo: `+ANTONIO +NARIÑO`, `+BARRIOS +UNIDOS`, `+CIUDAD +BOLÍVAR`).
+* Esto fuerza a Google a un **AND estricto**: solo devuelve páginas que contengan todas esas palabras. Excluimos la localidad rural de Sumapaz.
 
-### 3.3 Checkpointing Incremental en Disco (Persistencia a Prueba de Fallos)
-Los procesos de web scraping sobre miles de consultas están expuestos a cortes de red, bloqueos temporales de IP o reinicios del sistema:
-* Cada mes procesado para una localidad se guarda inmediatamente en disco como un archivo particionado Apache Parquet:
+### 2. Buscar mes por mes (chunking temporal)
+Si le pides a Google cuatro años de golpe, solo te deja ver las primeras 30 páginas (unas 300 noticias) y oculta el resto. Al dividir los 4 años en **bloques mensuales** (enero 2022, febrero 2022, etc.), logramos extraer muchas más noticias y no dejamos huecos en la serie. Además, convertimos las fechas al formato que Google exige: `MM/DD/YYYY`.
+
+### 3. Guardar por pedazos (checkpointing para no perder avance)
+Hacer scraping sobre miles de consultas toma varias horas. Si se cae el internet o salta un bloqueo en el mes 20, no queremos perder lo que ya descargamos.
+* Cada mes de cada localidad se guarda de inmediato en disco:
   ```text
   data/raw/noticias/chunk_{localidad}_{YYYY_MM}.parquet
   ```
-* Al arrancar o relanzar el script, este comprueba primero `if (file.exists(archivo_chunk)) next`. Si el archivo ya existe, **lo salta de inmediato sin abrir la página ni consumir peticiones**.
-* Esto permite interrumpir el proceso en cualquier momento y reanudarlo exactamente donde quedó, sin duplicar peticiones ni perder el trabajo realizado.
+* Cuando vuelves a correr el script, este primero revisa si el archivo de ese mes ya existe. Si ya está listo, se lo salta y continúa con el siguiente. Así puedes parar y continuar el proceso cuando quieras.
 
-### 3.4 Antidetección y Gestión de Bloqueos (Selenium)
-* **Banderas de evasión:** Se inicializa Chrome con `--disable-blink-features=AutomationControlled` para evitar que Google detecte el flag de WebDriver automatizado.
-* **Consentimiento de Cookies:** Hace clic programático automático sobre `button#L2AGLb` o botones con etiqueta "Acepto" para desbloquear la vista SERP.
-* **Pausas aleatorias:** Tiempos de espera variables (`runif(1, 2.0, 4.0)` segundos) que simulan la interacción humana.
-* **Control de CAPTCHA:** Si el HTML contiene patrones como `unusual traffic` o `recaptcha`, emite una alerta acústica/mensaje, realiza una pausa de 30 segundos para permitir la resolución manual en el navegador y retoma la navegación automáticamente.
+### 4. Evitar que nos bloqueen (Selenium)
+* Le quitamos a Chrome las etiquetas automáticas de navegador controlado (`--disable-blink-features=AutomationControlled`).
+* Acepta automáticamente la ventana de cookies de Google para que no tape los resultados.
+* Mete pausas aleatorias de 2 a 4 segundos entre consultas para no saturar al buscador.
+* Si Google pide resolver un CAPTCHA, el script te avisa con un mensaje y pausa 30 segundos para que lo resuelvas a mano en el navegador.
 
-### 3.5 Extracción de Texto en Dos Fases con Fallback
-1. **Fase 1 (Metadatos y Resumen):** Se capturan título, enlace, medio de comunicación, fecha visible y el snippet de resumen disponible directamente en la SERP de Google News.
-2. **Fase 2 (Cuerpo del Artículo):** Para cada enlace obtenido, se realiza una petición HTTP (`httr::GET`) con cabecera de navegador y un timeout estricto de **5 segundos** para leer los párrafos (`<p>`).
-3. **Mecanismo de Fallback:** Si el portal externo tiene muro de pago (*paywall*), requiere suscripción, devuelve error 403/404 o tarda más de 5 segundos, el script asigna automáticamente el **`resumen`** de Google News como cuerpo de la noticia. De esta manera, **ninguna noticia se descarta** y el módulo de `sentometrics` siempre cuenta con texto analizable.
+### 5. Descarga en dos fases y plan de respaldo (fallback)
+1. **Fase 1:** Guardamos de una vez el titular, la fecha, el enlace y el resumen que Google muestra en la página de resultados.
+2. **Fase 2:** Intentamos entrar al enlace de la noticia para leer los párrafos completos (`<p>`) con un tiempo límite corto de 5 segundos.
+3. **Plan de respaldo:** Muchos periódicos tienen muro de pago (paywall) o bloquean accesos automáticos. Si la página no abre o pide suscripción, el script no bota la noticia: guarda el resumen que nos dio Google. Así nos aseguramos de que cada noticia siempre tenga texto para el análisis de sentimiento.
 
-### 3.6 Validación Territorial Estricta y Desduplicación
-Al finalizar los checkpoints, la función de consolidación:
-* Une todos los micro-archivos `.parquet`.
-* Elimina noticias duplicadas mediante la URL (`enlace`).
-* Realiza un filtrado mediante expresiones regulares asegurando que el nombre de la localidad esté efectivamente mencionado en el titular, resumen o cuerpo.
-* Guarda el resultado en `data/raw/noticias_google_news_consolidado.parquet`.
+### 6. Filtro final de localidad
+Cuando termina de descargar todos los meses, el script une todos los pedazos, quita noticias repetidas y comprueba que el nombre de la localidad realmente aparezca en el texto. El resultado consolidado se guarda en `data/raw/noticias_google_news_consolidado.parquet`.
 
 ---
 
-## 4. Instrucciones de Uso
+## 4. Cómo correr el script
 
-Abra RStudio en la raíz del proyecto y ejecute:
+Abre RStudio y corre estos comandos en la consola:
 
 ```r
-# 1. Cargar el script de scraping
+# 1. Cargar las funciones de scraping
 source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
 
-# 2. Iniciar la recolección automática por meses y localidades
+# 2. Iniciar la descarga por meses y localidades (avanza con checkpoints)
 ejecutar_scraping_localidades()
 
-# 3. Consolidar los chunks de data/raw/noticias/ en una única base validada
+# 3. Consolidar todos los lotes en un solo archivo Parquet
 noticias_df <- consolidar_noticias_scraping()
 ```

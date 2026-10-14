@@ -1,11 +1,11 @@
 # Hurtos y Sentimiento Mediático en Bogotá (2022–2025)
 
 **Trabajo Final — Taller de Programación en R (2026-02)**  
-*Maestría en Economía Aplicada (MECA) — Facultad de Economía, Universidad de los Andes*  
+*Maestría en Economía Aplicada (MECA) — Universidad de los Andes*  
 
 ---
 
-## Integrantes del Grupo de Investigación
+## Integrantes del Grupo
 
 | Nombre Completo | Código Estudiantil |
 | :--- | :---: |
@@ -18,116 +18,115 @@
 
 ---
 
-## 1. Resumen y Pregunta de Investigación
+## 1. ¿De qué se trata este proyecto?
 
-¿Cómo se relacionan los niveles de hurtos registrados y el tono de las noticias sobre inseguridad en las 19 localidades urbanas de Bogotá durante el periodo 2022–2025?  
+Queremos responder una pregunta concreta: **¿en las localidades de Bogotá donde más se registran hurtos, las noticias sobre inseguridad son más frecuentes y negativas?**
 
-Los delitos contra el patrimonio impactan directamente la calidad de vida, la inversión comercial y la movilidad ciudadana. No obstante, la intensidad y el tono del cubrimiento mediático no siempre reflejan fielmente la criminalidad real denunciada ante las autoridades. Este proyecto contrasta de manera empírica y reproducible los registros oficiales distritales con el sentimiento de la prensa digital:
+Para investigarlo, cruzamos los registros oficiales de delitos de la Secretaría de Seguridad (hurtos a personas, residencias y motos) con las noticias publicadas en prensa entre 2022 y 2025. Analizamos el tono de las noticias con procesamiento de lenguaje natural (`sentometrics`) y agrupamos las localidades con perfiles similares usando $K$-means.
+
+El objetivo no es probar causalidad ni asumir que las noticias reflejan la opinión de la ciudadanía, sino comparar los datos de las denuncias oficiales con la historia que cuentan los medios de comunicación.
 
 ```mermaid
 flowchart LR
-    A["Delitos Oficiales<br/>(SDSCJ / SIEDCO)"] & B["Población Proyectada<br/>(SDS)"] --> C["Tasas de Hurto por<br/>100k hab. (2022–2025)"]
+    A["Delitos Oficiales<br/>(SDSCJ / SIEDCO)"] & B["Población Proyectada<br/>(Secretaría de Salud)"] --> C["Tasas de Hurto por<br/>100k hab. (2022–2025)"]
     C --> D["Perfiles Territoriales<br/>(K-means: K = 2–4)"]
-    E["Google News SERP<br/>(RSelenium + Checkpointing)"] --> F["Corpus y Polaridad<br/>(sentometrics + Léxico NRC)"]
-    D & F --> G["Tablero Dinámico Interactivo<br/>(Shiny App en app/)"]
-    D & F --> H["Informes Académicos Quarto<br/>(notebook/ en PDF/HTML)"]
+    E["Google Noticias<br/>(Scraping + Checkpoints)"] --> F["Tono de las Noticias<br/>(sentometrics + Léxico NRC)"]
+    D & F --> G["Tablero Interactivo<br/>(Shiny App en app/)"]
+    D & F --> H["Informe Académico<br/>(notebook/ en PDF/HTML)"]
 ```
 
-* **Hipótesis exploratoria:** Las localidades con mayores tasas registradas de hurto enfrentan una cobertura noticiosa significativamente más recurrente y desfavorable (polaridad negativa).
-* **Alcance:** Estudio descriptivo y analítico; no atribuye causalidad ni confunde cobertura periodística con percepción de la ciudadanía.
-
 ---
 
-## 2. Mapa de Navegación: ¿A qué Documentación Dirigirse?
+## 2. Dónde encontrar cada cosa
 
-Para facilitar la auditoría y consulta en detalle, cada componente cuenta con su documentación especializada:
+Si necesitas revisar los detalles de alguna parte del proyecto, aquí tienes los accesos directos:
 
-| Si necesitas consultar... | Documento / README a consultar | Descripción clave |
+| Si buscas información sobre... | Consulta este archivo | Qué contiene |
 | :--- | :--- | :--- |
-| **Propuesta académica y marco teórico** | [**`docs/propuesta_proyecto.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/propuesta_proyecto.md) | Justificación, bases de datos, llaves de enlace, método `sentometrics`, clustering y cronograma. |
-| **Enunciados y rúbricas del curso** | [**`docs/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/README.md) | Índice con [Semana 11](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_primera_entrega.md) (límites de palabras y páginas) y [Semana 16](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_entrega_final_y_presentacion.md) (presentación e informe final). |
-| **Estándares de código y buenas prácticas** | [**`docs/estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/estandares_programacion.md) | Reglas MECA: Document Outline (`----`), `{conflicted}`, `{here}`, pipe `|>`, tres capas de comentarios y `stopifnot`. |
-| **Pipeline de scripts y orquestación** | [**`scripts/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/README.md) | Flujo del pipeline general, orquestador `master.R` y coordinación de módulos. |
-| **Ingesta de Datos Abiertos (SoQL)** | [**`scripts/01_ingesta/01_datos_abiertos/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/01_datos_abiertos/README.md) | **Enlaces directos a las tablas del portal web**, metodología SoQL en Socrata y serialización Parquet. |
-| **Metodología de Scraping de Noticias** | [**`scripts/01_ingesta/02_scraping_noticias/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/02_scraping_noticias/README.md) | **Metodología detallada de web scraping**: búsquedas booleanas (`+`), *chunking* mensual, checkpoints y antidetección. |
-| **Detalle de microdatos y fuentes** | [**`data/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/data/README.md) | Diccionario de datos crudos (`data/raw/`), bases procesadas en Parquet y particionado de noticias. |
-| **Cuadernos Quarto y compilación PDF** | [**`notebook/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/notebook/README.md) | Instrucciones para renderizar `01_entrega_1_propuesta_eda.qmd` cumpliendo el límite de 3 páginas. |
-| **Tablero interactivo Shiny** | [**`app/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/app/README.md) | Arquitectura UI/Server con `bslib`, mapas y series temporales dinámicas. |
+| **Propuesta y metodología** | [**`docs/propuesta_proyecto.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/propuesta_proyecto.md) | Pregunta, hipótesis, fuentes, variables, sentometrics y plan de trabajo. |
+| **Enunciados y rúbricas del curso** | [**`docs/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/README.md) | Reglas oficiales y criterios de calificación de la [Semana 11](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_primera_entrega.md) y la [Semana 16](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_entrega_final_y_presentacion.md). |
+| **Reglas de código del grupo** | [**`docs/estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/estandares_programacion.md) | Guía de estilo MECA: Outline `----`, rutas con `{here}`, paquetes y control de errores. |
+| **Pipeline y scripts de R** | [**`scripts/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/README.md) | Orden en que corren los scripts y cómo funciona el orquestador `master.R`. |
+| **Tablas de datos abiertos** | [**`scripts/01_ingesta/01_datos_abiertos/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/01_datos_abiertos/README.md) | **Enlaces directos a las páginas web de los datos oficiales** y consultas con SQL. |
+| **Cómo extraemos las noticias** | [**`scripts/01_ingesta/02_scraping_noticias/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/02_scraping_noticias/README.md) | **Explicación paso a paso del scraping**: búsquedas con `+`, búsqueda mes a mes y cómo evitamos bloqueos. |
+| **Estructura de las bases de datos** | [**`data/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/data/README.md) | Qué hay en `data/raw/` y en `data/processed/`, y por qué usamos formato Parquet. |
+| **Informe Quarto en PDF** | [**`notebook/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/notebook/README.md) | Cómo compilar el documento de 3 páginas de la primera entrega. |
+| **Aplicación interactiva Shiny** | [**`app/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/app/README.md) | Cómo correr el tablero interactivo en tu computador. |
 
 ---
 
-## 3. Estructura Maestra del Repositorio
+## 3. Estructura de las carpetas
 
 ```text
 Repo_Entrega_Final_Taller_R/
-├── Repo_Entrega_Final_Taller_R.Rproj         # Proyecto RStudio (rutas relativas con here)
-├── README.md                                 # Guía maestra del repositorio y navegación
-├── .gitignore                                # Exclusión de temporales, RStudio y datos pesados
+├── Repo_Entrega_Final_Taller_R.Rproj         # Proyecto de RStudio
+├── README.md                                 # Esta guía principal
+├── .gitignore                                # Archivos que Git no debe subir (temporales y datos pesados)
 │
-├── docs/                                     # Documentación oficial y académica
-│   ├── README.md                             # Índice central de documentos
-│   ├── propuesta_proyecto.md                 # Propuesta metodológica del Grupo
-│   ├── estandares_programacion.md            # Guía de estilo Tidyverse y auditoría MECA
-│   ├── enunciado_primera_entrega.md          # Pautas oficiales y rúbrica (Semana 11)
-│   └── enunciado_entrega_final_y_presentacion.md # Pautas exposición e informe (Semana 16)
+├── docs/                                     # Documentos del proyecto
+│   ├── README.md                             # Índice de documentación
+│   ├── propuesta_proyecto.md                 # Propuesta metodológica completa
+│   ├── estandares_programacion.md            # Guía de estilo de código del equipo
+│   ├── enunciado_primera_entrega.md          # Instrucciones y rúbrica de la Semana 11
+│   └── enunciado_entrega_final_y_presentacion.md # Instrucciones de la presentación y entrega final
 │
-├── data/                                     # Gestión de datos reproducibles
-│   ├── README.md                             # Diccionario de fuentes, esquemas y formatos
-│   ├── raw/                                  # Descargas crudas (APIs Socrata, GeoJSON)
-│   │   ├── noticias/                         # Particionado mensual de noticias (.parquet)
-│   │   ├── delitos_alto_impacto_raw.parquet  # Hurtos SDSCJ / SIEDCO
-│   │   ├── poblacion_localidades_raw.parquet # Proyecciones demográficas SDS
-│   │   └── localidades_bogota_raw.geojson    # Geometrías SDP
-│   └── processed/                            # Bases consolidadas (.parquet / .rds)
+├── data/                                     # Bases de datos
+│   ├── README.md                             # Explicación de los datos y formatos
+│   ├── raw/                                  # Datos tal como bajan de las fuentes oficiales
+│   │   ├── noticias/                         # Noticias guardadas mes a mes (.parquet)
+│   │   ├── delitos_alto_impacto_raw.parquet  # Denuncias de hurtos (SDSCJ)
+│   │   ├── poblacion_localidades_raw.parquet # Habitantes por localidad (SDS)
+│   │   └── localidades_bogota_raw.geojson    # Mapas de las localidades (SDP)
+│   └── processed/                            # Bases limpias listas para analizar (.parquet / .rds)
 │
-├── output/                                   # Artefactos generados por el pipeline
-│   ├── tables/                               # Tablas resumen y de clustering (.csv, .tex)
-│   └── figures/                              # Figuras de alta resolución (.png, .pdf)
+├── output/                                   # Resultados generados
+│   ├── tables/                               # Tablas resumen (.csv, .tex)
+│   └── figures/                              # Gráficos e imágenes (.png, .pdf)
 │
-├── scripts/                                  # Pipeline modular de procesamiento en R
-│   ├── README.md                             # Guía de ejecución del pipeline y dependencias
-│   ├── master.R                              # Script orquestador general
-│   ├── 01_descarga_datos.R                   # Coordinador del módulo de ingesta
-│   ├── 01_ingesta/                           # Subcarpetas temáticas de ingesta
-│   │   ├── 01_datos_abiertos/                # Ingesta de datos abiertos vía SoQL
-│   │   │   ├── README.md                     # Metodología y enlaces a tablas de Datos Abiertos
-│   │   │   └── datos_abiertos_bogota.R       # Script de consulta y exportación Parquet
-│   │   └── 02_scraping_noticias/             # Web scraping de Google News
-│   │       ├── README.md                     # Metodología exhaustiva de scraping y evasión
-│   │       └── scraping_google_news.R        # Script con RSelenium y checkpointing
-│   ├── 02_limpieza_indicadores.R             # Homologación territorial y cálculo de tasas
-│   ├── 03_analisis_sentometrics.R            # Corpus y análisis de sentimiento textual
-│   ├── 04_clustering_kmeans.R                # Perfiles no supervisados de criminalidad
-│   └── 05_export_insumos_shiny.R             # Consolidación de datos procesados para Shiny
+├── scripts/                                  # Código en R
+│   ├── README.md                             # Explicación del pipeline
+│   ├── master.R                              # Script que corre todo el proyecto en orden
+│   ├── 01_descarga_datos.R                   # Orquestador de descargas
+│   ├── 01_ingesta/                           # Módulos de descarga
+│   │   ├── 01_datos_abiertos/                # Consultas a la API de la Alcaldía
+│   │   │   ├── README.md                     # Enlaces web a las tablas y explicación
+│   │   │   └── datos_abiertos_bogota.R       # Descarga de delitos, población y mapas
+│   │   └── 02_scraping_noticias/             # Extracción de noticias
+│   │       ├── README.md                     # Metodología detallada de scraping
+│   │       └── scraping_google_news.R        # Script con Selenium y guardado por lotes
+│   ├── 02_limpieza_indicadores.R             # Cálculo de tasas de hurto por habitante
+│   ├── 03_analisis_sentometrics.R            # Análisis de tono de las noticias
+│   ├── 04_clustering_kmeans.R                # Agrupamiento de localidades por nivel de hurto
+│   └── 05_export_insumos_shiny.R             # Prepara los datos que consume la app Shiny
 │
-├── notebook/                                 # Cuadernos académicos Quarto
-│   ├── README.md                             # Pautas de edición y compilación Quarto
-│   └── 01_entrega_1_propuesta_eda.qmd        # Primera Entrega (propuesta y EDA, máx. 3 págs)
+├── notebook/                                 # Documentos Quarto
+│   ├── README.md                             # Instrucciones para compilar
+│   └── 01_entrega_1_propuesta_eda.qmd        # Primera Entrega (propuesta y EDA, máx. 3 páginas)
 │
-└── app/                                      # Aplicación interactiva Shiny
-    ├── README.md                             # Documentación del tablero interactivo
-    ├── app.R                                 # Código principal de la aplicación (UI + Server)
-    └── www/                                  # Recursos estáticos web (CSS, logos)
+└── app/                                      # Aplicación Shiny
+    ├── README.md                             # Cómo funciona el tablero
+    ├── app.R                                 # Código de la aplicación (interfaz y servidor)
+    └── www/                                  # Estilos visuales e imágenes
 ```
 
 ---
 
-## 4. Hitos Evaluativos del Curso (Total: 40%)
+## 4. Entregas del curso (40% de la nota)
 
-| Momento | Actividad | Ponderación | Entregables Requeridos |
+| Cuándo | Qué se entrega | Peso | Requisitos clave |
 | :--- | :--- | :---: | :--- |
-| **Semana 11** | **Primera Entrega: Propuesta y EDA** | **10%** | Documento Quarto (PDF máx. 3 páginas) con pregunta ($\le 150$ palabras), motivación ($\le 150$), datos ($\le 150$), metodología ($\le 150$) y EDA/storytelling ($\le 700$ palabras con al menos 2 gráficos reales autocontenidos). |
-| **Por asignar** | **Presentaciones de Avance** | **15%** | Exposición de 20 minutos con diapositiva estratégica de resumen, estadísticas descriptivas, análisis y metodología. Envío de presentación 24h antes y co-evaluación (5 min). |
-| **Semana 16** | **Entrega Final: Informe + Script + Shiny** | **15%** | Documento académico (máx. 5 páginas + anexo), script reproducible de principio a fin y tablero interactivo ejecutable `ShinyApp`. |
+| **Semana 11** | **Primera Entrega: Propuesta y EDA** | **10%** | Documento Quarto (PDF de máximo 3 páginas) con pregunta, motivación, descripción de datos, plan de análisis y estadísticas con al menos 2 gráficos reales. |
+| **Por definir** | **Presentación del avance** | **15%** | Exposición de 20 minutos en clase con diapositiva de resumen, descriptivos y metodología. Se envían las diapositivas 24 horas antes. |
+| **Semana 16** | **Entrega Final: Informe + Script + Shiny** | **15%** | Documento académico (máx. 5 páginas + anexo), script reproducible de principio a fin y tablero interactivo en Shiny. |
 
 ---
 
-## 5. Inicio Rápido y Reproducibilidad (< 5 minutos)
+## 5. Cómo correr el proyecto en tu computador (< 5 minutos)
 
-### Paso 1: Clonar y Abrir el Proyecto
-Abrir el archivo [`Repo_Entrega_Final_Taller_R.Rproj`](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/Repo_Entrega_Final_Taller_R.Rproj) en RStudio para establecer la raíz del proyecto.
+### Paso 1: Abrir el proyecto
+Abre el archivo [`Repo_Entrega_Final_Taller_R.Rproj`](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/Repo_Entrega_Final_Taller_R.Rproj) en RStudio. Así R sabrá automáticamente dónde está la raíz del proyecto sin necesidad de usar `setwd()`.
 
-### Paso 2: Instalar Dependencias
+### Paso 2: Instalar paquetes necesarios
 ```r
 paquetes <- c(
   "here", "conflicted", "arrow", "readr", "dplyr", "tidyr", "stringr",
@@ -137,17 +136,17 @@ paquetes <- c(
 install.packages(setdiff(paquetes, rownames(installed.packages())))
 ```
 
-### Paso 3: Ejecutar el Pipeline Completo
+### Paso 3: Correr el pipeline de datos
 ```r
 source(here::here("scripts", "master.R"))
 ```
 
-### Paso 4: Compilar el Informe Quarto (Entrega 1)
+### Paso 4: Compilar el informe en PDF (Entrega 1)
 ```bash
 quarto render notebook/01_entrega_1_propuesta_eda.qmd --to pdf
 ```
 
-### Paso 5: Lanzar el Tablero Interactivo Shiny
+### Paso 5: Abrir el tablero interactivo de Shiny
 ```r
 shiny::runApp(here::here("app"))
 ```

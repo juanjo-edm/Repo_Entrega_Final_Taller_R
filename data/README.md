@@ -1,41 +1,41 @@
-# Estructura y Gestión de Datos
+# Organización de los datos
 
-Esta carpeta organiza los datos del proyecto garantizando trazabilidad desde las fuentes públicas originales hasta los artefactos analíticos finales.
+En esta carpeta guardamos los datos del proyecto, separando claramente lo que bajamos de internet de lo que nosotros mismos procesamos y limpiamos.
 
 ---
 
-## 1. Directorios
+## 1. Estructura de las carpetas de datos
 
 ```text
 data/
-├── raw/                              # Microdatos crudos descargados de fuentes oficiales
-│   ├── delitos_alto_impacto_raw.parquet # Hurtos extraídos vía API Socrata (SDSCJ)
-│   ├── poblacion_localidades_raw.parquet# Proyecciones demográficas 2005-2035 (SDS)
-│   ├── localidades_bogota_raw.geojson  # Cartografía oficial de localidades (SDP)
-│   ├── noticias_google_news_consolidado.parquet # Base de noticias validadas
-│   └── noticias/                     # Particionado mensual de scraping con checkpointing
-│       └── chunk_*.parquet           # Micro-lotes mensuales por localidad
-└── processed/                        # Datos limpios y normalizados para modelado
-    ├── tasas_hurtos_localidad.parquet# Tasas delictivas por 100k hab. (2022-2025)
-    ├── sentimiento_noticias.parquet  # Puntuaciones de polaridad sentometrics
-    ├── clusters_localidades.parquet  # Perfiles no supervisados K-means
-    └── datos_consolidados_shiny.rds  # Dataset integrado consumido por Shiny
+├── raw/                              # Datos tal como bajan de las fuentes oficiales (sin tocar)
+│   ├── delitos_alto_impacto_raw.parquet # Hurtos registrados vía API de Socrata (SDSCJ)
+│   ├── poblacion_localidades_raw.parquet# Habitantes por localidad 2005-2035 (SDS)
+│   ├── localidades_bogota_raw.geojson  # Mapas y polígonos de las localidades (SDP)
+│   ├── noticias_google_news_consolidado.parquet # Base final de noticias validadas
+│   └── noticias/                     # Particionado de noticias guardadas mes por mes
+│       └── chunk_*.parquet           # Lotes mensuales por localidad
+└── processed/                        # Datos listos y normalizados para los modelos y gráficos
+    ├── tasas_hurtos_localidad.parquet# Tasas de hurto calculadas por cada 100.000 habitantes
+    ├── sentimiento_noticias.parquet  # Puntuaciones de sentimiento de sentometrics
+    ├── clusters_localidades.parquet  # Perfiles de inseguridad calculados con K-means
+    └── datos_consolidados_shiny.rds  # Archivo único listo para que la app Shiny lo lea
 ```
 
 ---
 
-## 2. Fuentes Oficiales
+## 2. Fuentes oficiales que usamos
 
-| Conjunto de Datos | Entidad Emisora | Acceso / Protocolo | Formato Local |
+| Conjunto de datos | Entidad que lo publica | Cómo lo obtenemos | Formato en que lo guardamos |
 | :--- | :--- | :--- | :--- |
-| **Delitos de Alto Impacto** | Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ / SIEDCO) | API Socrata SoQL / Datos Abiertos Bogotá | `.parquet` |
-| **Proyecciones de Población** | Secretaría Distrital de Salud (SDS) | Datos Abiertos Bogotá (Pirámide 2005–2035) | `.parquet` |
-| **Límites de Localidades** | Secretaría Distrital de Planeación (SDP) | Datos Abiertos Bogotá | `.geojson` / `.parquet` |
-| **Prensa sobre Inseguridad** | Google News | Web Scraping automatizado (`RSelenium`) | `.parquet` |
+| **Delitos de Alto Impacto** | Secretaría de Seguridad (SDSCJ / SIEDCO) | API de Socrata con filtros SQL | `.parquet` |
+| **Proyecciones de Población** | Secretaría de Salud (SDS) | Portal de Datos Abiertos de Bogotá | `.parquet` |
+| **Mapas de las Localidades** | Secretaría de Planeación (SDP) | Portal de Datos Abiertos de Bogotá | `.geojson` y `.parquet` |
+| **Noticias de Prensa** | Google Noticias | Web Scraping con Selenium | `.parquet` |
 
 ---
 
-## 3. Política de Versionamiento
-* Los archivos pesados o temporales de gran tamaño se encuentran excluidos en `.gitignore`.
-* Se preserva la estructura de carpetas vacías mediante archivos `.gitkeep`.
-* Toda base contenida en `data/processed/` es 100% reproducible ejecutando `scripts/master.R`.
+## 3. Manejo de archivos en Git
+* Los archivos muy pesados (mayores a 50MB) o temporales no se suben a Git para no saturar el repositorio. Están excluidos en `.gitignore`.
+* Mantenemos las carpetas visibles en Git usando archivos `.gitkeep`.
+* Si clonas el repositorio y quieres recrear todas las bases de `data/processed/`, solo tienes que correr `scripts/master.R`.
