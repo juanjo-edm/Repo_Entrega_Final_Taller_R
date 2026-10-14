@@ -7,14 +7,14 @@
 
 ## Integrantes del Grupo de Investigación
 
-| Nombre Completo | Código Estudiantil | Correo Institucional |
-| :--- | :---: | :---: |
-| **Gabriel Arturo Echeverry Castaño** | `201016705` | `ga.echeverryc@uniandes.edu.co` |
-| **Olga Lucía Ramírez Contreras** | `202624900` | `ol.ramirezc@uniandes.edu.co` |
-| **Sergio Alejandro López Valderrama** | `202111932` | `sa.lopezv1@uniandes.edu.co` |
-| **Juan Esteban Carvajal Cruz** | `202614312` | `je.carvajalc@uniandes.edu.co` |
-| **Miguelangel Palma** | `202621481` | `m.palma@uniandes.edu.co` |
-| **Juan José Echeverry** | `202616233` | `jj.echeverry@uniandes.edu.co` |
+| Nombre Completo | Código Estudiantil |
+| :--- | :---: |
+| **Gabriel Arturo Echeverry Castaño** | `201016705` |
+| **Olga Lucía Ramírez Contreras** | `202624900` |
+| **Sergio Alejandro López Valderrama** | `202111932` |
+| **Juan Esteban Carvajal Cruz** | `202614312` |
+| **Miguelangel Palma** | `202621481` |
+| **Juan José Echeverry** | `202616233` |
 
 ---
 
@@ -47,7 +47,9 @@ Para facilitar la auditoría y consulta en detalle, cada componente cuenta con s
 | **Propuesta académica y marco teórico** | [**`docs/propuesta_proyecto.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/propuesta_proyecto.md) | Justificación, bases de datos, llaves de enlace, método `sentometrics`, clustering y cronograma. |
 | **Enunciados y rúbricas del curso** | [**`docs/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/README.md) | Índice con [Semana 11](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_primera_entrega.md) (límites de palabras y páginas) y [Semana 16](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_entrega_final_y_presentacion.md) (presentación e informe final). |
 | **Estándares de código y buenas prácticas** | [**`docs/estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/estandares_programacion.md) | Reglas MECA: Document Outline (`----`), `{conflicted}`, `{here}`, pipe `|>`, tres capas de comentarios y `stopifnot`. |
-| **Pipeline de scripts y ejecución** | [**`scripts/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/README.md) | Diagrama de flujo del pipeline, orquestador `master.R` y subcarpeta `scripts/01_ingesta/`. |
+| **Pipeline de scripts y orquestación** | [**`scripts/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/README.md) | Flujo del pipeline general, orquestador `master.R` y coordinación de módulos. |
+| **Ingesta de Datos Abiertos (SoQL)** | [**`scripts/01_ingesta/01_datos_abiertos/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/01_datos_abiertos/README.md) | **Enlaces directos a las tablas del portal web**, metodología SoQL en Socrata y serialización Parquet. |
+| **Metodología de Scraping de Noticias** | [**`scripts/01_ingesta/02_scraping_noticias/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/02_scraping_noticias/README.md) | **Metodología detallada de web scraping**: búsquedas booleanas (`+`), *chunking* mensual, checkpoints y antidetección. |
 | **Detalle de microdatos y fuentes** | [**`data/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/data/README.md) | Diccionario de datos crudos (`data/raw/`), bases procesadas en Parquet y particionado de noticias. |
 | **Cuadernos Quarto y compilación PDF** | [**`notebook/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/notebook/README.md) | Instrucciones para renderizar `01_entrega_1_propuesta_eda.qmd` cumpliendo el límite de 3 páginas. |
 | **Tablero interactivo Shiny** | [**`app/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/app/README.md) | Arquitectura UI/Server con `bslib`, mapas y series temporales dinámicas. |
@@ -86,9 +88,13 @@ Repo_Entrega_Final_Taller_R/
 │   ├── README.md                             # Guía de ejecución del pipeline y dependencias
 │   ├── master.R                              # Script orquestador general
 │   ├── 01_descarga_datos.R                   # Coordinador del módulo de ingesta
-│   ├── 01_ingesta/                           # Subcarpeta modular de descarga y web scraping
-│   │   ├── datos_abiertos_bogota.R           # Consulta SoQL a API Socrata y exportación Parquet
-│   │   └── scraping_google_news.R            # Scraping robusto con RSelenium y checkpointing
+│   ├── 01_ingesta/                           # Subcarpetas temáticas de ingesta
+│   │   ├── 01_datos_abiertos/                # Ingesta de datos abiertos vía SoQL
+│   │   │   ├── README.md                     # Metodología y enlaces a tablas de Datos Abiertos
+│   │   │   └── datos_abiertos_bogota.R       # Script de consulta y exportación Parquet
+│   │   └── 02_scraping_noticias/             # Web scraping de Google News
+│   │       ├── README.md                     # Metodología exhaustiva de scraping y evasión
+│   │       └── scraping_google_news.R        # Script con RSelenium y checkpointing
 │   ├── 02_limpieza_indicadores.R             # Homologación territorial y cálculo de tasas
 │   ├── 03_analisis_sentometrics.R            # Corpus y análisis de sentimiento textual
 │   ├── 04_clustering_kmeans.R                # Perfiles no supervisados de criminalidad
