@@ -1,0 +1,30 @@
+# History and session files
+.Rhistory
+.RData
+.Ruserdata
+
+# RStudio files
+.Rproj.user/
+
+# Mac / OS files
+.DS_Store
+Thumbs.db
+
+# Quarto temporary and execution artifacts
+.quarto/
+*_cache/
+*_files/
+
+# Shiny deployment artifacts
+rsconnect/
+
+# Large raw datasets (>50MB) or heavy archives
+data/raw/*.zip
+data/raw/*.tar.gz
+data/raw/*.rar
+data/raw/*.7z
+*.large
+*.tar
+
+# Preserve directory structure
+!.gitkeep

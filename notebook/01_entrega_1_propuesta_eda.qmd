@@ -1,0 +1,150 @@
+---
+title: "Propuesta de Trabajo Final: Hurtos y Sentimiento Mediático en Bogotá"
+subtitle: "Primera Entrega (Semana 11) — Taller de Programación en R"
+author:
+  - "Gabriel Arturo Echeverry Castaño — 201016705"
+  - "Olga Lucía Ramírez Contreras — 202624900"
+  - "Sergio Alejandro López Valderrama — 202111932"
+  - "Juan Esteban Carvajal Cruz — 202614312"
+  - "Miguelangel Palma — 202621481"
+  - "Juan José Echeverry — 202616233"
+date: today
+format:
+  pdf:
+    documentclass: article
+    papersize: letter
+    geometry:
+      - top=20mm
+      - bottom=20mm
+      - left=20mm
+      - right=20mm
+    fontsize: 10pt
+    linestretch: 1.15
+    number-sections: true
+    toc: false
+    fig-pos: "H"
+  html:
+    theme: flatly
+    toc: true
+    number-sections: true
+    embed-resources: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup-entorno
+#| include: false
+
+# 1. Configuración Inicial Obligatoria ----
+rm(list = ls())
+options(scipen = 999)
+set.seed(20261014)
+
+# 1.1 Carga de librerías ----
+library(here)
+library(conflicted)
+library(arrow)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(sentometrics)
+
+# 1.2 Resolución explícita de conflictos ----
+conflict_prefer("filter", "dplyr", quiet = TRUE)
+conflict_prefer("lag",    "dplyr", quiet = TRUE)
+conflict_prefer("select", "dplyr", quiet = TRUE)
+
+# 1.3 Definición de rutas relativas con {here} ----
+ruta_datos_raw      <- here::here("data", "raw")
+ruta_datos_clean    <- here::here("data", "processed")
+ruta_salida_tablas  <- here::here("output", "tables")
+ruta_salida_figuras <- here::here("output", "figures")
+```
+
+# Pregunta de Investigación (Máximo 150 palabras)
+
+<!-- 
+Pautas del enunciado:
+- Plantear una pregunta de investigación (con una hipótesis a probar) económica y/o social clara.
+- Debe ser diferente y original.
+- Máximo 150 palabras.
+-->
+
+
+# Motivación (Máximo 150 palabras)
+
+<!-- 
+Pautas del enunciado:
+- Plantear por qué la pregunta es relevante desde el punto de vista económico y social.
+- Justificación sólida y directa con la pregunta problema.
+- Máximo 150 palabras.
+-->
+
+
+# Descripción de los Datos (Máximo 150 palabras)
+
+<!-- 
+Pautas del enunciado:
+- Fuente de los datos (SDSCJ, SDS, Google News RSS, SDP).
+- Unidad de observación de los datos (Localidad x Año / Noticia).
+- Variables relevantes para el análisis y tipos de variables.
+- Número de observaciones y formato de la base de datos (.csv, .parquet, .geojson).
+- Llaves de vinculación entre bases (código/nombre de localidad + año).
+- Máximo 150 palabras.
+-->
+
+
+# Plan General del Manejo de los Datos / Metodología (Máximo 150 palabras)
+
+<!-- 
+Pautas del enunciado:
+- Plan de trabajo general sobre manipulación (limpieza de caracteres, imputación, joins).
+- Bosquejo de herramientas analíticas (sentometrics, K-means, series temporales, tasas por 100k hab.).
+- Máximo 150 palabras.
+-->
+
+
+# Análisis Preliminar de Datos y Storytelling (Máximo 700 palabras)
+
+<!-- 
+Pautas del enunciado:
+1. Estadísticas descriptivas calculadas a partir de los datos reales (medias, medianas, desviaciones, proporciones, etc.).
+2. Incluir al menos dos (2) gráficos distintos y autocontenidos (título claro, ejes rotulados, unidades explícitas y leyendas).
+3. Construir una narrativa preliminar (storytelling) que conecte los hallazgos entre sí y con la hipótesis:
+   qué patrón o tensión revelan los datos y qué preguntas quedan abiertas para la entrega final.
+- Máximo 700 palabras en esta sección.
+-->
+
+```{r}
+#| label: tbl-descriptivas
+#| eval: false
+
+# [Placeholder] Código para generar tabla de estadísticas descriptivas calculadas
+```
+
+```{r}
+#| label: fig-grafico-1
+#| fig-cap: "Gráfico 1: [Título descriptivo autocontenido]"
+#| eval: false
+
+# [Placeholder] Código para el primer gráfico autocontenido
+```
+
+```{r}
+#| label: fig-grafico-2
+#| fig-cap: "Gráfico 2: [Título descriptivo autocontenido]"
+#| eval: false
+
+# [Placeholder] Código para el segundo gráfico autocontenido
+```
+
+
+# Referencias
+
+<!-- 
+Listado de fuentes oficiales, paquetes de R y referencias bibliográficas del proyecto.
+-->
