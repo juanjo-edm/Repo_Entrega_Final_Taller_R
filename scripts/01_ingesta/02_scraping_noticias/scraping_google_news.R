@@ -47,6 +47,7 @@ conflict_prefer("select", "dplyr", quiet = TRUE)
 ruta_datos_raw      <- here::here("data", "raw")
 ruta_noticias_raw   <- here::here("data", "raw", "noticias")
 ruta_salida_tablas  <- here::here("output", "tables")
+archivo_cobertura   <- here::here("data", "raw", "noticias", "cobertura_historica.json")
 
 if (!dir.exists(ruta_noticias_raw)) dir.create(ruta_noticias_raw, recursive = TRUE)
 
@@ -241,17 +242,29 @@ ejecutar_scraping_localidades <- function(headless = FALSE) {
     for (i_mes in seq_along(inicios_mes)) {
       dmin <- inicios_mes[i_mes]
       dmax <- fines_mes[i_mes]
-      
       nombre_limpio <- tolower(gsub("[^a-zA-Z0-9]", "_", loc))
       archivo_chunk <- file.path(
         ruta_noticias_raw,
         paste0("chunk_", nombre_limpio, "_", format(dmin, "%Y_%m"), ".parquet")
       )
+      mes_str <- format(dmin, "%Y-%m")
       
-      # Control de checkpointing: si ya existe el archivo particionado, se omite
+      # Control de checkpointing y cobertura histórica: si ya existe el mes, se omite
       if (file.exists(archivo_chunk)) {
-        message(paste0("  [Checkpoint] Omitiendo ", loc, " | ", format(dmin, "%Y-%m"), " (ya procesado)."))
+        message(paste0("  [Checkpoint] Omitiendo ", loc, " | ", mes_str, " (chunk ya procesado)."))
         next
+      }
+      
+      # Consultar si el mes ya está cubierto en el histórico consolidado
+      if (file.exists(archivo_cobertura)) {
+        try({
+          meta <- jsonlite::fromJSON(archivo_cobertura)
+          loc_match <- purrr::keep(meta$localidades, ~ tolower(stringi::stri_trans_general(.x$localidad, "Latin-ASCII")) == tolower(stringi::stri_trans_general(loc, "Latin-ASCII")))
+          if (length(loc_match) > 0 && mes_str %in% loc_match[[1]]$meses_cubiertos) {
+            message(paste0("  [Historico] Omitiendo ", loc, " | ", mes_str, " (ya cubierto en base histórica)."))
+            next
+          }
+        }, silent = TRUE)
       }
       
       datos_mes <- list()

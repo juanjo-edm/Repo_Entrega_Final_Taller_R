@@ -5,16 +5,18 @@
 
 ---
 
-## Integrantes del Grupo
+## Integrantes y Organización del Grupo
 
-| Nombre Completo | Código Estudiantil |
-| :--- | :---: |
-| **Gabriel Arturo Echeverry Castaño** | `201016705` |
-| **Olga Lucía Ramírez Contreras** | `202624900` |
-| **Sergio Alejandro López Valderrama** | `202111932` |
-| **Juan Esteban Carvajal Cruz** | `202614312` |
-| **Miguelangel Palma** | `202621481` |
-| **Juan José Echeverry** | `202616233` |
+| Nombre Completo | Código Estudiantil | Sub-equipo de Trabajo | Rol en el Proyecto |
+| :--- | :---: | :--- | :--- |
+| **Miguelangel Palma** | `202621481` | Datos y Modelado | Facilitador de coordinación |
+| **Gabriel Arturo Echeverry Castaño** | `201016705` | Datos y Modelado | Ingesta de datos y modelado |
+| **Juan Esteban Carvajal Cruz** | `202614312` | Datos y Modelado | Ingesta de datos y modelado |
+| **Juan José Echeverry** | `202616233` | NLP y Visualización | Facilitador de coordinación |
+| **Sergio Alejandro López Valderrama** | `202111932` | NLP y Visualización | Modelado NLP y desarrollo Shiny |
+| **Olga Lucía Ramírez Contreras** | `202624900` | NLP y Visualización | Modelado NLP y desarrollo Shiny |
+
+> 📌 Para consultar el cronograma detallado (semanas 11 a 16), las responsabilidades por hito y el protocolo colaborativo de Git, consulta el [**Plan de Trabajo Colaborativo**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/plan_de_trabajo.md).
 
 ---
 
@@ -43,12 +45,13 @@ Si necesitas revisar los detalles de alguna parte del proyecto, aquí tienes los
 
 | Si buscas información sobre... | Consulta este archivo | Qué contiene |
 | :--- | :--- | :--- |
+| **Plan de trabajo y sub-equipos** | [**`docs/plan_de_trabajo.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/plan_de_trabajo.md) | Distribución en dos sub-equipos de 3, facilitadores, cronograma semanas 11 a 16 y flujo en Git. |
 | **Propuesta y metodología** | [**`docs/propuesta_proyecto.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/propuesta_proyecto.md) | Pregunta, hipótesis, fuentes, variables, sentometrics y plan de trabajo. |
 | **Enunciados y rúbricas del curso** | [**`docs/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/README.md) | Reglas oficiales y criterios de calificación de la [Semana 11](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_primera_entrega.md) y la [Semana 16](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciado_entrega_final_y_presentacion.md). |
 | **Reglas de código del grupo** | [**`docs/estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/estandares_programacion.md) | Guía de estilo MECA: Outline `----`, rutas con `{here}`, paquetes y control de errores. |
 | **Pipeline y scripts de R** | [**`scripts/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/README.md) | Orden en que corren los scripts y cómo funciona el orquestador `master.R`. |
 | **Tablas de datos abiertos** | [**`scripts/01_ingesta/01_datos_abiertos/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/01_datos_abiertos/README.md) | **Enlaces directos a las páginas web de los datos oficiales** y consultas con SQL. |
-| **Cómo extraemos las noticias** | [**`scripts/01_ingesta/02_scraping_noticias/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/02_scraping_noticias/README.md) | **Explicación paso a paso del scraping**: búsquedas con `+`, búsqueda mes a mes y cómo evitamos bloqueos. |
+| **Cómo extraemos las noticias** | [**`scripts/01_ingesta/02_scraping_noticias/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/02_scraping_noticias/README.md) | **Explicación paso a paso del scraping**: conservación de 19 subtablas, consolidación y scraping incremental. |
 | **Estructura de las bases de datos** | [**`data/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/data/README.md) | Qué hay en `data/raw/` y en `data/processed/`, y por qué usamos formato Parquet. |
 | **Informe Quarto en PDF** | [**`notebook/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/notebook/README.md) | Cómo compilar el documento de 3 páginas de la primera entrega. |
 | **Aplicación interactiva Shiny** | [**`app/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/app/README.md) | Cómo correr el tablero interactivo en tu computador. |
@@ -65,6 +68,7 @@ Repo_Entrega_Final_Taller_R/
 │
 ├── docs/                                     # Documentos del proyecto
 │   ├── README.md                             # Índice de documentación
+│   ├── plan_de_trabajo.md                    # Plan de trabajo de los sub-equipos (Semanas 11-16)
 │   ├── propuesta_proyecto.md                 # Propuesta metodológica completa
 │   ├── estandares_programacion.md            # Guía de estilo de código del equipo
 │   ├── enunciado_primera_entrega.md          # Instrucciones y rúbrica de la Semana 11
@@ -73,7 +77,12 @@ Repo_Entrega_Final_Taller_R/
 ├── data/                                     # Bases de datos
 │   ├── README.md                             # Explicación de los datos y formatos
 │   ├── raw/                                  # Datos tal como bajan de las fuentes oficiales
-│   │   ├── noticias/                         # Noticias guardadas mes a mes (.parquet)
+│   │   ├── noticias_google_news_consolidado.parquet # Base de noticias validadas (2.487 noticias)
+│   │   ├── noticias_google_news_consolidado.rds     # Respaldo nativo de R
+│   │   ├── noticias/                         # Ingesta y trazabilidad de noticias
+│   │   │   ├── historico_por_localidad/      # 19 subtablas brutas individuales (Parquet/RDS)
+│   │   │   ├── cobertura_historica.json      # Metadatos de meses cubiertos para scraping incremental
+│   │   │   └── chunk_*.parquet               # Lotes mensuales adicionales de scraping
 │   │   ├── delitos_alto_impacto_raw.parquet  # Denuncias de hurtos (SDSCJ)
 │   │   ├── poblacion_localidades_raw.parquet # Habitantes por localidad (SDS)
 │   │   └── localidades_bogota_raw.geojson    # Mapas de las localidades (SDP)
@@ -92,8 +101,9 @@ Repo_Entrega_Final_Taller_R/
 │   │   │   ├── README.md                     # Enlaces web a las tablas y explicación
 │   │   │   └── datos_abiertos_bogota.R       # Descarga de delitos, población y mapas
 │   │   └── 02_scraping_noticias/             # Extracción de noticias
-│   │       ├── README.md                     # Metodología detallada de scraping
-│   │       └── scraping_google_news.R        # Script con Selenium y guardado por lotes
+│   │       ├── README.md                     # Metodología detallada de scraping y trazabilidad
+│   │       ├── 00_consolidar_subtablas_historicas.R # Migración de subtablas y consolidación
+│   │       └── scraping_google_news.R        # Scraping incremental con Selenium y checkpoints
 │   ├── 02_limpieza_indicadores.R             # Cálculo de tasas de hurto por habitante
 │   ├── 03_analisis_sentometrics.R            # Análisis de tono de las noticias
 │   ├── 04_clustering_kmeans.R                # Agrupamiento de localidades por nivel de hurto

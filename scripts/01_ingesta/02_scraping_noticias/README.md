@@ -1,85 +1,75 @@
-# Cómo extraemos las noticias de Google News
+# Ingesta y Scraping de Noticias en Google News
 
-En esta carpeta está el código para descargar las noticias de seguridad en las 19 localidades urbanas de Bogotá entre 2022 y 2025. 
+En esta carpeta está el código para obtener, consolidar y expandir las noticias de prensa y comunicados sobre hurtos y seguridad en las 19 localidades urbanas de Bogotá.
 
-El método viene de la experiencia del repositorio *Perception-and-legitimacy*, pero le metimos varias mejoras para que el proceso no se caiga a mitad de camino y no tengamos que volver a empezar si se interrumpe la conexión.
-
----
-
-## 1. ¿Por qué buscar en la web de Google Noticias y no solo en el feed RSS?
-
-El feed RSS de Google News solo guarda noticias de las últimas semanas (generalmente 30 a 60 días). Como nuestro análisis abarca 4 años completos (**desde enero de 2022 hasta diciembre de 2025**), necesitamos buscar directamente en el portal web de Google Noticias (`tbm=nws`) usando el filtro de fechas personalizadas.
+El método proviene del repositorio previo *Perception-and-legitimacy*, pero se rediseñó para garantizar **trazabilidad completa**, **conservación de subtablas por localidad** y un mecanismo de **scraping incremental** que no repite datos existentes.
 
 ---
 
-## 2. Diagrama del flujo de scraping
+## 1. Estructura de Datos y Trazabilidad
+
+Para que cualquier persona pueda auditar cómo se construyó la base final, conservamos tanto las subtablas brutas de cada localidad como el archivo unificado:
+
+```text
+data/raw/noticias/
+├── historico_por_localidad/            # Subtablas brutas individuales (4.276 filas en total)
+│   ├── antonio_narino.parquet (.rds)
+│   ├── barrios_unidos.parquet (.rds)
+│   ├── bosa.parquet (.rds)
+│   ├── ... (19 localidades urbanas)
+│   └── usme.parquet (.rds)
+├── cobertura_historica.json            # Metadatos de meses y fechas ya cubiertos por localidad
+└── chunk_*.parquet                     # Lotes temporales adicionales de scraping incremental
+
+data/raw/
+├── noticias_google_news_consolidado.parquet   # Base final validada (2.487 noticias únicas)
+└── noticias_google_news_consolidado.rds       # Respaldo en formato nativo de R
+```
+
+---
+
+## 2. Flujo de Trabajo Metodológico
 
 ```mermaid
 flowchart TD
-    A["1. Búsqueda con operador +<br/>(+seguridad +Bogotá +localidad +hurtos +LOCALIDAD)"] --> B["2. Búsqueda mes por mes<br/>(Bloques MM/DD/YYYY: 2022 a 2025)"]
-    B --> C{"3. ¿Ya descargamos este mes?<br/>(Revisar data/raw/noticias/)"}
-    C -- Sí --> D["Saltar mes<br/>(No gastamos tiempo ni peticiones)"]
-    C -- No --> E["4. Abrir Chrome con RSelenium<br/>(Con pausas y sin marcas de bot)"]
-    E --> F["5. Aceptar cookies de Google<br/>y leer resultados"]
-    F --> G["6. Fase 1: guardar titular,<br/>medio, fecha, enlace y resumen"]
-    G --> H["7. Fase 2: intentar leer la<br/>noticia completa (timeout 5s)"]
-    H --> I{"¿Pudimos leer los párrafos?"}
-    I -- Sí --> J["Guardar texto completo"]
-    I -- No o muro de pago --> K["Plan de respaldo:<br/>usar el resumen que dio Google"]
-    J & K --> L["8. Guardar lote del mes en Parquet<br/>data/raw/noticias/chunk_*.parquet"]
-    L --> M["9. Unir todo y filtrar por localidad<br/>noticias_google_news_consolidado.parquet"]
+    A["19 Subtablas brutas por localidad<br/>(4.276 noticias extraídas)"] --> B["00_consolidar_subtablas_historicas.R"]
+    B --> C["1. Filtro presencia de Bogotá<br/>(Normalización Latin-ASCII)"]
+    C --> D["2. Identificación del medio<br/>(Extracción de dominio web)"]
+    D --> E["3. Limpieza de nombre de localidad<br/>(A partir de consulta booleana)"]
+    E --> F["4. Deduplicación por enlace<br/>(Prioriza mención explícita en titular/resumen)"]
+    F --> G["data/raw/noticias_google_news_consolidado.parquet<br/>(Exactamente 2.487 noticias con 0 NAs)"]
+    F --> H["data/raw/noticias/cobertura_historica.json<br/>(Registro de meses cubiertos 2022-01 a 2025-09)"]
+    
+    H -. Control de omitir data existente .-> I["scraping_google_news.R<br/>(Expansión incremental)"]
+    I --> J["Descargar solo meses faltantes<br/>(p. ej. Oct-Dic 2025 o 2026)"]
 ```
 
 ---
 
-## 3. Los 6 trucos para que el scraping funcione bien
+## 3. Scripts Disponibles
 
-### 1. El truco del operador `+` (búsqueda estricta)
-Google suele cambiar palabras por sinónimos o mostrar noticias de otras ciudades. Si buscamos simplemente `hurto Kennedy`, a veces aparecen noticias de robos en Medellín o noticias políticas de la localidad. 
-
-Para obligar a Google a que la noticia hable exactamente de seguridad en esa localidad de Bogotá, le ponemos un `+` a cada palabra obligatoria:
-* Base de búsqueda: `+seguridad +Bogotá +localidad +hurtos`
-* Localidad con más de una palabra: se separa con un `+` en cada término (por ejemplo: `+ANTONIO +NARIÑO`, `+BARRIOS +UNIDOS`, `+CIUDAD +BOLÍVAR`).
-* Esto fuerza a Google a un **AND estricto**: solo devuelve páginas que contengan todas esas palabras. Excluimos la localidad rural de Sumapaz.
-
-### 2. Buscar mes por mes (chunking temporal)
-Si le pides a Google cuatro años de golpe, solo te deja ver las primeras 30 páginas (unas 300 noticias) y oculta el resto. Al dividir los 4 años en **bloques mensuales** (enero 2022, febrero 2022, etc.), logramos extraer muchas más noticias y no dejamos huecos en la serie. Además, convertimos las fechas al formato que Google exige: `MM/DD/YYYY`.
-
-### 3. Guardar por pedazos (checkpointing para no perder avance)
-Hacer scraping sobre miles de consultas toma varias horas. Si se cae el internet o salta un bloqueo en el mes 20, no queremos perder lo que ya descargamos.
-* Cada mes de cada localidad se guarda de inmediato en disco:
-  ```text
-  data/raw/noticias/chunk_{localidad}_{YYYY_MM}.parquet
+### `00_consolidar_subtablas_historicas.R`
+* **¿Qué hace?** Lee las carpetas originales de las 19 localidades, guarda cada subtabla en `historico_por_localidad/` (formato Parquet y RDS), ejecuta la consolidación y validación territorial, exporta `noticias_google_news_consolidado.parquet` y crea el archivo `cobertura_historica.json`.
+* **Garantía:** Reproduce con precisión matemática las 2.487 filas del estudio original sin pérdida de información.
+* **Ejecución:**
+  ```r
+  source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "00_consolidar_subtablas_historicas.R"))
   ```
-* Cuando vuelves a correr el script, este primero revisa si el archivo de ese mes ya existe. Si ya está listo, se lo salta y continúa con el siguiente. Así puedes parar y continuar el proceso cuando quieras.
 
-### 4. Evitar que nos bloqueen (Selenium)
-* Le quitamos a Chrome las etiquetas automáticas de navegador controlado (`--disable-blink-features=AutomationControlled`).
-* Acepta automáticamente la ventana de cookies de Google para que no tape los resultados.
-* Mete pausas aleatorias de 2 a 4 segundos entre consultas para no saturar al buscador.
-* Si Google pide resolver un CAPTCHA, el script te avisa con un mensaje y pausa 30 segundos para que lo resuelvas a mano en el navegador.
-
-### 5. Descarga en dos fases y plan de respaldo (fallback)
-1. **Fase 1:** Guardamos de una vez el titular, la fecha, el enlace y el resumen que Google muestra en la página de resultados.
-2. **Fase 2:** Intentamos entrar al enlace de la noticia para leer los párrafos completos (`<p>`) con un tiempo límite corto de 5 segundos.
-3. **Plan de respaldo:** Muchos periódicos tienen muro de pago (paywall) o bloquean accesos automáticos. Si la página no abre o pide suscripción, el script no bota la noticia: guarda el resumen que nos dio Google. Así nos aseguramos de que cada noticia siempre tenga texto para el análisis de sentimiento.
-
-### 6. Filtro final de localidad
-Cuando termina de descargar todos los meses, el script une todos los pedazos, quita noticias repetidas y comprueba que el nombre de la localidad realmente aparezca en el texto. El resultado consolidado se guarda en `data/raw/noticias_google_news_consolidado.parquet`.
+### `scraping_google_news.R`
+* **¿Qué hace?** Automatiza Google Noticias mediante `RSelenium` para descargar periodos nuevos o faltantes mes por mes.
+* **Control incremental inteligente:** Antes de lanzar una petición a Google, revisa `cobertura_historica.json` y los chunks guardados en `data/raw/noticias/`. Si el mes de esa localidad ya existe, lo omite automáticamente, ahorrando tiempo y evitando bloqueos de IP.
+* **Búsqueda booleana estricta:** Aplica el operador `+` en cada palabra obligatoria (`+seguridad +Bogotá +localidad +hurtos +KENNEDY`), forzando a Google a un AND estricto.
+* **Ejecución:**
+  ```r
+  source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
+  ejecutar_scraping_localidades()
+  ```
 
 ---
 
-## 4. Cómo correr el script
+## 4. Cobertura Histórica y Expansión Futura
 
-Abre RStudio y corre estos comandos en la consola:
-
-```r
-# 1. Cargar las funciones de scraping
-source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
-
-# 2. Iniciar la descarga por meses y localidades (avanza con checkpoints)
-ejecutar_scraping_localidades()
-
-# 3. Consolidar todos los lotes en un solo archivo Parquet
-noticias_df <- consolidar_noticias_scraping()
-```
+* **Periodo cubierto en subtablas:** Enero de 2022 a Septiembre de 2025 (45 meses).
+* **Periodo pendiente por scrapear:** Octubre a Diciembre de 2025 (3 meses para completar el cuatrienio).
+* Al ejecutar `scraping_google_news.R`, el script identificará de inmediato que los primeros 45 meses ya están cubiertos y únicamente descargará los 3 meses restantes, integrándolos a la base consolidada sin tocar los datos previos.
