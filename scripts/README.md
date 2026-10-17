@@ -36,7 +36,7 @@ flowchart LR
 ---
 
 ## 2. Reglas de estilo para el equipo
-Antes de modificar o agregar scripts a esta carpeta, revisa [**`docs/estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/estandares_programacion.md):
+Antes de modificar o agregar scripts a esta carpeta, revisa [**`docs/guias/estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/guias/estandares_programacion.md):
 * Secciones organizadas con `# 1. ----` para que aparezcan en el Document Outline de RStudio (`Cmd + Shift + O`).
 * Cero `setwd()` y cero rutas absolutas tipo `/Users/...`: usamos siempre `here::here()`.
 * Usar los verbos de `dplyr` y el pipe nativo `|>`.
