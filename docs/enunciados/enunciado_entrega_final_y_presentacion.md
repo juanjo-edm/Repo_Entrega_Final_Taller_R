@@ -1,8 +1,8 @@
 # Enunciado Presentación y Documento de Trabajo Final: Taller de Programación Aplicada a R
 
 **Ponderación Total:** 30% de la nota final del curso
-* **Presentaciones del trabajo final:** 15% (Semana asignada)
-* **Documento de trabajo final + Script + Shiny App:** 15% (Semana 16)
+* **Presentaciones del trabajo final:** 15% (Semana 16 — 17 de noviembre de 2026)
+* **Documento de trabajo final + Script + Shiny App:** 15% (Semana 16 — 17 de noviembre de 2026)
 
 ---
 
@@ -30,7 +30,7 @@ La presentación debe organizarse asociada a cada uno de los siguientes criterio
 
 ---
 
-## 2. Documento de Trabajo Final (15%) (Semana 16)
+## 2. Documento de Trabajo Final (15%) (Semana 16 — 17 de noviembre de 2026)
 
 Los grupos deberán entregar un documento en cualquier editor de texto de su preferencia, en el cual resuman en **no más de 5 páginas** (sin contar el anexo en el cuál pueden ir gráficos y tablas) el trabajo realizado para resolver la pregunta problema.
 

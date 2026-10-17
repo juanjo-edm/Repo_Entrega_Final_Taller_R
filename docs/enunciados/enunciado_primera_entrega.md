@@ -1,7 +1,7 @@
 # Enunciado Trabajo Final: Taller de Programación Aplicada a R — Primera Entrega
 
 **Ponderación:** 10% de la nota final  
-**Momento de entrega:** Semana 11  
+**Momento de entrega:** Semana 11 (20 de octubre de 2026)  
 **Canal de entrega:** Bloque Neón  
 **Formato:** Archivo de texto (desarrollado en el editor de su preferencia), máximo 3 páginas.
 
@@ -10,9 +10,9 @@
 ## 1. Instrucciones Generales
 
 El trabajo final es una actividad que permitirá a los y las estudiantes aventurarse en un proyecto clásico de analítica de datos para la resolución de un problema de significancia económica. Para ello, se asignarán grupos para el desarrollo del trabajo final. Esta actividad cuenta con tres (3) etapas que se desarrollarán a través del semestre:
-1. Propuesta de Trabajo Final (Semana 11 - 10%)
-2. Presentaciones del trabajo final (15%)
-3. Documento de trabajo final y Shiny App (Semana 16 - 15%)
+1. Propuesta de Trabajo Final (Semana 11 — 20 de octubre de 2026: 10%)
+2. Presentaciones del trabajo final (Semana 16 — 17 de noviembre de 2026: 15%)
+3. Documento de trabajo final y Shiny App (Semana 16 — 17 de noviembre de 2026: 15%)
 
 ---
 

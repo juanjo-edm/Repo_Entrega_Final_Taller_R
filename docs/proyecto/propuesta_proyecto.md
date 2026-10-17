@@ -58,21 +58,22 @@ Se descargarán los datos oficiales de hurtos y población mediante fuentes púb
 
 ## 5. Productos, tiempos y compromisos de entrega
 
-El cronograma se expresa en semanas académicas del curso; las fechas calendario de radicación se tomarán de Bloque Neón. Entre la primera y la entrega final existe un intervalo de cinco semanas académicas.
+El cronograma de trabajo cuenta con fechas límite exactas orientadas al cierre definitivo el **17 de noviembre de 2026**. Entre la primera entrega y la entrega final existe un intervalo de un mes con seguimiento continuo por hitos.
 
-| Momento | Qué se entregará (contenido verificable) | Plazo |
+| Momento | Qué se entregará (contenido verificable) | Plazo límite |
 | :--- | :--- | :--- |
-| **Primera entrega — propuesta y EDA** | Documento de máximo 3 páginas, con pregunta/hipótesis, motivación, fuentes y variables, metodología, estadísticas calculadas y al menos dos gráficos reales con narrativa (*storytelling*). Incluir prueba inicial de `sentometrics` en el corpus recuperado, revisión del léxico español y delimitación documentada de la ventana temporal. Primeros cuatro apartados: máximo 150 palabras cada uno; EDA/storytelling: máximo 700 palabras. | **SEMANA 11**<br>Cierre de auditoría de fuentes y elección del periodo común. |
-| **Presentación intermedia** | Presentación de 20 minutos: resumen, pregunta, motivación, datos, metodología, descriptivos y hallazgos. Enviar diapositivas 24 horas antes y recoger retroalimentación. | Semana asignada por el curso (sin fecha fijada en el enunciado). |
-| **Entrega final — informe + scripts + aplicación** | Informe de máximo 5 páginas (anexos aparte), con introducción, datos/EDA, metodología, resultados e interpretación, referencias; scripts comentados y ejecutables; y Shiny con mapa de hurtos, series de sentimiento `sentometrics`, perfiles K-means, filtros por localidad/año y tabla de noticias. | **SEMANA 16**<br>Aplicación, repositorio y resultados verificados. |
+| **Primera entrega — propuesta y EDA** | Documento de máximo 3 páginas, con pregunta/hipótesis, motivación, fuentes y variables, metodología, estadísticas calculadas y al menos dos gráficos reales con narrativa (*storytelling*). Incluir prueba inicial de `sentometrics` en el corpus recuperado, revisión del léxico español y delimitación documentada de la ventana temporal. Primeros cuatro apartados: máximo 150 palabras cada uno; EDA/storytelling: máximo 700 palabras. | **20 de octubre de 2026** (Semana 11)<br>Cierre de auditoría de fuentes y radicación en Bloque Neón. |
+| **Presentación y sustentación** | Presentación de 20 minutos en clase: resumen ejecutivo, pregunta, motivación, datos, metodología, descriptivos, clustering, sentometrics y hallazgos clave. | **17 de noviembre de 2026** (Semana 16)<br>Sustentación presencial en clase y co-evaluación. |
+| **Entrega final — informe + scripts + aplicación** | Informe de máximo 5 páginas (anexos aparte), con introducción, datos/EDA, metodología, resultados e interpretación, referencias; scripts comentados y ejecutables con `master.R`; y Shiny con mapa de hurtos, series de sentimiento `sentometrics`, perfiles K-means, filtros por localidad/año y tabla de noticias. | **17 de noviembre de 2026** (Semana 16)<br>Aplicación desplegada, repositorio y resultados verificados. |
 
 ### 5.1. Secuencia de trabajo entre entregas
 
-* **Semana 11:** Descargas auditadas de hurtos, población y prensa; prueba de corpus español y sentometrics; descriptivos reales, $\ge 2$ gráficos y storytelling; confirmación del periodo de coincidencia.
-* **Semanas 12–13:** Tasas de hurto por 100.000 habitantes y K-means validados; cómputo integral de sentometrics, revisión léxica y consolidación localidad-año.
-* **Semana 14:** Shiny funcional: mapa de hurtos, evolución del sentimiento, volumen de noticias, comparaciones entre clusters y tabla filtrable con fuentes.
-* **Semana 15:** Revisión integral de series sentometrics, coherencia temporal y resultados K-means; ejecución desde cero, ajuste tras retroalimentación y ensayo de exposición.
-* **Semana 16:** Informe final, scripts, tablas y gráficos reproducibles, datos procesados trazables, diccionario, referencias y Shiny ejecutable.
+* **20 de octubre (Hito 1):** Descargas auditadas de hurtos, población y prensa; prueba de corpus español y sentometrics; descriptivos reales, $\ge 2$ gráficos y storytelling; confirmación del periodo de coincidencia y radicación del informe preliminar.
+* **27 de octubre (Hito 2):** Tasas de hurto por 100.000 habitantes, tablas intermedias en `data/processed/`, configuración de ponderaciones intra-mes y decaimiento exponencial en `sentometrics`.
+* **3 de noviembre (Hito 3):** Primeros modelos de clustering K-means y PCA validados, y esqueleto funcional del tablero Shiny con navegación por tarjetas en `bslib`.
+* **10 de noviembre (Hito 4):** Shiny interactiva con mapas coropléticos en `leaflet`, evolución temporal del sentimiento mediático por localidad y cruce con perfiles de delincuencia.
+* **14 de noviembre (Hito 5):** Versión candidata probada de punta a punta, reporte de metodología, verificación de scripts de reproducción con `master.R` y ensayos de exposición.
+* **17 de noviembre (Hito 6 — Cierre final):** Despliegue de la app Shiny en Posit Connect / shinyapps.io, entrega de informe académico final de 5 páginas y sustentación del proyecto en clase.
 
 ---
 
