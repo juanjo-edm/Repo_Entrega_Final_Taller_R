@@ -2,7 +2,7 @@
 
 Bienvenido al centro de documentación del proyecto de investigación sobre hurtos y percepción mediática en Bogotá (**Grupo 10 — Maestría en Economía Aplicada, Universidad de los Andes**).
 
-Para facilitar la navegación y el mantenimiento del repositorio, los documentos están organizados en tres subcarpetas temáticas:
+Para facilitar la navegación y el mantenimiento del repositorio, los documentos están organizados en cuatro subcarpetas temáticas:
 
 ```text
 docs/
@@ -17,6 +17,11 @@ docs/
 │   ├── README.md                             # Visión general de la investigación y sub-equipos
 │   ├── propuesta_proyecto.md                 # Pregunta, hipótesis, datos, sentometrics y K-means
 │   └── plan_de_trabajo.md                    # Sub-equipos, roles, cronograma (11-16) y flujo Git
+│
+├── sentometrics/                             # Literatura y referencias del paquete sentometrics
+│   ├── README.md                             # Explicación del repositorio, web oficial y metodología
+│   ├── paper_sentometrics_jss_2021.pdf       # Paper publicado en Journal of Statistical Software (JSS)
+│   └── manual_referencia_sentometrics_cran.pdf # Manual técnico oficial de CRAN (versión 1.0.1)
 │
 └── guias/                                    # Estándares técnicos y buenas prácticas
     ├── README.md                             # Principios de reproducibilidad del equipo
@@ -41,7 +46,15 @@ Documentos de formulación teórica, metodológica y operativa del proyecto del 
 
 ---
 
-### 3. [Guías y Estándares (`docs/guias/`)](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/guias/README.md)
+### 3. [Documentación y Papers de `sentometrics` (`docs/sentometrics/`)](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/sentometrics/README.md)
+Referencias bibliográficas y manuales técnicos del paquete econométrico de análisis de sentimiento:
+* [**`paper_sentometrics_jss_2021.pdf`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/sentometrics/paper_sentometrics_jss_2021.pdf): Paper publicado en el *Journal of Statistical Software* (Ardia et al., 2021).
+* [**`manual_referencia_sentometrics_cran.pdf`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/sentometrics/manual_referencia_sentometrics_cran.pdf): Manual de funciones oficial de CRAN (versión 1.0.1).
+* [**`README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/sentometrics/README.md): Explicación detallada del repositorio en GitHub ([`SentometricsResearch/sentometrics`](https://github.com/SentometricsResearch/sentometrics)), web oficial ([`sentometrics.com`](https://www.sentometrics.com/)) y aplicación a las localidades de Bogotá.
+
+---
+
+### 4. [Guías y Estándares (`docs/guias/`)](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/guias/README.md)
 Guías técnicas para asegurar la calidad y reproducibilidad del código fuente:
 * [**`estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/guias/estandares_programacion.md): Guía de estilo MECA para R: Outline `----`, rutas relativas con `{here}`, gestión de conflictos con `{conflicted}`, pipe nativo `|>` y control de errores con `stopifnot()`.
 
