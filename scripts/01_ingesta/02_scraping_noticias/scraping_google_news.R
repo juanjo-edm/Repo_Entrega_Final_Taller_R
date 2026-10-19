@@ -1,53 +1,88 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
-# ROL: Web Scraping Robusto de Noticias en Google News con RSelenium
+# ARCHIVO: scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R
+# ROL: Web Scraping de Noticias en Google News mediante RSelenium y Checkpointing
 # AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # ==============================================================================
+#
+# DESCRIPCIÓN GENERAL:
+# Este script automatiza la extracción de artículos de prensa y noticias sobre
+# criminalidad (hurtos, robos, atracos, inseguridad) para las 19 localidades
+# urbanas de Bogotá D.C. en la pestaña de noticias de Google Search (tbm=nws).
+#
+# CARACTERÍSTICAS PRINCIPALES:
+# 1. Horizonte Temporal Amplio (2022–2026):
+#    Permite extraer información mensual continua desde enero de 2022 hasta
+#    septiembre de 2026 (57 meses calendario).
+# 2. Control Incremental Inteligente (Checkpointing):
+#    Antes de consultar a Google, verifica si el mes de la localidad ya fue
+#    procesado en data/raw/noticias/ o en la base histórica validada.
+# 3. Dos Modos de Operación:
+#    - 'faltantes': Completa únicamente los periodos pendientes (ej. Oct 2025 a Sep 2026).
+#    - 'enriquecer': Re-escanea meses previos con consultas optimizadas para rescatar
+#                    noticias omitidas por filtros anteriores sin duplicar registros.
+# 4. Evasión Antibot y Resiliencia en Navegador:
+#    Inyección de JavaScript para enmascarar navigator.webdriver, pausas con jitter
+#    humano aleatorio, manejo automático de cookies y detección interactiva de CAPTCHA.
+# 5. Calidad y Normalización Textual:
+#    Limpieza de URLs con tracking, extracción semántica del cuerpo del artículo
+#    y filtros de exclusión deportiva para evitar sesgos en casos homónimos (Santa Fe).
+#
+# GUÍA RÁPIDA DE USO:
+#   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
+#   ejecutar_scraping_localidades(modo = "faltantes")   # 1. Descarga automática
+#   consolidar_noticias_scraping()                      # 2. Fusión y deduplicación
+#   auditar_corpus_noticias()                           # 3. Diagnóstico de calidad
+# ==============================================================================
 
-# 1. Configuración y Dependencias ----
+# 1. Configuración de Entorno y Dependencias ----
 
-## 1.1 Opciones globales y semilla ----
+## 1.1 Opciones globales y reproducibilidad ----
+# Evitar notación científica en IDs y fijar semilla estocástica
 options(scipen = 999)
 set.seed(20261014)
 
-## 1.2 Instalación y carga de librerías ----
+## 1.2 Verificación e instalación de paquetes requeridos ----
 librerias_requeridas <- c(
   "here", "conflicted", "RSelenium", "netstat", "arrow", "readr",
-  "dplyr", "tidyr", "stringr", "stringi", "glue", "lubridate", "rvest", "httr", "purrr", "jsonlite"
+  "dplyr", "tidyr", "stringr", "stringi", "glue", "lubridate",
+  "rvest", "httr", "purrr", "jsonlite"
 )
 
 for (pkg in librerias_requeridas) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
+    message(paste0("Instalando paquete faltante: ", pkg))
     install.packages(pkg)
   }
 }
 
 suppressPackageStartupMessages({
-  library(here)
-  library(conflicted)
-  library(RSelenium)
-  library(netstat)
-  library(arrow)
-  library(readr)
-  library(dplyr)
-  library(tidyr)
-  library(stringr)
-  library(stringi)
-  library(glue)
-  library(lubridate)
-  library(rvest)
-  library(httr)
-  library(purrr)
-  library(jsonlite)
+  library(here)        # Rutas relativas seguras referenciadas a la raíz del proyecto
+  library(conflicted)  # Resolución estricta y transparente de colisiones de funciones
+  library(RSelenium)   # Control automatizado de navegadores web (WebDriver)
+  library(netstat)     # Detección dinámica de puertos libres de red para Selenium
+  library(arrow)       # Lectura y escritura eficiente en formato columnar Parquet
+  library(readr)       # Lectura y exportación rápida de tablas rectangulares
+  library(dplyr)       # Transformación, filtrado y agregación de datos
+  library(tidyr)       # Ordenamiento y estructuración ordenada de datos (tidy data)
+  library(stringr)     # Manipulación consistente de cadenas y expresiones regulares
+  library(stringi)     # Normalización de caracteres internacionales y remoción de acentos
+  library(glue)        # Interpolación limpia y legible de texto y variables
+  library(lubridate)   # Manipulación robusta de fechas, meses y rangos temporales
+  library(rvest)       # Parseo de HTML y extracción de selectores CSS
+  library(httr)        # Peticiones HTTP con control de encabezados y timeouts
+  library(purrr)       # Programación funcional y aplicación de mapeos sobre listas
+  library(jsonlite)    # Serialización y lectura de metadatos de cobertura en JSON
 })
 
 ## 1.3 Resolución explícita de conflictos ({conflicted}) ----
+# Se fuerza el uso de las versiones de {dplyr} para evitar discrepancias con stats o base
 conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
-## 1.4 Definición de rutas relativas con {here} ----
+## 1.4 Definición de rutas del proyecto con {here} ----
 ruta_datos_raw      <- here::here("data", "raw")
 ruta_noticias_raw   <- here::here("data", "raw", "noticias")
 ruta_salida_tablas  <- here::here("output", "tables")
@@ -55,11 +90,16 @@ archivo_cobertura   <- here::here("data", "raw", "noticias", "cobertura_historic
 archivo_consolidado <- here::here("data", "raw", "noticias_google_news_consolidado.parquet")
 archivo_consol_rds  <- here::here("data", "raw", "noticias_google_news_consolidado.rds")
 
-if (!dir.exists(ruta_noticias_raw)) dir.create(ruta_noticias_raw, recursive = TRUE)
+# Asegurar existencia del directorio de almacenamiento bruto
+if (!dir.exists(ruta_noticias_raw)) {
+  dir.create(ruta_noticias_raw, recursive = TRUE)
+}
 
 # 2. Configuración de Parámetros y Consultas Booleanas ----
 
-## 2.1 Catálogo de las 19 localidades urbanas ----
+## 2.1 Catálogo canónico de las 19 localidades urbanas ----
+# Se excluye deliberadamente Sumapaz (localidad 20) por ser enteramente rural
+# y carecer de dinamismo en noticias sobre hurtos urbanos.
 localidades <- c(
   "USAQUÉN", "CHAPINERO", "SANTA FE", "SAN CRISTÓBAL", "USME",
   "TUNJUELITO", "BOSA", "KENNEDY", "FONTIBÓN", "ENGATIVÁ",
@@ -68,12 +108,27 @@ localidades <- c(
   "RAFAEL URIBE URIBE", "CIUDAD BOLÍVAR"
 )
 
-## 2.2 Constructor de consultas optimizadas con comillas y sinónimos ----
+## 2.2 Constructor de consultas optimizadas con sinónimos y exclusión ----
+#' Construye la cadena de consulta booleana para Google Search
+#'
+#' @description
+#' Genera una búsqueda de alta precisión que combina sinónimos de criminalidad
+#' con la ciudad obligatoria ("Bogotá") y el nombre de la localidad.
+#' En el caso particular de "Santa Fe", agrega términos negativos de exclusión
+#' para omitir noticias de fútbol que contaminarían el posterior análisis de polaridad.
+#'
+#' @param localidad Cadena de texto con el nombre de la localidad.
+#' @return Cadena de texto con la consulta formateada para Google.
+#' @examples
+#' construir_consulta_google("KENNEDY")
+#' construir_consulta_google("SANTA FE")
 construir_consulta_google <- function(localidad) {
   delitos_kw <- '("hurto" OR "hurtos" OR "robo" OR "robos" OR "atraco" OR "atracos" OR "inseguridad")'
   loc_nombre <- stringr::str_to_title(tolower(localidad))
   
-  # Filtro negativo de exclusión para "Santa Fe" (evitar sesgo por el club de fútbol)
+  # Regla de exclusión deportiva:
+  # El club 'Independiente Santa Fe' genera ruido frecuente con términos de confrontación
+  # (ej. 'derrota', 'ataque del rival', 'golpe') que no corresponden a criminalidad real.
   if (tolower(loc_nombre) == "santa fe") {
     return(glue::glue('{delitos_kw} "Bogotá" "{loc_nombre}" -fútbol -liga -campín -dimayor -cardenal'))
   }
@@ -81,28 +136,46 @@ construir_consulta_google <- function(localidad) {
   glue::glue('{delitos_kw} "Bogotá" "{loc_nombre}"')
 }
 
-## 2.3 Rango temporal mensual (2022-01 a 2026-09) ----
+## 2.3 Rango temporal mensual (Enero 2022 a Septiembre 2026) ----
 fecha_inicio <- as.Date("2022-01-01")
 fecha_fin    <- as.Date("2026-09-30")
 
+# Secuencia de primeros días de mes
 inicios_mes <- seq(from = floor_date(fecha_inicio, "month"),
                    to   = floor_date(fecha_fin, "month"),
                    by   = "1 month")
+
+# Secuencia correspondiente de últimos días de mes
 fines_mes   <- pmin(inicios_mes %m+% months(1) - days(1), fecha_fin)
 
-## 2.4 Parámetros de navegación y scraping ----
-hl                  <- "es-419" # Español Latinoamérica
-gl                  <- "CO"     # Colombia
-max_paginas_por_mes <- 15       # Hasta 150 resultados por mes/localidad
-espera_min          <- 3.0      # Pausas con jitter humano para evitar bloqueo
-espera_max          <- 6.0
+## 2.4 Parámetros de navegación web y simulación humana ----
+hl                  <- "es-419" # Idioma: Español Latinoamérica
+gl                  <- "CO"     # Geolocalización: Colombia
+max_paginas_por_mes <- 15       # Hasta 15 páginas SERP (aprox. 150 noticias por mes/localidad)
+espera_min          <- 3.0      # Pausa mínima en segundos entre peticiones
+espera_max          <- 6.0      # Pausa máxima en segundos (jitter aleatorio)
 
+#' Formatea un objeto Date al formato MM/DD/YYYY requerido por Google tbs
 formatear_mmddyyyy <- function(fecha) format(as.Date(fecha), "%m/%d/%Y")
 
+#' Construye la URL completa de búsqueda en Google News con filtro temporal
+#'
+#' @param query Consulta en texto plano (se codifica internamente).
+#' @param dmin Fecha inicial del intervalo.
+#' @param dmax Fecha final del intervalo.
+#' @param start Índice del resultado inicial para paginación (0, 10, 20...).
+#' @param hl Código de idioma.
+#' @param gl Código de país.
+#' @return URL absoluta lista para navegar.
 build_google_news_url <- function(query, dmin, dmax, start = 0, hl = "es-419", gl = "CO") {
   q      <- utils::URLencode(query, reserved = TRUE)
   cd_min <- formatear_mmddyyyy(dmin)
   cd_max <- formatear_mmddyyyy(dmax)
+  
+  # Parámetros clave de Google:
+  # tbm=nws        -> Pestaña de Noticias
+  # tbs=cdr:1,...  -> Rango personalizado de fechas
+  # start=N        -> Paginación
   glue::glue(
     "https://www.google.com/search?q={q}",
     "&tbm=nws&hl={hl}&gl={gl}",
@@ -113,7 +186,9 @@ build_google_news_url <- function(query, dmin, dmax, start = 0, hl = "es-419", g
 
 # 3. Funciones de Extracción y Resiliencia en Navegador ----
 
-## 3.1 Gestión de consentimiento de cookies ----
+## 3.1 Gestión de consentimiento de cookies de Google ----
+#' Detecta y pulsa el botón de aceptación de cookies si aparece en pantalla
+#' @param remDr Instancia del cliente remoto de RSelenium.
 aceptar_consentimiento <- function(remDr) {
   try({
     Sys.sleep(runif(1, 1.5, 3.0))
@@ -129,6 +204,7 @@ aceptar_consentimiento <- function(remDr) {
 }
 
 ## 3.2 Selectores en cascada para atributos y textos ----
+#' Busca el primer texto disponible entre un vector de selectores CSS candidatos
 get_first_text <- function(node, css_vec) {
   for (css in css_vec) {
     kids <- try(node$findChildElements("css selector", css), silent = TRUE)
@@ -140,6 +216,7 @@ get_first_text <- function(node, css_vec) {
   NA_character_
 }
 
+#' Busca el primer atributo disponible entre un vector de selectores CSS candidatos
 get_first_attr <- function(node, css_vec, attr) {
   for (css in css_vec) {
     kids <- try(node$findChildElements("css selector", css), silent = TRUE)
@@ -151,21 +228,36 @@ get_first_attr <- function(node, css_vec, attr) {
   NA_character_
 }
 
-## 3.3 Limpieza de URL de seguimiento y redirecciones ----
+## 3.3 Limpieza de URL de seguimiento y resolución de redirectores ----
+#' Normaliza URLs eliminando redirectores de Google y parámetros UTM de tracking
 limpiar_enlace <- function(url) {
   if (is.na(url) || url == "") return(NA_character_)
-  # Resolver redirector de Google (/url?q=...)
+  
+  # Si Google devuelve un enlace encapsulado en su redirector (/url?q=...)
   if (grepl("/url\\?q=", url)) {
     url <- sub("^.*/url\\?q=([^&]+).*$", "\\1", url)
     url <- utils::URLdecode(url)
   }
-  # Remover parámetros comunes de tracking
+  
+  # Remover parámetros de seguimiento y analítica (utm, ref, fbclid)
   sub("\\?(utm_|ref_|fbclid).*", "", url)
 }
 
-## 3.4 Extracción de página de resultados SERP ----
+## 3.4 Extracción estructurada de una página de resultados SERP ----
+#' Parsea los contenedores de artículos en una página de resultados de Google News
+#'
+#' @param remDr Cliente RSelenium activo.
+#' @param consulta Texto de la consulta ejecutada.
+#' @param localidad Nombre de la localidad correspondiente.
+#' @param dmin Fecha inicial del mes.
+#' @param dmax Fecha final del mes.
+#' @param pagina_idx Índice de la página procesada (1, 2, ...).
+#' @return Tibble con las noticias extraídas en la página actual.
 extraer_pagina_serp <- function(remDr, consulta, localidad, dmin, dmax, pagina_idx) {
+  # Pausa humana aleatoria para evitar detección por cadencia fija
   Sys.sleep(runif(1, espera_min, espera_max))
+  
+  # Selectores CSS modernos que utiliza Google para los contenedores de noticias
   contenedores <- remDr$findElements(
     "css selector",
     "div.SoaBEf, div.dbsr, div.Gx5Zad.fP1Qef.xpd.EtOod.pkphOe, div[jscontroller='d0NqJe']"
@@ -201,7 +293,18 @@ extraer_pagina_serp <- function(remDr, consulta, localidad, dmin, dmax, pagina_i
     dplyr::distinct(enlace, .keep_all = TRUE)
 }
 
-## 3.5 Extracción de cuerpo con selectores semánticos y fallback ----
+## 3.5 Descarga de cuerpo textual con selectores semánticos y fallback ----
+#' Extrae el texto completo del artículo desde la URL original
+#'
+#' @description
+#' Hace una petición HTTP con timeout de 10s buscando selectores semánticos
+#' (<article>, div.article-body) para ignorar pies de página, cookies y menús.
+#' Si el sitio bloquea la petición o el contenido es muy breve, retorna el
+#' resumen de Google News como respaldo confiable (fallback).
+#'
+#' @param url Dirección web del artículo de prensa.
+#' @param resumen_fallback Texto del resumen de Google en caso de fallo.
+#' @return Cadena de texto con el cuerpo limpio o el fallback.
 extraer_cuerpo_noticia <- function(url, resumen_fallback) {
   if (is.na(url) || url == "") return(resumen_fallback)
   
@@ -219,13 +322,13 @@ extraer_cuerpo_noticia <- function(url, resumen_fallback) {
     
     html_doc <- rvest::read_html(httr::content(resp, as = "text", encoding = "UTF-8"))
     
-    # 1. Intentar primero con selectores semánticos de artículo
+    # Prioridad 1: Selectores semánticos de contenido editorial
     nodos_articulo <- rvest::html_elements(
       html_doc,
       "article p, div.article-body p, div.story-contents p, div[itemprop='articleBody'] p"
     )
     
-    # 2. Si no encuentra o es muy corto, recurrir a todos los párrafos <p>
+    # Prioridad 2: Si no hay marcas semánticas, extraer párrafos generales <p>
     if (length(nodos_articulo) == 0) {
       nodos_articulo <- rvest::html_elements(html_doc, "p")
     }
@@ -241,14 +344,18 @@ extraer_cuerpo_noticia <- function(url, resumen_fallback) {
   })
 }
 
-# 4. Loop Principal de Scraping (Incremental o Enriquecimiento) ----
+# 4. Orquestación del Scraping con Control de Checkpoints ----
 
-#' Ejecuta el scraping de Google News con soporte para dos modos
-#' @param modo "faltantes" (descarga solo meses pendientes hasta 2026-09) o "enriquecer" (re-escanea meses cubiertos para capturar noticias omitidas por consultas viejas)
-#' @param localidades_objetivo Vector de localidades a procesar (por defecto las 19)
-#' @param headless Booleano para ocultar o mostrar el navegador (recomendado FALSE para resolver CAPTCHAs)
-#' @param max_paginas Máximo de páginas SERP por mes (por defecto 15 = 150 noticias máx)
-#' @param rango_meses Vector de fechas inicio de mes opcional (para pruebas selectivas)
+#' Ejecuta el ciclo completo de recolección de noticias por localidad y mes
+#'
+#' @param modo Cadena de texto:
+#'   - "faltantes" (por defecto): Descarga únicamente los meses pendientes hasta 2026-09.
+#'   - "enriquecer": Re-escanea meses cubiertos para rescatar noticias con la nueva sintaxis.
+#' @param localidades_objetivo Vector de localidades a procesar (por defecto las 19).
+#' @param headless Booleano: FALSE abre la ventana interactiva de Chrome (recomendado para resolver CAPTCHAs).
+#' @param max_paginas Número máximo de páginas SERP a explorar por cada mes (por defecto 15).
+#' @param rango_meses Vector opcional de fechas inicio de mes para pruebas acotadas.
+#' @return NULL (los datos se persisten atómicamente en disco en cada iteración).
 ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
                                          localidades_objetivo = localidades,
                                          headless = FALSE,
@@ -256,13 +363,16 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
                                          rango_meses = NULL) {
   
   modo <- match.arg(modo)
-  message(paste0("\n>>> [RSelenium] Modo de ejecución: '", modo, "'"))
-  message(">>> Configurando opciones antibot y arrancando ChromeDriver...")
+  message(paste0("\n========================================================"))
+  message(paste0("🚀 INICIANDO SCRAPER DE GOOGLE NEWS EN MODO: '", toupper(modo), "'"))
+  message(paste0("   Localidades a procesar: ", length(localidades_objetivo)))
+  message(paste0("========================================================"))
   
+  # Configuración de capacidades avanzadas de Chrome (antidetección y estabilidad)
   extra_caps <- list(
     chromeOptions = list(
       args = c(
-        "--disable-blink-features=AutomationControlled",
+        "--disable-blink-features=AutomationControlled", # Oculta la bandera interna de Selenium
         "--disable-infobars",
         "--no-sandbox",
         "--disable-dev-shm-usage",
@@ -270,7 +380,7 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       ),
       prefs = list(
-        "profile.default_content_setting_values.notifications" = 2
+        "profile.default_content_setting_values.notifications" = 2 # Desactivar popups de notificaciones
       )
     )
   )
@@ -279,9 +389,10 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
     extra_caps$chromeOptions$args <- c(extra_caps$chromeOptions$args, "--headless=new")
   }
   
+  # Iniciar sesión de ChromeDriver a través de RSelenium
   rD <- RSelenium::rsDriver(
     browser    = "chrome",
-    chromever  = NULL, # Utiliza el Chrome instalado en el sistema
+    chromever  = NULL, # Emplea automáticamente el ejecutable instalado de Chrome
     port       = netstat::free_port(),
     verbose    = FALSE,
     check      = FALSE,
@@ -290,36 +401,42 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
   )
   
   remDr <- rD$client
+  
+  # Asegurar el cierre del navegador y servidor al finalizar o si ocurre una interrupción
   on.exit({
     try(remDr$close(), silent = TRUE)
     try(rD$server$stop(), silent = TRUE)
-    message(">>> Sesión de RSelenium cerrada correctamente.")
+    message(">>> [RSelenium] Sesión de navegador finalizada y puerto liberado.")
   })
   
-  # Inyección antibot de evasión de webdriver
+  # Inyección de script para ocultar la propiedad navigator.webdriver
   try({
     remDr$navigate("https://www.google.com")
     remDr$executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     aceptar_consentimiento(remDr)
   }, silent = TRUE)
   
+  # Definición de meses a recorrer
   meses_a_procesar <- if (is.null(rango_meses)) inicios_mes else as.Date(rango_meses)
   fines_a_procesar <- pmin(meses_a_procesar %m+% months(1) - days(1), fecha_fin)
   
   total_chunks_procesados <- 0
   
+  # Iteración principal por localidad
   for (loc in localidades_objetivo) {
     consulta <- construir_consulta_google(loc)
-    message(paste0("\n========================================================"))
-    message(paste0("📍 Localidad en proceso: ", loc))
-    message(paste0("   Consulta: ", consulta))
-    message(paste0("========================================================"))
+    message(paste0("\n--------------------------------------------------------"))
+    message(paste0("📍 Localidad: ", loc))
+    message(paste0("   Consulta:  ", consulta))
+    message(paste0("--------------------------------------------------------"))
     
+    # Iteración mensual
     for (i_mes in seq_along(meses_a_procesar)) {
       dmin <- meses_a_procesar[i_mes]
       dmax <- fines_a_procesar[i_mes]
       mes_str <- format(dmin, "%Y-%m")
       
+      # Normalizar nombre para archivo seguro en disco
       nombre_limpio <- tolower(stringi::stri_trans_general(loc, "Latin-ASCII"))
       nombre_limpio <- gsub("[^a-zA-Z0-9]", "_", nombre_limpio)
       nombre_limpio <- gsub("_+", "_", nombre_limpio)
@@ -330,12 +447,14 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
         paste0(prefijo_chunk, nombre_limpio, "_", format(dmin, "%Y_%m"), ".parquet")
       )
       
-      # En modo 'faltantes', omitir si el chunk ya existe o ya está en la cobertura histórica
+      # Verificación de Checkpoint en modo 'faltantes'
       if (modo == "faltantes") {
+        # 1. Si el chunk ya fue descargado previamente en esta sesión o una anterior:
         if (file.exists(archivo_chunk)) {
           next
         }
         
+        # 2. Si el mes ya se encuentra cubierto dentro de cobertura_historica.json:
         if (file.exists(archivo_cobertura)) {
           saltar_mes <- FALSE
           try({
@@ -356,7 +475,7 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
           if (saltar_mes) next
         }
       } else if (modo == "enriquecer") {
-        # Si ya se procesó el chunk enriquecido en una sesión anterior, omitir
+        # En modo enriquecer, omitir solo si este chunk enriquecido ya se guardó
         if (file.exists(archivo_chunk)) next
       }
       
@@ -364,6 +483,7 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
       datos_mes <- list()
       start     <- 0L
       
+      # Recorrido de páginas SERP para el mes en curso
       for (i_pag in 1:max_paginas) {
         url <- build_google_news_url(consulta, dmin, dmax, start = start, hl = hl, gl = gl)
         
@@ -371,40 +491,42 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
           remDr$navigate(url)
           aceptar_consentimiento(remDr)
           
-          # Detección de CAPTCHA
+          # Detección y manejo interactivo de CAPTCHA
           page_html <- try(remDr$getPageSource()[[1]], silent = TRUE)
           if (!inherits(page_html, "try-error") && str_detect(page_html, regex("unusual traffic|recaptcha", ignore_case = TRUE))) {
-            warning("\n🚨 ALERTA: CAPTCHA detectado. Resuelve el desafío en la ventana de Chrome.")
+            warning("\n🚨 ATENCIÓN: CAPTCHA detectado. Por favor resuélvelo en la ventana abierta de Chrome.")
             flush.console()
-            Sys.sleep(30)
+            Sys.sleep(30) # Espera 30 segundos para permitir resolución manual
             remDr$navigate(url)
             aceptar_consentimiento(remDr)
           }
           
           df_pag <- extraer_pagina_serp(remDr, consulta, loc, dmin, dmax, pagina_idx = i_pag)
           
+          # Si no hay más noticias en la página actual, terminar el mes
           if (nrow(df_pag) == 0) {
             break
           } else {
             datos_mes[[length(datos_mes) + 1]] <- df_pag
-            start <- start + 10L
+            start <- start + 10L # Avanzar al siguiente bloque de 10 noticias
           }
         }, error = function(e) {
-          warning(paste0("    ⚠ Error en página ", i_pag, ": ", e$message))
+          warning(paste0("    ⚠ Error capturado en página ", i_pag, ": ", e$message))
         })
       }
       
-      # Guardar el chunk obtenido
+      # Guardar el lote mensual en formato Parquet atómico
       if (length(datos_mes) > 0) {
         chunk_df <- dplyr::bind_rows(datos_mes) |>
           dplyr::distinct(enlace, .keep_all = TRUE)
         
-        message(paste0("     Descargando cuerpo para ", nrow(chunk_df), " artículos..."))
+        message(paste0("     Descargando cuerpo editorial para ", nrow(chunk_df), " noticias..."))
         chunk_df$cuerpo <- purrr::map2_chr(chunk_df$enlace, chunk_df$resumen, extraer_cuerpo_noticia)
         
         arrow::write_parquet(chunk_df, archivo_chunk)
         message(paste0("  ✔ Chunk guardado: ", basename(archivo_chunk), " (", nrow(chunk_df), " noticias)"))
       } else {
+        # Registrar un archivo vacío para marcar el mes como consultado sin resultados
         vacio_df <- tibble::tibble(
           localidad = loc, consulta = consulta, titulo = character(0),
           resumen = character(0), fuente = character(0), fecha_texto = character(0),
@@ -416,27 +538,37 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
       }
       
       total_chunks_procesados <- total_chunks_procesados + 1
+      # Pausa breve entre meses para moderar el tráfico
       Sys.sleep(runif(1, 2.0, 4.0))
     }
   }
   
-  message(paste0("\n✔ Scraping finalizado. Chunks nuevos generados: ", total_chunks_procesados))
+  message(paste0("\n✔ Scraping completado exitosamente."))
+  message(paste0("   Total de nuevos lotes (chunks) procesados: ", total_chunks_procesados))
 }
 
-# 5. Consolidación, Auditoría y Actualización de Cobertura ----
+# 5. Consolidación, Auditoría y Actualización de Metadatos ----
 
-#' Consolida la base histórica con todos los chunks (estándar y enriquecidos)
+#' Consolida la base histórica con todos los chunks generados y actualiza cobertura
+#'
+#' @description
+#' Lee la base histórica de noticias y todos los archivos 'chunk_*.parquet'
+#' generados, aplica deduplicación por enlace limpio y por título exacto,
+#' normaliza el campo 'fuente' y sobreescribe los archivos consolidados en
+#' Parquet y RDS, actualizando al mismo tiempo 'cobertura_historica.json'.
+#'
+#' @return Tibble invisible con el consolidado final unificado.
 consolidar_noticias_scraping <- function() {
-  message(">>> [Consolidación] Leyendo base histórica y chunks generados...")
+  message("\n>>> [Consolidación] Leyendo base histórica y lotes descargados...")
   
-  # 1. Base histórica existente
+  # 1. Base histórica validada existente
   df_historico <- tibble::tibble()
   if (file.exists(archivo_consolidado)) {
     df_historico <- arrow::read_parquet(archivo_consolidado)
-    message(paste0("  ✔ Base histórica cargada: ", format(nrow(df_historico), big.mark = ","), " noticias."))
+    message(paste0("  ✔ Base previa cargada: ", format(nrow(df_historico), big.mark = ","), " noticias."))
   }
   
-  # 2. Todos los chunks (chunk_*.parquet y chunk_enriquecido_*.parquet)
+  # 2. Lotes adicionales en data/raw/noticias/
   archivos_chunks <- list.files(ruta_noticias_raw, pattern = "^chunk_.*\\.parquet$", full.names = TRUE)
   df_nuevos <- tibble::tibble()
   
@@ -445,31 +577,31 @@ consolidar_noticias_scraping <- function() {
       tryCatch(arrow::read_parquet(f), error = function(e) tibble::tibble())
     }) |>
       dplyr::filter(!is.na(titulo) & titulo != "")
-    message(paste0("  ✔ Chunks leídos de disco: ", format(nrow(df_nuevos), big.mark = ","), " noticias."))
+    message(paste0("  ✔ Chunks adicionales leídos: ", format(nrow(df_nuevos), big.mark = ","), " noticias."))
   }
   
-  # 3. Fusión total y deduplicación inteligente
+  # 3. Fusión y deduplicación dual (por URL limpia y por título idéntico)
   noticias_total <- dplyr::bind_rows(df_historico, df_nuevos) |>
     dplyr::filter(!is.na(enlace) & enlace != "") |>
     dplyr::distinct(enlace, .keep_all = TRUE) |>
     dplyr::distinct(titulo, .keep_all = TRUE)
   
-  # 4. Normalización de campos clave
+  # 4. Normalización de dominios y medios
   noticias_total <- noticias_total |>
     dplyr::mutate(
       fuente = ifelse(is.na(fuente) | fuente == "", sub("^https?://([^/]+).*$", "\\1", enlace), fuente)
     )
   
-  # 5. Exportar base consolidada
+  # 5. Exportar la base unificada en Parquet y RDS para máxima portabilidad
   arrow::write_parquet(noticias_total, archivo_consolidado)
   saveRDS(noticias_total, archivo_consol_rds)
   
-  message(paste0("\n✔ Base consolidada unificada con éxito:"))
+  message(paste0("\n✔ Base de datos consolidada actualizada:"))
   message(paste0("  - Parquet: ", archivo_consolidado))
   message(paste0("  - RDS:     ", archivo_consol_rds))
   message(paste0("  - Total noticias únicas validadas: ", format(nrow(noticias_total), big.mark = ",")))
   
-  # 6. Actualizar cobertura_historica.json
+  # 6. Actualizar metadatos de cobertura temporal (cobertura_historica.json)
   try({
     cobertura <- noticias_total |>
       dplyr::group_by(localidad) |>
@@ -494,16 +626,18 @@ consolidar_noticias_scraping <- function() {
     )
     
     jsonlite::write_json(metadatos, archivo_cobertura, pretty = TRUE, auto_unbox = TRUE)
-    message(paste0("  ✔ Metadatos de cobertura actualizados en: ", archivo_cobertura))
+    message(paste0("  ✔ Registro de metadatos actualizado en: ", archivo_cobertura))
   }, silent = TRUE)
   
   return(invisible(noticias_total))
 }
 
-#' Auditoría y diagnóstico completo del corpus consolidado
+#' Genera un reporte diagnóstico en consola sobre el estado del corpus consolidado
+#'
+#' @return Tibble invisible con el dataset leído.
 auditar_corpus_noticias <- function() {
   if (!file.exists(archivo_consolidado)) {
-    message("⚠ No se encontró el archivo consolidado.")
+    message("⚠ No se encontró el archivo consolidado en data/raw/.")
     return(NULL)
   }
   
@@ -526,11 +660,11 @@ auditar_corpus_noticias <- function() {
   df_loc <- df |> dplyr::count(localidad, sort = TRUE) |> head(10)
   print(as.data.frame(df_loc))
   
-  cat("\nFuentes principales:\n")
+  cat("\nPrincipales medios de comunicación:\n")
   df_fuente <- df |> dplyr::count(fuente, sort = TRUE) |> head(5)
   print(as.data.frame(df_fuente))
   
-  cat("\nValores faltantes (NAs):\n")
+  cat("\nAuditoría de valores faltantes (NAs):\n")
   cat(paste0("  - Titular: ", sum(is.na(df$titulo)), "\n"))
   cat(paste0("  - Resumen: ", sum(is.na(df$resumen)), "\n"))
   cat(paste0("  - Enlace:  ", sum(is.na(df$enlace)), "\n"))
@@ -540,9 +674,9 @@ auditar_corpus_noticias <- function() {
   return(invisible(df))
 }
 
-# 6. Modo de Ejecución Directo ----
+# 6. Ejecución Directa en Consola ----
 if (!interactive()) {
-  message("Para ejecutar el scraping en R:")
+  message("Para ejecutar el scraping interactivo en RStudio:")
   message("  source('scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R')")
   message("  ejecutar_scraping_localidades(modo = 'faltantes') # O 'enriquecer'")
   message("  consolidar_noticias_scraping()")
