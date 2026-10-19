@@ -151,15 +151,15 @@ get_first_attr <- function(node, css_vec, attr) {
   NA_character_
 }
 
-## 3.3 Limpieza de URL de seguimiento ----
+## 3.3 Limpieza de URL de seguimiento y redirecciones ----
 limpiar_enlace <- function(url) {
   if (is.na(url) || url == "") return(NA_character_)
-  # Si Google antepone su redirector (/url?q=...)
+  # Resolver redirector de Google (/url?q=...)
   if (grepl("/url\\?q=", url)) {
     url <- sub("^.*/url\\?q=([^&]+).*$", "\\1", url)
     url <- utils::URLdecode(url)
   }
-  # Remover parámetros de analítica comunes
+  # Remover parámetros comunes de tracking
   sub("\\?(utm_|ref_|fbclid).*", "", url)
 }
 
@@ -241,10 +241,23 @@ extraer_cuerpo_noticia <- function(url, resumen_fallback) {
   })
 }
 
-# 4. Loop Principal de Scraping con Checkpointing Incremental ----
+# 4. Loop Principal de Scraping (Incremental o Enriquecimiento) ----
 
-ejecutar_scraping_localidades <- function(headless = FALSE, max_paginas = max_paginas_por_mes) {
-  message(">>> [RSelenium] Configurando opciones antibot y arrancando ChromeDriver...")
+#' Ejecuta el scraping de Google News con soporte para dos modos
+#' @param modo "faltantes" (descarga solo meses pendientes hasta 2026-09) o "enriquecer" (re-escanea meses cubiertos para capturar noticias omitidas por consultas viejas)
+#' @param localidades_objetivo Vector de localidades a procesar (por defecto las 19)
+#' @param headless Booleano para ocultar o mostrar el navegador (recomendado FALSE para resolver CAPTCHAs)
+#' @param max_paginas Máximo de páginas SERP por mes (por defecto 15 = 150 noticias máx)
+#' @param rango_meses Vector de fechas inicio de mes opcional (para pruebas selectivas)
+ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
+                                         localidades_objetivo = localidades,
+                                         headless = FALSE,
+                                         max_paginas = max_paginas_por_mes,
+                                         rango_meses = NULL) {
+  
+  modo <- match.arg(modo)
+  message(paste0("\n>>> [RSelenium] Modo de ejecución: '", modo, "'"))
+  message(">>> Configurando opciones antibot y arrancando ChromeDriver...")
   
   extra_caps <- list(
     chromeOptions = list(
@@ -268,7 +281,7 @@ ejecutar_scraping_localidades <- function(headless = FALSE, max_paginas = max_pa
   
   rD <- RSelenium::rsDriver(
     browser    = "chrome",
-    chromever  = NULL, # Usa la versión instalada de Chrome
+    chromever  = NULL, # Utiliza el Chrome instalado en el sistema
     port       = netstat::free_port(),
     verbose    = FALSE,
     check      = FALSE,
@@ -290,55 +303,61 @@ ejecutar_scraping_localidades <- function(headless = FALSE, max_paginas = max_pa
     aceptar_consentimiento(remDr)
   }, silent = TRUE)
   
+  meses_a_procesar <- if (is.null(rango_meses)) inicios_mes else as.Date(rango_meses)
+  fines_a_procesar <- pmin(meses_a_procesar %m+% months(1) - days(1), fecha_fin)
+  
   total_chunks_procesados <- 0
   
-  for (loc in localidades) {
+  for (loc in localidades_objetivo) {
     consulta <- construir_consulta_google(loc)
     message(paste0("\n========================================================"))
     message(paste0("📍 Localidad en proceso: ", loc))
     message(paste0("   Consulta: ", consulta))
     message(paste0("========================================================"))
     
-    for (i_mes in seq_along(inicios_mes)) {
-      dmin <- inicios_mes[i_mes]
-      dmax <- fines_mes[i_mes]
+    for (i_mes in seq_along(meses_a_procesar)) {
+      dmin <- meses_a_procesar[i_mes]
+      dmax <- fines_a_procesar[i_mes]
       mes_str <- format(dmin, "%Y-%m")
       
       nombre_limpio <- tolower(stringi::stri_trans_general(loc, "Latin-ASCII"))
       nombre_limpio <- gsub("[^a-zA-Z0-9]", "_", nombre_limpio)
       nombre_limpio <- gsub("_+", "_", nombre_limpio)
       
+      prefijo_chunk <- if (modo == "enriquecer") "chunk_enriquecido_" else "chunk_"
       archivo_chunk <- file.path(
         ruta_noticias_raw,
-        paste0("chunk_", nombre_limpio, "_", format(dmin, "%Y_%m"), ".parquet")
+        paste0(prefijo_chunk, nombre_limpio, "_", format(dmin, "%Y_%m"), ".parquet")
       )
       
-      # 1. Control de checkpointing directo: si el chunk ya existe en disco, se omite
-      if (file.exists(archivo_chunk)) {
-        next
-      }
-      
-      # 2. Control de cobertura histórica: si el mes ya está cubierto en la base validada, se omite
-      if (file.exists(archivo_cobertura)) {
-        saltar_mes <- FALSE
-        try({
-          meta <- jsonlite::fromJSON(archivo_cobertura)
-          loc_norm <- tolower(stringi::stri_trans_general(loc, "Latin-ASCII"))
-          loc_match <- purrr::keep(meta$localidades, function(l) {
-            nombre_loc_meta <- if (is.data.frame(l)) l$localidad[1] else l$localidad
-            tolower(stringi::stri_trans_general(nombre_loc_meta, "Latin-ASCII")) == loc_norm
-          })
-          if (length(loc_match) > 0) {
-            meses_loc <- if (is.data.frame(loc_match[[1]])) loc_match[[1]]$meses_cubiertos[[1]] else loc_match[[1]]$meses_cubiertos
-            if (mes_str %in% meses_loc) {
-              saltar_mes <- TRUE
-            }
-          }
-        }, silent = TRUE)
-        
-        if (saltar_mes) {
+      # En modo 'faltantes', omitir si el chunk ya existe o ya está en la cobertura histórica
+      if (modo == "faltantes") {
+        if (file.exists(archivo_chunk)) {
           next
         }
+        
+        if (file.exists(archivo_cobertura)) {
+          saltar_mes <- FALSE
+          try({
+            meta <- jsonlite::fromJSON(archivo_cobertura)
+            loc_norm <- tolower(stringi::stri_trans_general(loc, "Latin-ASCII"))
+            loc_match <- purrr::keep(meta$localidades, function(l) {
+              nombre_loc_meta <- if (is.data.frame(l)) l$localidad[1] else l$localidad
+              tolower(stringi::stri_trans_general(nombre_loc_meta, "Latin-ASCII")) == loc_norm
+            })
+            if (length(loc_match) > 0) {
+              meses_loc <- if (is.data.frame(loc_match[[1]])) loc_match[[1]]$meses_cubiertos[[1]] else loc_match[[1]]$meses_cubiertos
+              if (mes_str %in% meses_loc) {
+                saltar_mes <- TRUE
+              }
+            }
+          }, silent = TRUE)
+          
+          if (saltar_mes) next
+        }
+      } else if (modo == "enriquecer") {
+        # Si ya se procesó el chunk enriquecido en una sesión anterior, omitir
+        if (file.exists(archivo_chunk)) next
       }
       
       message(paste0("  🔄 Scrapeando: ", loc, " | Mes: ", mes_str, "..."))
@@ -375,12 +394,11 @@ ejecutar_scraping_localidades <- function(headless = FALSE, max_paginas = max_pa
         })
       }
       
-      # Guardar el chunk obtenido (o vacío para registrar completitud)
+      # Guardar el chunk obtenido
       if (length(datos_mes) > 0) {
         chunk_df <- dplyr::bind_rows(datos_mes) |>
           dplyr::distinct(enlace, .keep_all = TRUE)
         
-        # Extracción opcional del cuerpo del artículo
         message(paste0("     Descargando cuerpo para ", nrow(chunk_df), " artículos..."))
         chunk_df$cuerpo <- purrr::map2_chr(chunk_df$enlace, chunk_df$resumen, extraer_cuerpo_noticia)
         
@@ -398,18 +416,18 @@ ejecutar_scraping_localidades <- function(headless = FALSE, max_paginas = max_pa
       }
       
       total_chunks_procesados <- total_chunks_procesados + 1
-      # Pausa breve entre meses
       Sys.sleep(runif(1, 2.0, 4.0))
     }
   }
   
-  message(paste0("\n✔ Scraping completado. Total nuevos chunks procesados: ", total_chunks_procesados))
+  message(paste0("\n✔ Scraping finalizado. Chunks nuevos generados: ", total_chunks_procesados))
 }
 
-# 5. Consolidación y Actualización de Cobertura ----
+# 5. Consolidación, Auditoría y Actualización de Cobertura ----
 
+#' Consolida la base histórica con todos los chunks (estándar y enriquecidos)
 consolidar_noticias_scraping <- function() {
-  message(">>> [Consolidación] Leyendo base histórica y nuevos chunks...")
+  message(">>> [Consolidación] Leyendo base histórica y chunks generados...")
   
   # 1. Base histórica existente
   df_historico <- tibble::tibble()
@@ -418,7 +436,7 @@ consolidar_noticias_scraping <- function() {
     message(paste0("  ✔ Base histórica cargada: ", format(nrow(df_historico), big.mark = ","), " noticias."))
   }
   
-  # 2. Chunks adicionales en data/raw/noticias/
+  # 2. Todos los chunks (chunk_*.parquet y chunk_enriquecido_*.parquet)
   archivos_chunks <- list.files(ruta_noticias_raw, pattern = "^chunk_.*\\.parquet$", full.names = TRUE)
   df_nuevos <- tibble::tibble()
   
@@ -427,10 +445,10 @@ consolidar_noticias_scraping <- function() {
       tryCatch(arrow::read_parquet(f), error = function(e) tibble::tibble())
     }) |>
       dplyr::filter(!is.na(titulo) & titulo != "")
-    message(paste0("  ✔ Chunks adicionales leídos: ", format(nrow(df_nuevos), big.mark = ","), " noticias."))
+    message(paste0("  ✔ Chunks leídos de disco: ", format(nrow(df_nuevos), big.mark = ","), " noticias."))
   }
   
-  # 3. Fusión y deduplicación por enlace limpio y título
+  # 3. Fusión total y deduplicación inteligente
   noticias_total <- dplyr::bind_rows(df_historico, df_nuevos) |>
     dplyr::filter(!is.na(enlace) & enlace != "") |>
     dplyr::distinct(enlace, .keep_all = TRUE) |>
@@ -442,14 +460,14 @@ consolidar_noticias_scraping <- function() {
       fuente = ifelse(is.na(fuente) | fuente == "", sub("^https?://([^/]+).*$", "\\1", enlace), fuente)
     )
   
-  # 5. Exportar base unificada
+  # 5. Exportar base consolidada
   arrow::write_parquet(noticias_total, archivo_consolidado)
   saveRDS(noticias_total, archivo_consol_rds)
   
-  message(paste0("\n✔ Base consolidada actualizada exitosamente:"))
-  message(paste0("  - Archivo Parquet: ", archivo_consolidado))
-  message(paste0("  - Archivo RDS:     ", archivo_consol_rds))
-  message(paste0("  - Total noticias únicas: ", format(nrow(noticias_total), big.mark = ",")))
+  message(paste0("\n✔ Base consolidada unificada con éxito:"))
+  message(paste0("  - Parquet: ", archivo_consolidado))
+  message(paste0("  - RDS:     ", archivo_consol_rds))
+  message(paste0("  - Total noticias únicas validadas: ", format(nrow(noticias_total), big.mark = ",")))
   
   # 6. Actualizar cobertura_historica.json
   try({
@@ -482,10 +500,51 @@ consolidar_noticias_scraping <- function() {
   return(invisible(noticias_total))
 }
 
-# 6. Ejecución Directa ----
+#' Auditoría y diagnóstico completo del corpus consolidado
+auditar_corpus_noticias <- function() {
+  if (!file.exists(archivo_consolidado)) {
+    message("⚠ No se encontró el archivo consolidado.")
+    return(NULL)
+  }
+  
+  df <- arrow::read_parquet(archivo_consolidado)
+  
+  cat("\n=======================================================\n")
+  cat("📊 AUDITORÍA DEL CORPUS DE NOTICIAS CONSOLIDADO\n")
+  cat("=======================================================\n")
+  cat(paste0("Total de artículos: ", format(nrow(df), big.mark = ","), "\n"))
+  cat(paste0("Rango temporal:     ", min(df$fecha_chunk_desde, na.rm=TRUE), " a ", max(df$fecha_chunk_desde, na.rm=TRUE), "\n"))
+  cat(paste0("Medios únicos:      ", length(unique(df$fuente)), "\n\n"))
+  
+  cat("Distribución por año:\n")
+  df_año <- df |>
+    dplyr::mutate(año = lubridate::year(as.Date(fecha_chunk_desde))) |>
+    dplyr::count(año)
+  print(as.data.frame(df_año))
+  
+  cat("\nNoticias por localidad (Top 10):\n")
+  df_loc <- df |> dplyr::count(localidad, sort = TRUE) |> head(10)
+  print(as.data.frame(df_loc))
+  
+  cat("\nFuentes principales:\n")
+  df_fuente <- df |> dplyr::count(fuente, sort = TRUE) |> head(5)
+  print(as.data.frame(df_fuente))
+  
+  cat("\nValores faltantes (NAs):\n")
+  cat(paste0("  - Titular: ", sum(is.na(df$titulo)), "\n"))
+  cat(paste0("  - Resumen: ", sum(is.na(df$resumen)), "\n"))
+  cat(paste0("  - Enlace:  ", sum(is.na(df$enlace)), "\n"))
+  cat(paste0("  - Cuerpo:  ", sum(is.na(df$cuerpo)), "\n"))
+  cat("=======================================================\n\n")
+  
+  return(invisible(df))
+}
+
+# 6. Modo de Ejecución Directo ----
 if (!interactive()) {
-  message("Para iniciar la recolección ejecute en R:")
+  message("Para ejecutar el scraping en R:")
   message("  source('scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R')")
-  message("  ejecutar_scraping_localidades()")
+  message("  ejecutar_scraping_localidades(modo = 'faltantes') # O 'enriquecer'")
   message("  consolidar_noticias_scraping()")
+  message("  auditar_corpus_noticias()")
 }
