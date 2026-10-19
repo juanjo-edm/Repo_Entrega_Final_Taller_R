@@ -59,17 +59,18 @@ flowchart TD
 ### `scraping_google_news.R`
 * **¿Qué hace?** Automatiza Google Noticias mediante `RSelenium` para descargar periodos nuevos o faltantes mes por mes.
 * **Control incremental inteligente:** Antes de lanzar una petición a Google, revisa `cobertura_historica.json` y los chunks guardados en `data/raw/noticias/`. Si el mes de esa localidad ya existe, lo omite automáticamente, ahorrando tiempo y evitando bloqueos de IP.
-* **Búsqueda booleana estricta:** Aplica el operador `+` en cada palabra obligatoria (`+seguridad +Bogotá +localidad +hurtos +KENNEDY`), forzando a Google a un AND estricto.
+* **Búsqueda booleana optimizada:** Aplica agrupación de sinónimos de delitos (`"hurto" OR "robo" OR "atraco" OR "inseguridad"`), mención exacta de Bogotá y la localidad, y filtros de exclusión deportiva para casos homónimos como Santa Fe (`-fútbol -liga`).
 * **Ejecución:**
   ```r
   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
   ejecutar_scraping_localidades()
+  consolidar_noticias_scraping()
   ```
 
 ---
 
 ## 4. Cobertura Histórica y Expansión Futura
 
-* **Periodo cubierto en subtablas:** Enero de 2022 a Septiembre de 2025 (45 meses).
-* **Periodo pendiente por scrapear:** Octubre a Diciembre de 2025 (3 meses para completar el cuatrienio).
-* Al ejecutar `scraping_google_news.R`, el script identificará de inmediato que los primeros 45 meses ya están cubiertos y únicamente descargará los 3 meses restantes, integrándolos a la base consolidada sin tocar los datos previos.
+* **Periodo cubierto en subtablas históricas:** Enero de 2022 a Septiembre de 2025 (45 meses, 2.487 noticias consolidadas).
+* **Periodo objetivo extendido:** Octubre de 2025 a Septiembre de 2026 (12 meses adicionales para las 19 localidades).
+* Al ejecutar `scraping_google_news.R`, el script identifica de inmediato a través de `cobertura_historica.json` qué meses ya existen y se enfoca exclusivamente en los periodos faltantes, guardando cada lote como un archivo `chunk_*.parquet` y actualizando la base unificada con `consolidar_noticias_scraping()`.
