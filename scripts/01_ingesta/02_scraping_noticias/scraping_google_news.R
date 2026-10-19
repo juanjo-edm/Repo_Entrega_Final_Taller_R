@@ -45,7 +45,7 @@ set.seed(20261014)
 
 ## 1.2 Verificación e instalación de paquetes requeridos ----
 librerias_requeridas <- c(
-  "here", "conflicted", "RSelenium", "netstat", "arrow", "readr",
+  "here", "conflicted", "RSelenium", "wdman", "netstat", "arrow", "readr",
   "dplyr", "tidyr", "stringr", "stringi", "glue", "lubridate",
   "rvest", "httr", "purrr", "jsonlite"
 )
@@ -61,6 +61,7 @@ suppressPackageStartupMessages({
   library(here)        # Rutas relativas seguras referenciadas a la raíz del proyecto
   library(conflicted)  # Resolución estricta y transparente de colisiones de funciones
   library(RSelenium)   # Control automatizado de navegadores web (WebDriver)
+  library(wdman)       # Gestor directo de binarios ChromeDriver sin Selenium Server
   library(netstat)     # Detección dinámica de puertos libres de red para Selenium
   library(arrow)       # Lectura y escritura eficiente en formato columnar Parquet
   library(readr)       # Lectura y exportación rápida de tablas rectangulares
@@ -389,24 +390,31 @@ ejecutar_scraping_localidades <- function(modo = c("faltantes", "enriquecer"),
     extra_caps$chromeOptions$args <- c(extra_caps$chromeOptions$args, "--headless=new")
   }
   
-  # Iniciar sesión de ChromeDriver a través de RSelenium
-  rD <- RSelenium::rsDriver(
-    browser    = "chrome",
-    chromever  = NULL, # Emplea automáticamente el ejecutable instalado de Chrome
-    port       = netstat::free_port(),
-    verbose    = FALSE,
-    check      = FALSE,
-    phantomver = NULL,
+  # Iniciar ChromeDriver nativo directamente (evita fallos de binman_seleniumserver y Java)
+  puerto <- netstat::free_port()
+  message(paste0(">>> Conectando ChromeDriver directo en puerto local: ", puerto))
+  
+  cDrv <- wdman::chrome(
+    port    = puerto,
+    check   = FALSE,
+    verbose = FALSE
+  )
+  
+  remDr <- RSelenium::remoteDriver(
+    remoteServerAddr  = "localhost",
+    port              = puerto,
+    browserName       = "chrome",
     extraCapabilities = extra_caps
   )
   
-  remDr <- rD$client
+  Sys.sleep(1.5)
+  remDr$open(silent = TRUE)
   
-  # Asegurar el cierre del navegador y servidor al finalizar o si ocurre una interrupción
+  # Asegurar el cierre del navegador y del proceso ChromeDriver al finalizar o ante interrupción
   on.exit({
     try(remDr$close(), silent = TRUE)
-    try(rD$server$stop(), silent = TRUE)
-    message(">>> [RSelenium] Sesión de navegador finalizada y puerto liberado.")
+    try(cDrv$stop(), silent = TRUE)
+    message(">>> [RSelenium] Proceso ChromeDriver finalizado y puerto liberado.")
   })
   
   # Inyección de script para ocultar la propiedad navigator.webdriver
