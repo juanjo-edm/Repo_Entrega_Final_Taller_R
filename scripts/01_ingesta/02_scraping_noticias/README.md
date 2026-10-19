@@ -57,14 +57,31 @@ flowchart TD
   ```
 
 ### `scraping_google_news.R`
-* **¿Qué hace?** Automatiza Google Noticias mediante `RSelenium` para descargar periodos nuevos o faltantes mes por mes.
-* **Control incremental inteligente:** Antes de lanzar una petición a Google, revisa `cobertura_historica.json` y los chunks guardados en `data/raw/noticias/`. Si el mes de esa localidad ya existe, lo omite automáticamente, ahorrando tiempo y evitando bloqueos de IP.
-* **Búsqueda booleana optimizada:** Aplica agrupación de sinónimos de delitos (`"hurto" OR "robo" OR "atraco" OR "inseguridad"`), mención exacta de Bogotá y la localidad, y filtros de exclusión deportiva para casos homónimos como Santa Fe (`-fútbol -liga`).
-* **Ejecución:**
+* **¿Qué hace?** Automatiza Google Noticias mediante `RSelenium` con evasión antibot, selectores semánticos y dos modos de operación.
+* **Modos disponibles:**
+  * `modo = "faltantes"`: Omitirá meses ya cubiertos en `cobertura_historica.json` y descargará exclusivamente los periodos pendientes hasta Septiembre de 2026.
+  * `modo = "enriquecer"`: Vuelve a consultar meses ya existentes con la nueva sintaxis booleana con sinónimos (`"hurto" OR "robo" OR "atraco" OR "inseguridad"`), capturando noticias adicionales que fueron omitidas en el scraping histórico original.
+* **Auditoría del corpus:** Función `auditar_corpus_noticias()` que entrega métricas de volumen, distribución anual, medios y chequeo de NAs.
+* **Ejecución típica:**
   ```r
   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
-  ejecutar_scraping_localidades()
+  
+  # Opción 1: Completar meses faltantes (2025-10 a 2026-09)
+  ejecutar_scraping_localidades(modo = "faltantes")
+  
+  # Opción 2: Enriquecer meses históricos con más noticias
+  ejecutar_scraping_localidades(modo = "enriquecer", localidades_objetivo = c("KENNEDY", "CHAPINERO"))
+  
+  # Consolidar y auditar
   consolidar_noticias_scraping()
+  auditar_corpus_noticias()
+  ```
+
+### `test_scraping_noticias.R`
+* **¿Qué hace?** Batería de 15 pruebas automatizadas que valida la sintaxis booleana, exclusiones deportivas, codificación de URLs, limpieza de enlaces de tracking, fallback de cuerpo e integridad del dataset consolidado.
+* **Ejecución de pruebas:**
+  ```r
+  source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "test_scraping_noticias.R"))
   ```
 
 ---
@@ -73,4 +90,4 @@ flowchart TD
 
 * **Periodo cubierto en subtablas históricas:** Enero de 2022 a Septiembre de 2025 (45 meses, 2.487 noticias consolidadas).
 * **Periodo objetivo extendido:** Octubre de 2025 a Septiembre de 2026 (12 meses adicionales para las 19 localidades).
-* Al ejecutar `scraping_google_news.R`, el script identifica de inmediato a través de `cobertura_historica.json` qué meses ya existen y se enfoca exclusivamente en los periodos faltantes, guardando cada lote como un archivo `chunk_*.parquet` y actualizando la base unificada con `consolidar_noticias_scraping()`.
+* Al ejecutar `scraping_google_news.R`, el script identifica a través de `cobertura_historica.json` qué meses ya existen, guarda los nuevos lotes particionados en `.parquet` y consolida de forma atómica sin duplicar enlaces ni títulos.
