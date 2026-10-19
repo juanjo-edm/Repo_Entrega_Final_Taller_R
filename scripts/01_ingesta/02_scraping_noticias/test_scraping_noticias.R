@@ -13,7 +13,8 @@ suppressPackageStartupMessages({
   library(stringr)
 })
 
-# Cargar funciones del scraper
+# Desactivar auto-ejecución para cargar únicamente las funciones en el entorno de pruebas
+auto_ejecutar <- FALSE
 source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
 
 cat("\n==================================================================\n")

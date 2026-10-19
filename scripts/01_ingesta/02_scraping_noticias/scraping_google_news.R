@@ -674,11 +674,33 @@ auditar_corpus_noticias <- function() {
   return(invisible(df))
 }
 
-# 6. Ejecución Directa en Consola ----
-if (!interactive()) {
-  message("Para ejecutar el scraping interactivo en RStudio:")
-  message("  source('scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R')")
-  message("  ejecutar_scraping_localidades(modo = 'faltantes') # O 'enriquecer'")
-  message("  consolidar_noticias_scraping()")
-  message("  auditar_corpus_noticias()")
+# 6. Ejecución Automática del Pipeline de Scraping ----
+
+#' Ejecuta el pipeline completo de scraping, consolidación y auditoría
+#'
+#' @param modo "faltantes" (descarga solo meses pendientes hasta 2026-09) o "enriquecer"
+#' @param headless Booleano: FALSE abre Chrome visible (recomendado para resolver CAPTCHAs)
+#' @return Tibble invisible con el corpus consolidado final.
+ejecutar_pipeline_noticias_completo <- function(modo = "faltantes", headless = FALSE) {
+  message("\n==================================================================")
+  message("  INICIANDO PIPELINE DE SCRAPING DE GOOGLE NEWS")
+  message("==================================================================")
+  
+  # Paso 1: Ejecutar recolección por localidad y mes
+  ejecutar_scraping_localidades(modo = modo, headless = headless)
+  
+  # Paso 2: Consolidar y actualizar base histórica
+  df_consolidado <- consolidar_noticias_scraping()
+  
+  # Paso 3: Auditar y mostrar métricas en consola
+  auditar_corpus_noticias()
+  
+  return(invisible(df_consolidado))
+}
+
+# Auto-ejecución inmediata:
+# Si se corre el script directamente con source() o Rscript, inicia la descarga.
+# Para cargar únicamente las funciones sin disparar la descarga, definir auto_ejecutar <- FALSE previamente.
+if (!exists("auto_ejecutar") || isTRUE(auto_ejecutar)) {
+  ejecutar_pipeline_noticias_completo(modo = "faltantes", headless = FALSE)
 }
