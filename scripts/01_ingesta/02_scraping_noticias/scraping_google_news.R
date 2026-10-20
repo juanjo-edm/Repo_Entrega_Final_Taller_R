@@ -17,10 +17,10 @@
 #   Seccion 3: Recoleccion de notas de prensa recientes via feed Google News RSS.
 #   Seccion 4: Consolidacion y union vertical de subtablas historicas y lotes.
 #   Seccion 5: Normalizacion de campos, deduplicacion dual y delimitacion muestral.
-#   Seccion 6: Enriquecimiento analitico:
+#   Seccion 6: Enriquecimiento analitico con diccionarios tematicos ampliados:
 #              - Tipificacion de medios de comunicacion (sesgos editoriales).
 #              - Validacion territorial y determinacion de confianza geografica.
-#              - Clasificacion tematica de modalidad delictiva (violencia, comercio, personas, etc.).
+#              - Clasificacion exhaustiva de modalidades delictivas y hechos de seguridad.
 #              - Estructura temporal para modelacion en panel (ano, mes, trimestre, semana).
 #   Seccion 7: Almacenamiento optimizado de microdatos (Parquet, RDS) y metadatos JSON.
 #   Seccion 8: Resumen descriptivo de la muestra y diagnostico de integridad.
@@ -245,7 +245,7 @@ df_muestra_base <- df_unificado_bruto |>
 
 
 # ------------------------------------------------------------------------------
-# 6. ENRIQUECIMIENTO ANALITICO DEL CORPUS DE NOTICIAS
+# 6. ENRIQUECIMIENTO ANALITICO CON DICCIONARIOS TEMATICOS Y PANEL
 # ------------------------------------------------------------------------------
 
 # 6.1 MEJORA 1: Tipificacion y categorizacion de medios de comunicacion
@@ -302,25 +302,62 @@ df_muestra_enriquecida <- df_muestra_enriquecida |>
   ) |>
   select(-loc_slug, -patron_geografico, -texto_geografia)
 
-# 6.3 MEJORA 3: Clasificacion tematica de modalidades delictivas
-# Identifica menciones de tipos especificos de hurto y agresion mediante expresiones regulares
-texto_delito <- tolower(paste(df_muestra_enriquecida$titulo, df_muestra_enriquecida$resumen))
+# 6.3 MEJORA 3: Diccionario semantico exhaustivo de delitos y hechos de seguridad
+# Normalizacion de texto sin tildes para optimizar busquedas lexicograficas
+texto_corpus <- tolower(stri_trans_general(paste(df_muestra_enriquecida$titulo, df_muestra_enriquecida$resumen), "Latin-ASCII"))
+
+# Diccionarios semanticos expandidos por modalidad:
+patron_violencia <- "arma de fuego|pistola|revolver|cuchillo|arma blanca|punzon|punal|disparo|disparos|balacera|tiroteo|baleado|apunalado|herido|homicidio|asesinato|asesinado|asesino|sicariato|sicario|muerto|cadaver|embolsado|abatido|abatidos|cruces de disparos|lesiones personales|muerte|violenta|mataron"
+
+patron_personas  <- "celular|telefono|movil|peaton|transeunte|atraco|atracaron|asaltaron|raponazo|cosquilleo|pasajero|transmilenio|sitp|paradero|billetera|reloj|joya|bolso|mochila|morral|paseo millonario|taxista|fleteo|transeuntes|manada|hurto a personas|robo a personas|ladron de celular|robaron a"
+
+patron_comercio  <- "local|comercio|tienda|restaurante|panaderia|bodega|negocio|supermercado|almacen|banco|cajero|joyeria|establecimiento|farmacia|drogueria|comerciante|comerciantes|asaltaron local|salon de belleza|peluqueria|bar|discoteca|asadero"
+
+patron_residencias <- "casa|apartamento|vivienda|conjunto residencial|edificio|habitacion|residencia|apartamentero|apartamenteros|hurto a residencia|robo a casa"
+
+patron_vehiculos <- "carro|vehiculo|moto|motocicleta|camioneta|autopartes|llanta|espejo|computador del carro|bici|bicicleta|ciclista|bicitaxi|deshuesadero|hurto de automotores|halado|taxi"
+
+patron_infraestructura <- "cable|cables|medidor|medidores|alcantarilla|tapas de alcantarilla|alumbrado publico|infraestructura|fibra optica|energia|acueducto|residuos|basuras"
+
+patron_extorsion <- "extorsion|extorsiones|vacuna|vacunas|gota a gota|panfleto|panfletos|amenaza|amenazas|boleteo|chantaje|tren de aragua|satanas|milicias"
+
+patron_microtrafico <- "estupefacientes|microtrafico|droga|drogas|olla|ollas|papeleta|papeletas|dosis|bazuco|marihuana|cocaina|jibaro|jibaros|expendedor|expendedores|trafico de estupefacientes|narco"
+
+patron_operativos <- "capturado|capturada|capturados|capturan|cayo|cayeron|banda|bandas|desarticulada|desarticulan|allanamiento|allanamientos|operativo|golpe a|desmantelan|judicializados|cayeron los|detuvieron|detenido|detenidos|aprehendido|aprehendidos|incautaron|incautacion|porte ilegal|porte de armas|mini uzi|falsificacion|licor adulterado"
+
+patron_politica   <- "frente de seguridad|frentes de seguridad|camaras|camara|pie de fuerza|policias|dispositivo|comando|comandos|seguridad en navidad|alcaldesa|alcalde|patrullaje|patrullajes|cifras de seguridad|consejo de seguridad|vigilancia|estrategia de seguridad|percepcion de inseguridad|victimizacion|cifras|dane|secretaria de seguridad|seguridad en bogota|falta de seguridad"
+
+patron_fraude     <- "estafa|estafas|ciberdelito|ciberdelitos|falso servicio|suplantacion|engano|clonacion|lucrando"
 
 df_muestra_enriquecida <- df_muestra_enriquecida |>
   mutate(
-    modalidad_personas    = str_detect(texto_delito, "celular|peaton|peatón|atraco|pasajero|transmilenio|sitp|paradero|billetera|reloj|joya|bolso|mochila"),
-    modalidad_comercio    = str_detect(texto_delito, "local|comercio|tienda|restaurante|panaderia|panadería|bodega|negocio|supermercado|almacen|almacén|banco|cajero"),
-    modalidad_residencias = str_detect(texto_delito, "casa|apartamento|vivienda|conjunto residencial|edificio|habitacion|residencia"),
-    modalidad_automotores = str_detect(texto_delito, "carro|vehiculo|vehículo|moto|motocicleta|camioneta|autopartes|llanta|espejo|fleteo"),
-    delito_con_violencia  = str_detect(texto_delito, "arma de fuego|pistola|revolver|revólver|cuchillo|arma blanca|disparo|disparos|baleado|apunalado|apuñalado|herido|homicidio|asesinato|sicariato|muerto"),
-    tipo_delito_dominante = case_when(
-      delito_con_violencia & modalidad_personas ~ "Hurto a personas con violencia",
-      modalidad_personas                        ~ "Hurto a personas",
-      modalidad_comercio                        ~ "Hurto a comercio",
-      modalidad_automotores                     ~ "Hurto de vehiculos / autopartes",
-      modalidad_residencias                     ~ "Hurto a residencias",
-      delito_con_violencia                      ~ "Hecho violento / Homicidio",
-      TRUE                                      ~ "Seguridad ciudadana no especificada"
+    # Variables indicadoras binarias por dimension
+    modalidad_personas       = str_detect(texto_corpus, patron_personas),
+    modalidad_comercio       = str_detect(texto_corpus, patron_comercio),
+    modalidad_residencias    = str_detect(texto_corpus, patron_residencias),
+    modalidad_automotores    = str_detect(texto_corpus, patron_vehiculos),
+    delito_con_violencia     = str_detect(texto_corpus, patron_violencia),
+    modalidad_extorsion      = str_detect(texto_corpus, patron_extorsion),
+    modalidad_microtrafico   = str_detect(texto_corpus, patron_microtrafico),
+    modalidad_operativos     = str_detect(texto_corpus, patron_operativos),
+    modalidad_prevencion     = str_detect(texto_corpus, patron_politica),
+    
+    # Clasificacion tematica dominante exhaustiva
+    tipo_delito_dominante    = case_when(
+      str_detect(texto_corpus, patron_violencia) & str_detect(texto_corpus, patron_personas) ~ "Hurto a personas con violencia",
+      str_detect(texto_corpus, patron_personas)        ~ "Hurto a personas",
+      str_detect(texto_corpus, patron_comercio)       ~ "Hurto a comercio",
+      str_detect(texto_corpus, patron_vehiculos)      ~ "Hurto de vehiculos / autopartes / bicicletas",
+      str_detect(texto_corpus, patron_residencias)    ~ "Hurto a residencias",
+      str_detect(texto_corpus, patron_extorsion)      ~ "Extorsion y amenazas",
+      str_detect(texto_corpus, patron_microtrafico)   ~ "Microtrafico y estupefacientes",
+      str_detect(texto_corpus, patron_infraestructura)~ "Hurto de infraestructura y servicios publicos",
+      str_detect(texto_corpus, patron_violencia)      ~ "Hecho violento y homicidio",
+      str_detect(texto_corpus, patron_operativos)     ~ "Operativos policiales y captura de bandas",
+      str_detect(texto_corpus, patron_politica)       ~ "Politica de seguridad, vigilancia y prevencion",
+      str_detect(texto_corpus, patron_fraude)         ~ "Fraude, estafa y cibercrimen",
+      str_detect(texto_corpus, "hurto|robo|atraco|ladron|ladrones|delincuente|delincuentes|asaltante") ~ "Hurto y delincuencia comun general",
+      TRUE                                            ~ "Seguridad ciudadana y coyuntura no especificada"
     )
   )
 
@@ -386,7 +423,7 @@ conteo_tipo_medio <- df_muestra_final |>
   count(tipo_medio, sort = TRUE, name = "articulos") |>
   as.data.frame()
 
-# Cuadro 3: Distribucion por modalidad delictiva dominante
+# Cuadro 3: Distribucion por modalidad delictiva dominante (taxonomia refinada)
 conteo_delitos <- df_muestra_final |>
   count(tipo_delito_dominante, sort = TRUE, name = "articulos") |>
   as.data.frame()
