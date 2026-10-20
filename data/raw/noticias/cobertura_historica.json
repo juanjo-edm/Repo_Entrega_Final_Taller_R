@@ -1,6 +1,6 @@
 {
   "proyecto": "Hurtos y Sentimiento Mediatico en Bogota (2022-2026)",
-  "fecha_actualizacion": "2026-10-19 19:46:23.543126",
+  "fecha_actualizacion": "2026-10-19 19:52:41.11737",
   "total_filas_consolidadas": 3928,
   "rango_generalizable": {
     "inicio": "2022-01-01",
@@ -39,16 +39,6 @@
     ],
     "4": [
       {
-        "localidad": "Candelaria",
-        "noticias_consolidadas": 49,
-        "fecha_min": "2022-07-01",
-        "fecha_max": "2025-09-01",
-        "meses_cubiertos": ["2022-07", "2022-09", "2022-12", "2023-03", "2023-04", "2023-05", "2023-09", "2023-10", "2023-12", "2024-01", "2024-03", "2024-05", "2024-09", "2024-11", "2024-12", "2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09"],
-        "fuentes_principales": ["www.infobae.com", "bogota.gov.co", "caracol.com.co", "www.diarioadn.co", "www.policia.gov.co"]
-      }
-    ],
-    "5": [
-      {
         "localidad": "Chapinero",
         "noticias_consolidadas": 260,
         "fecha_min": "2022-01-01",
@@ -57,7 +47,7 @@
         "fuentes_principales": ["www.infobae.com", "bogota.gov.co", "Infobae", "El Tiempo", "Pulzo"]
       }
     ],
-    "6": [
+    "5": [
       {
         "localidad": "Ciudad Bolívar",
         "noticias_consolidadas": 323,
@@ -67,7 +57,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "www.eltiempo.com", "Bogota.gov.co", "Infobae"]
       }
     ],
-    "7": [
+    "6": [
       {
         "localidad": "Engativá",
         "noticias_consolidadas": 248,
@@ -77,7 +67,7 @@
         "fuentes_principales": ["www.infobae.com", "bogota.gov.co", "El Tiempo", "City Tv", "www.eltiempo.com"]
       }
     ],
-    "8": [
+    "7": [
       {
         "localidad": "Fontibón",
         "noticias_consolidadas": 155,
@@ -87,7 +77,7 @@
         "fuentes_principales": ["bogota.gov.co", "Infobae", "City Tv", "www.infobae.com", "El Tiempo"]
       }
     ],
-    "9": [
+    "8": [
       {
         "localidad": "Kennedy",
         "noticias_consolidadas": 261,
@@ -97,17 +87,17 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "El Tiempo", "www.eltiempo.com", "citytv.eltiempo.com"]
       }
     ],
-    "10": [
+    "9": [
       {
         "localidad": "La Candelaria",
-        "noticias_consolidadas": 43,
-        "fecha_min": "2022-08-01",
+        "noticias_consolidadas": 92,
+        "fecha_min": "2022-07-01",
         "fecha_max": "2026-09-01",
-        "meses_cubiertos": ["2022-08", "2022-11", "2023-03", "2023-05", "2023-09", "2024-01", "2024-02", "2024-03", "2024-04", "2024-05", "2024-08", "2024-09", "2024-10", "2024-11", "2025-01", "2025-04", "2025-06", "2025-07", "2025-08", "2025-10", "2026-02", "2026-03", "2026-04", "2026-05", "2026-07", "2026-08", "2026-09"],
-        "fuentes_principales": ["Infobae", "Blu Radio", "El Tiempo", "Bogota.gov.co", "Pulzo"]
+        "meses_cubiertos": ["2022-07", "2022-08", "2022-09", "2022-11", "2022-12", "2023-03", "2023-04", "2023-05", "2023-09", "2023-10", "2023-12", "2024-01", "2024-02", "2024-03", "2024-04", "2024-05", "2024-08", "2024-09", "2024-10", "2024-11", "2024-12", "2025-01", "2025-02", "2025-03", "2025-04", "2025-05", "2025-06", "2025-07", "2025-08", "2025-09", "2025-10", "2026-02", "2026-03", "2026-04", "2026-05", "2026-07", "2026-08", "2026-09"],
+        "fuentes_principales": ["www.infobae.com", "Infobae", "bogota.gov.co", "Blu Radio", "El Tiempo"]
       }
     ],
-    "11": [
+    "10": [
       {
         "localidad": "Los Mártires",
         "noticias_consolidadas": 176,
@@ -117,7 +107,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "Infobae", "El Tiempo", "Bogota.gov.co"]
       }
     ],
-    "12": [
+    "11": [
       {
         "localidad": "Puente Aranda",
         "noticias_consolidadas": 231,
@@ -127,7 +117,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "City Tv", "El Tiempo", "citytv.eltiempo.com"]
       }
     ],
-    "13": [
+    "12": [
       {
         "localidad": "Rafael Uribe Uribe",
         "noticias_consolidadas": 217,
@@ -137,7 +127,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "Infobae", "El Tiempo", "City Tv"]
       }
     ],
-    "14": [
+    "13": [
       {
         "localidad": "San Cristóbal",
         "noticias_consolidadas": 212,
@@ -147,7 +137,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "El Tiempo", "City Tv", "Infobae"]
       }
     ],
-    "15": [
+    "14": [
       {
         "localidad": "Santa Fe",
         "noticias_consolidadas": 142,
@@ -157,7 +147,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "Bogota.gov.co", "Pulzo", "City Tv"]
       }
     ],
-    "16": [
+    "15": [
       {
         "localidad": "Suba",
         "noticias_consolidadas": 227,
@@ -167,7 +157,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "City Tv", "El Tiempo", "www.eltiempo.com"]
       }
     ],
-    "17": [
+    "16": [
       {
         "localidad": "Teusaquillo",
         "noticias_consolidadas": 150,
@@ -177,7 +167,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "El Tiempo", "Infobae", "City Tv"]
       }
     ],
-    "18": [
+    "17": [
       {
         "localidad": "Tunjuelito",
         "noticias_consolidadas": 96,
@@ -187,7 +177,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "City Tv", "Bogota.gov.co", "Pulzo"]
       }
     ],
-    "19": [
+    "18": [
       {
         "localidad": "Usaquén",
         "noticias_consolidadas": 210,
@@ -197,7 +187,7 @@
         "fuentes_principales": ["bogota.gov.co", "www.infobae.com", "El Tiempo", "Pulzo", "Infobae"]
       }
     ],
-    "20": [
+    "19": [
       {
         "localidad": "Usme",
         "noticias_consolidadas": 161,

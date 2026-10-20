@@ -1,31 +1,29 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediatico en Bogota (2022-2026)
 # ARCHIVO: scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R
-# ROL: Ingesta, depuracion y consolidacion de prensa digital (Google News RSS)
+# ROL: Ingesta, depuracion, enriquecimiento y consolidacion de prensa digital
 # AUTORES: Juan Jose Echeverry, Miguelangel Palma, Sergio Lopez (Grupo 10)
 # PROGRAMA: Maestria en Economia Aplicada (MECA) — Universidad de los Andes
 # ==============================================================================
 #
 # METODOLOGIA Y FLUJO SECUENCIAL:
 # Este script implementa un pipeline procedimental puro y lineal para la
-# construccion del corpus periodistico sobre criminalidad y percepcion de
-# seguridad en Bogota D.C. entre enero de 2022 y septiembre de 2026.
+# construccion y enriquecimiento analitico del corpus periodistico sobre
+# criminalidad y percepcion de seguridad en Bogota D.C. (2022 - 2026).
 #
-# El diseno sigue una arquitectura estrictamente secuencial (de arriba hacia abajo)
-# y prescinde de funciones envolventes personalizadas. Esta decision metodologica
-# permite:
-#   1. Inspeccionar interactivamente en memoria cada paso del procesamiento.
-#   2. Garantizar la trazabilidad y reproducibilidad econometrica de los datos.
-#   3. Evaluar de manera transparente las transformaciones aplicadas a cada variable.
-#
-# ESTRUCTURA DEL PIPELINE:
-#   Seccion 1: Configuracion del entorno, resolucion de colisiones y dependencias.
-#   Seccion 2: Definicion del catalogo territorial y construccion de consultas booleanas.
+# ESTRUCTURA PROCEDIMENTAL DEL PIPELINE:
+#   Seccion 1: Configuracion del entorno, resolucion de colisiones y librerias.
+#   Seccion 2: Definicion del catalogo territorial y consultas booleanas.
 #   Seccion 3: Recoleccion de notas de prensa recientes via feed Google News RSS.
-#   Seccion 4: Consolidacion y union vertical de subtablas historicas y nuevos lotes.
+#   Seccion 4: Consolidacion y union vertical de subtablas historicas y lotes.
 #   Seccion 5: Normalizacion de campos, deduplicacion dual y delimitacion muestral.
-#   Seccion 6: Almacenamiento optimizado de microdatos (Parquet, RDS) y metadatos JSON.
-#   Seccion 7: Reporte descriptivo de frecuencias y control de valores faltantes.
+#   Seccion 6: Enriquecimiento analitico:
+#              - Tipificacion de medios de comunicacion (sesgos editoriales).
+#              - Validacion territorial y determinacion de confianza geografica.
+#              - Clasificacion tematica de modalidad delictiva (violencia, comercio, personas, etc.).
+#              - Estructura temporal para modelacion en panel (ano, mes, trimestre, semana).
+#   Seccion 7: Almacenamiento optimizado de microdatos (Parquet, RDS) y metadatos JSON.
+#   Seccion 8: Resumen descriptivo de la muestra y diagnostico de integridad.
 # ==============================================================================
 
 
@@ -33,26 +31,13 @@
 # 1. ENTORNO DE TRABAJO, RESOLUCION DE CONFLICTOS Y LIBRERIAS
 # ------------------------------------------------------------------------------
 
-# Desactivar notacion cientifica para preservar identificadores numericos y fechas
+# Desactivar notacion cientifica para preservar codigos numericos e identificadores
 options(scipen = 999)
 
-# Fijar semilla pseudoaleatoria para reproducibilidad en procesos muestrales
+# Fijar semilla pseudoaleatoria para reproducibilidad global
 set.seed(20261014)
 
-# Carga de paquetes del ecosistema R requeridos:
-# - here: Construccion de rutas relativas independientes del sistema operativo.
-# - conflicted: Manejo estricto de colisiones entre nombres de funciones de distintas librerias.
-# - arrow: Lectura y escritura en formato columnar Apache Parquet (alta compresion y velocidad I/O).
-# - readr: Lectura de archivos delimitados y soporte de parseo rapido.
-# - dplyr: Gramatica fundamental para la transformacion, filtrado y manipulacion de datos.
-# - tidyr: Herramientas para ordenamiento y estructuracion de datos en formato 'tidy'.
-# - stringr: Funciones vectorizadas para el procesamiento y manipulacion de cadenas de texto.
-# - stringi: Estandarizacion de caracteres, transliteracion y remocion de acentos ortograficos.
-# - lubridate: Manipulacion y operaciones aritmeticas sobre calendarios y marcas temporales.
-# - xml2: Lectura, extraccion y navegacion en documentos XML y feeds RSS de sindicacion.
-# - rvest: Procesamiento y extraccion de contenido en etiquetas HTML web.
-# - httr: Protocolo de peticiones cliente HTTP con control de encabezados y tiempos de espera.
-# - jsonlite: Serializacion y parseo de metadatos en formato estructurado JSON.
+# Carga de paquetes del ecosistema R requeridos
 library(here)
 library(conflicted)
 library(arrow)
@@ -67,9 +52,7 @@ library(rvest)
 library(httr)
 library(jsonlite)
 
-# Resolucion explicita de colisiones mediante el paquete {conflicted}:
-# Esto asegura que llamadas como filter(), lag() o select() provengan siempre
-# del paquete adecuado sin necesidad de prefijar constantemente con el operador ::.
+# Resolucion explicita de colisiones entre funciones mediante {conflicted}
 conflict_prefer("filter", "dplyr")
 conflict_prefer("lag", "dplyr")
 conflict_prefer("select", "dplyr")
@@ -89,14 +72,13 @@ if (!dir.exists(ruta_noticias_raw)) {
   dir.create(ruta_noticias_raw, recursive = TRUE)
 }
 
-# Parametros del horizonte temporal de investigacion:
-# El periodo de analisis abarca desde el 1 de enero de 2022 hasta el 30 de septiembre de 2026.
+# Parametros del horizonte temporal de investigacion (2022-01-01 a 2026-09-30)
 fecha_inicio_muestra  <- as.Date("2022-01-01")
 fecha_fin_muestra     <- as.Date("2026-09-30")
 
-# Interruptor de ejecucion en vivo:
-# - TRUE: Realiza peticiones web al feed de Google News para descargar notas recientes.
-# - FALSE: Omite la descarga web y procede a consolidar, filtrar y auditar los datos locales existentes.
+# Interruptor de ejecucion de raspado web:
+# FALSE: Utiliza y consolida la informacion local ya descargada.
+# TRUE: Ejecuta consultas web adicionales a Google News RSS.
 ejecutar_descarga_rss <- FALSE
 
 
@@ -104,9 +86,7 @@ ejecutar_descarga_rss <- FALSE
 # 2. CATALOGO DE LOCALIDADES Y ESPECIFICACION DE CONSULTAS BOOLEANAS
 # ------------------------------------------------------------------------------
 
-# Vector con las 19 localidades urbanas del Distrito Capital de Bogota.
-# (Se excluye la localidad 20, Sumapaz, debido a su naturaleza netamente rural y a la
-# ausencia de registros periodisticos continuos sobre criminalidad urbana en prensa digital).
+# Vector con las 19 localidades urbanas del Distrito Capital de Bogota
 localidades_bogota <- c(
   "Usaquén", "Chapinero", "Santa Fe", "San Cristóbal", "Usme",
   "Tunjuelito", "Bosa", "Kennedy", "Fontibón", "Engativá",
@@ -115,15 +95,12 @@ localidades_bogota <- c(
   "Rafael Uribe Uribe", "Ciudad Bolívar"
 )
 
-# Diccionario de terminos asociados a conductas delictivas de alto impacto ciudadano
+# Diccionario tematico de delitos asociados a la seguridad ciudadana
 terminos_delitos <- "(hurto OR robo OR atraco OR asalto OR inseguridad)"
 
 # Construccion procedimental de la tabla de consultas:
-# 1. termino_localidad: Encierra el nombre entre comillas dobles para forzar busqueda textual exacta.
-# 2. filtro_exclusiones: Para la localidad de Santa Fe se excluyen explicitamente terminos futbolisticos
-#    (-futbol, -liga, -campin, -dimayor, -cardenal) para neutralizar el sesgo que genera el club de futbol.
-# 3. cadena_busqueda: Concatenacion limpia y normalizada de los terminos de delito, ciudad y territorio.
-# 4. url_rss: URL parametrizada para el endpoint de Google News RSS con idioma espanol y region Colombia.
+# - Se entrecomilla el territorio para forzar coincidencia textual exacta.
+# - Para Santa Fe se excluyen terminos futbolisticos para neutralizar el sesgo del club homonimo.
 df_consultas <- tibble(localidad = localidades_bogota) |>
   mutate(
     termino_localidad  = paste0('"', localidad, '"'),
@@ -147,34 +124,26 @@ df_consultas <- tibble(localidad = localidades_bogota) |>
 # 3. RECOLECCION SECUENCIAL VIA GOOGLE NEWS RSS (BUCLE DIRECTO)
 # ------------------------------------------------------------------------------
 
-# Este bloque se ejecuta unicamente cuando ejecutar_descarga_rss = TRUE.
-# Realiza consultas secuenciales al feed XML oficial, extrayendo metadatos estructurados
-# sin requerir navegadores automatizados ni generar riesgos de bloqueos por captcha.
 if (isTRUE(ejecutar_descarga_rss)) {
   for (i in seq_len(nrow(df_consultas))) {
     loc_nombre <- df_consultas$localidad[i]
     url_actual <- df_consultas$url_rss[i]
     
-    # Generacion de identificador slug sin caracteres especiales para el archivo particionado
     slug_loc <- tolower(stri_trans_general(loc_nombre, "Latin-ASCII"))
     slug_loc <- gsub("[^a-z0-9]", "_", slug_loc)
     archivo_chunk <- file.path(ruta_noticias_raw, paste0("chunk_rss_", slug_loc, ".parquet"))
     
-    # Manejo de excepciones para asegurar que un fallo de red en una localidad no detenga el bucle
     tryCatch({
-      # Lectura y parseo del documento XML de la respuesta RSS
       doc_xml    <- read_xml(url_actual)
       nodos_item <- xml_find_all(doc_xml, "//item")
       
       if (length(nodos_item) > 0) {
-        # Extraccion de elementos nodales del XML
         titulos_raw <- xml_text(xml_find_first(nodos_item, "title"))
         enlaces_raw <- xml_text(xml_find_first(nodos_item, "link"))
         fechas_raw  <- xml_text(xml_find_first(nodos_item, "pubDate"))
         fuentes_raw <- xml_text(xml_find_first(nodos_item, "source"))
         desc_raw    <- xml_text(xml_find_first(nodos_item, "description"))
         
-        # Limpieza de etiquetas HTML en los textos de resumen informativo
         resumenes_limpios <- character(length(desc_raw))
         for (k in seq_along(desc_raw)) {
           resumenes_limpios[k] <- tryCatch(
@@ -183,16 +152,13 @@ if (isTRUE(ejecutar_descarga_rss)) {
           )
         }
         
-        # Conversion de fechas estandar RFC 822 (GMT/RSS) a objetos Date de R
         fechas_parseadas <- as.Date(parse_date_time(
           fechas_raw,
           orders = c("dmy HMS", "ymd HMS", "a d b Y HMS z", "a d b Y")
         ))
         
-        # Remocion de parametros de seguimiento web y analitica (UTM, ref, fbclid)
         enlaces_limpios <- sub("\\?(utm_|ref_|fbclid).*", "", enlaces_raw)
         
-        # Estructuracion del lote de datos en formato tabular
         df_chunk <- tibble(
           localidad         = loc_nombre,
           consulta          = df_consultas$cadena_busqueda[i],
@@ -211,14 +177,12 @@ if (isTRUE(ejecutar_descarga_rss)) {
           filter(!is.na(enlace) & enlace != "") |>
           distinct(enlace, .keep_all = TRUE)
         
-        # Guardado incremental del lote particionado en formato Parquet
         write_parquet(df_chunk, archivo_chunk)
       }
     }, error = function(e) {
       warning(paste("Fallo en peticion para:", loc_nombre))
     })
     
-    # Pausa de cortesía para no saturar las conexiones del servidor
     Sys.sleep(1.0)
   }
 }
@@ -228,13 +192,13 @@ if (isTRUE(ejecutar_descarga_rss)) {
 # 4. CONSOLIDACION DE REGISTROS HISTORICOS Y PARTICIONES RECIENTES
 # ------------------------------------------------------------------------------
 
-# 4.1 Carga de la serie consolidada preexistente en disco (si existe)
+# Carga de la serie consolidada preexistente
 df_historico_previo <- tibble()
 if (file.exists(archivo_consolidado)) {
   df_historico_previo <- read_parquet(archivo_consolidado)
 }
 
-# 4.2 Carga secuencial de todas las particiones Parquet generadas en data/raw/noticias/
+# Carga de todos los lotes Parquet particionados
 archivos_particiones <- list.files(ruta_noticias_raw, pattern = "^chunk_.*\\.parquet$", full.names = TRUE)
 
 lista_particiones <- vector("list", length(archivos_particiones))
@@ -246,7 +210,7 @@ for (j in seq_along(archivos_particiones)) {
 }
 df_particiones <- bind_rows(lista_particiones)
 
-# 4.3 Fasion vertical de observaciones historicas y registros recientes
+# Fusion vertical
 df_unificado_bruto <- bind_rows(df_historico_previo, df_particiones)
 
 
@@ -254,15 +218,11 @@ df_unificado_bruto <- bind_rows(df_historico_previo, df_particiones)
 # 5. NORMALIZACION, DEDUPLICACION DUAL Y DELIMITACION TEMPORAL
 # ------------------------------------------------------------------------------
 
-# Procedimiento de depuracion econometrica y control de calidad:
-# 1. Filtro de registros espurios con enlaces o titulares vacios.
-# 2. Desinfeccion de enlaces web (limpieza de cadenas de consulta analiticas).
-# 3. Imputacion de medio de comunicacion (fuente): si el campo esta vacio, se extrae el dominio web del enlace.
-# 4. Deduplicacion en dos etapas:
-#    a. Primer nivel: Por enlace web canonico unico (evita registros duplicados de una misma noticia).
-#    b. Segundo nivel: Por titular identico (elimina notas republicadas bajo distintas URLs por agencias de noticias).
-# 5. Delimitacion temporal estricta: Se acota la muestra al periodo entre fecha_inicio_muestra y fecha_fin_muestra.
-df_muestra_limpia <- df_unificado_bruto |>
+df_muestra_base <- df_unificado_bruto |>
+  # Estandarizacion de nombres de localidad (ej. Candelaria -> La Candelaria)
+  mutate(
+    localidad = if_else(localidad == "Candelaria", "La Candelaria", localidad)
+  ) |>
   filter(!is.na(enlace) & enlace != "") |>
   filter(!is.na(titulo) & titulo != "") |>
   mutate(
@@ -275,27 +235,119 @@ df_muestra_limpia <- df_unificado_bruto |>
     fecha_chunk_desde = as.Date(fecha_chunk_desde),
     cuerpo            = if_else(is.na(cuerpo) | cuerpo == "", resumen, cuerpo)
   ) |>
+  # Criterio de deduplicacion dual (URL canonica y titular textual exacto)
   distinct(enlace, .keep_all = TRUE) |>
   distinct(titulo, .keep_all = TRUE) |>
   filter(
     fecha_chunk_desde >= fecha_inicio_muestra,
     fecha_chunk_desde <= fecha_fin_muestra
+  )
+
+
+# ------------------------------------------------------------------------------
+# 6. ENRIQUECIMIENTO ANALITICO DEL CORPUS DE NOTICIAS
+# ------------------------------------------------------------------------------
+
+# 6.1 MEJORA 1: Tipificacion y categorizacion de medios de comunicacion
+# Permite controlar econométricamente por sesgos editoriales (institucional vs. alarma ciudadana)
+fuente_lower <- tolower(df_muestra_base$fuente)
+
+df_muestra_enriquecida <- df_muestra_base |>
+  mutate(
+    tipo_medio = case_when(
+      str_detect(fuente_lower, "bogota\\.gov|alcaldia|concejodebogota|policia|fiscalia|personeria|gobierno") ~ "Institucional",
+      str_detect(fuente_lower, "eltiempo|el tiempo|elespectador|el espectador|semana|portafolio|el pais|el nuevo siglo|la republica") ~ "Prensa Tradicional",
+      str_detect(fuente_lower, "citytv|city tv|caracol|rcn|blu radio|w radio|la fm|canal capital|red\\+ noticias") ~ "Television y Radio",
+      str_detect(fuente_lower, "infobae|pulzo|las2orillas|kienyke|minuto30|valora analitik") ~ "Nativo Digital",
+      str_detect(fuente_lower, "suba alternativa|barrios de bogota|periodico|comunitari|adn") ~ "Prensa Local y Comunitaria",
+      TRUE ~ "Prensa Digital General"
+    )
+  )
+
+# 6.2 MEJORA 2: Validacion de mencion territorial en el texto y confianza geografica
+# Comprueba si el titular o el resumen mencionan explicitamente la localidad o sus barrios representativos
+df_patrones_territorio <- tibble(
+  localidad = localidades_bogota,
+  patron_geografico = c(
+    "usaquen|cedritos|santa barbara|san cristobal norte|torca|unicentro",
+    "chapinero|chico|rosales|el retiro|lago|marly|antiguo country",
+    "santa fe|la macarena|las aguas|germania|las nieves|san victorino|la perseverancia",
+    "san cristobal|20 de julio|la victoria|libertadores|quindio",
+    "usme|yomasa|alfonso lopez|danubio|monteblanco",
+    "tunjuelito|venecia|san carlos|tunal|el tunal|san benito",
+    "bosa|brasil|carbonell|porvenir|san bernardino|la libertad",
+    "kennedy|patio bonito|castilla|tintal|el tintal|corabastos|mandalay|carvajal|timiza",
+    "fontibon|modelia|salitre|capellania|zona franca|san pablo",
+    "engativa|minuto de dios|boyaca real|alamos|quirigua|garces navas",
+    "suba|rincon|niza|colina campestre|tibabuyes|prado veraniego|pontevedra|la campina",
+    "barrios unidos|7 de agosto|siete de agosto|polo club|doce de octubre|rincon del salitre|la castellana",
+    "teusaquillo|palermo|galerias|salitre greco|parkway|ciudad salitre|la soledad",
+    "los martires|martires|santa isabel|ricaurte|eduardo santos|la sabana|voto nacional",
+    "antonio narino|antonio nariño|restrepo|santander|policarpa|ciudad berna",
+    "puente aranda|ciudad montes|salazar gomez|gorgonzola|cundinamarca",
+    "candelaria|la candelaria|centro historico|plaza de bolivar|belen",
+    "rafael uribe|olaya|quiroga|san jose|diana turbay|marruecos",
+    "ciudad bolivar|meissen|sierra morena|arborizadora|lucero|san francisco|jerusalen"
+  )
+) |>
+  mutate(loc_slug = tolower(stri_trans_general(localidad, "Latin-ASCII")))
+
+df_muestra_enriquecida <- df_muestra_enriquecida |>
+  mutate(loc_slug = tolower(stri_trans_general(localidad, "Latin-ASCII"))) |>
+  left_join(df_patrones_territorio |> select(loc_slug, patron_geografico), by = "loc_slug") |>
+  mutate(
+    texto_geografia      = tolower(stri_trans_general(paste(titulo, resumen), "Latin-ASCII")),
+    menciona_territorio  = str_detect(texto_geografia, patron_geografico),
+    confianza_geografica = if_else(menciona_territorio, "Alta", "Media")
+  ) |>
+  select(-loc_slug, -patron_geografico, -texto_geografia)
+
+# 6.3 MEJORA 3: Clasificacion tematica de modalidades delictivas
+# Identifica menciones de tipos especificos de hurto y agresion mediante expresiones regulares
+texto_delito <- tolower(paste(df_muestra_enriquecida$titulo, df_muestra_enriquecida$resumen))
+
+df_muestra_enriquecida <- df_muestra_enriquecida |>
+  mutate(
+    modalidad_personas    = str_detect(texto_delito, "celular|peaton|peatón|atraco|pasajero|transmilenio|sitp|paradero|billetera|reloj|joya|bolso|mochila"),
+    modalidad_comercio    = str_detect(texto_delito, "local|comercio|tienda|restaurante|panaderia|panadería|bodega|negocio|supermercado|almacen|almacén|banco|cajero"),
+    modalidad_residencias = str_detect(texto_delito, "casa|apartamento|vivienda|conjunto residencial|edificio|habitacion|residencia"),
+    modalidad_automotores = str_detect(texto_delito, "carro|vehiculo|vehículo|moto|motocicleta|camioneta|autopartes|llanta|espejo|fleteo"),
+    delito_con_violencia  = str_detect(texto_delito, "arma de fuego|pistola|revolver|revólver|cuchillo|arma blanca|disparo|disparos|baleado|apunalado|apuñalado|herido|homicidio|asesinato|sicariato|muerto"),
+    tipo_delito_dominante = case_when(
+      delito_con_violencia & modalidad_personas ~ "Hurto a personas con violencia",
+      modalidad_personas                        ~ "Hurto a personas",
+      modalidad_comercio                        ~ "Hurto a comercio",
+      modalidad_automotores                     ~ "Hurto de vehiculos / autopartes",
+      modalidad_residencias                     ~ "Hurto a residencias",
+      delito_con_violencia                      ~ "Hecho violento / Homicidio",
+      TRUE                                      ~ "Seguridad ciudadana no especificada"
+    )
+  )
+
+# 6.4 MEJORA 4: Variables de calendario y estructura de panel econometrico
+df_muestra_final <- df_muestra_enriquecida |>
+  mutate(
+    año        = year(fecha_chunk_desde),
+    mes        = month(fecha_chunk_desde),
+    año_mes    = format(fecha_chunk_desde, "%Y-%m"),
+    trimestre  = paste0(year(fecha_chunk_desde), "-T", quarter(fecha_chunk_desde)),
+    semana_año = isoweek(fecha_chunk_desde)
   ) |>
   arrange(localidad, fecha_chunk_desde)
 
 
 # ------------------------------------------------------------------------------
-# 6. ALMACENAMIENTO DE MICRODATOS Y METADATOS MUESTRALES
+# 7. ALMACENAMIENTO DE MICRODATOS Y METADATOS MUESTRALES
 # ------------------------------------------------------------------------------
 
-# 6.1 Exportacion de la base definitiva en formato Parquet (optimo para analisis columnar masivo)
-write_parquet(df_muestra_limpia, archivo_consolidado)
+# 7.1 Exportacion columnar definitiva a Parquet
+write_parquet(df_muestra_final, archivo_consolidado)
 
-# 6.2 Exportacion en formato nativo serializado de R (.rds) para compatibilidad plena
-saveRDS(df_muestra_limpia, archivo_consol_rds)
+# 7.2 Exportacion en formato nativo serializado de R (.rds)
+saveRDS(df_muestra_final, archivo_consol_rds)
 
-# 6.3 Construccion de la matriz agregada de cobertura territorial para metadatos
-tabla_cobertura <- df_muestra_limpia |>
+# 7.3 Generacion y serializacion de metadatos de auditoria muestral (JSON)
+tabla_cobertura <- df_muestra_final |>
   group_by(localidad) |>
   summarise(
     noticias_consolidadas = n(),
@@ -306,14 +358,13 @@ tabla_cobertura <- df_muestra_limpia |>
     .groups               = "drop"
   )
 
-# 6.4 Serializacion del registro de cobertura y trazabilidad en JSON
 metadatos_auditoria <- list(
   proyecto                 = "Hurtos y Sentimiento Mediatico en Bogota (2022-2026)",
   fecha_actualizacion      = as.character(Sys.time()),
-  total_filas_consolidadas = nrow(df_muestra_limpia),
+  total_filas_consolidadas = nrow(df_muestra_final),
   rango_generalizable      = list(
-    inicio = as.character(min(df_muestra_limpia$fecha_chunk_desde, na.rm = TRUE)),
-    fin    = as.character(max(df_muestra_limpia$fecha_chunk_desde, na.rm = TRUE))
+    inicio = as.character(min(df_muestra_final$fecha_chunk_desde, na.rm = TRUE)),
+    fin    = as.character(max(df_muestra_final$fecha_chunk_desde, na.rm = TRUE))
   ),
   localidades              = split(tabla_cobertura, seq_len(nrow(tabla_cobertura)))
 )
@@ -322,40 +373,45 @@ write_json(metadatos_auditoria, archivo_cobertura, pretty = TRUE, auto_unbox = T
 
 
 # ------------------------------------------------------------------------------
-# 7. RESUMEN DESCRIPTIVO DE LA MUESTRA PROCESADA
+# 8. RESUMEN DESCRIPTIVO DE LA MUESTRA PROCESADA
 # ------------------------------------------------------------------------------
 
-# 7.1 Distribucion de observaciones por ano de publicacion
-conteo_anual <- df_muestra_limpia |>
-  mutate(año = year(fecha_chunk_desde)) |>
+# Cuadro 1: Distribucion anual de notas periodisticas
+conteo_anual <- df_muestra_final |>
   count(año, name = "articulos") |>
   as.data.frame()
 
-# 7.2 Distribucion de observaciones por localidad (primeras 10 posiciones)
-conteo_localidades <- df_muestra_limpia |>
-  count(localidad, sort = TRUE, name = "articulos") |>
-  head(10) |>
+# Cuadro 2: Distribucion por categoria de medio de comunicacion
+conteo_tipo_medio <- df_muestra_final |>
+  count(tipo_medio, sort = TRUE, name = "articulos") |>
   as.data.frame()
 
-# 7.3 Principales medios de comunicacion en la muestra (primeras 5 posiciones)
-conteo_fuentes <- df_muestra_limpia |>
-  count(fuente, sort = TRUE, name = "articulos") |>
-  head(5) |>
+# Cuadro 3: Distribucion por modalidad delictiva dominante
+conteo_delitos <- df_muestra_final |>
+  count(tipo_delito_dominante, sort = TRUE, name = "articulos") |>
   as.data.frame()
 
-# 7.4 Tabla de diagnostico de completitud y recuento de valores faltantes (NA)
+# Cuadro 4: Nivel de confianza geografica territorial
+conteo_geografia <- df_muestra_final |>
+  count(confianza_geografica, name = "articulos") |>
+  as.data.frame()
+
+# Cuadro 5: Auditoria de valores faltantes (NA) en campos criticos
 valores_faltantes <- data.frame(
-  variable = c("titulo", "resumen", "enlace", "cuerpo"),
+  variable = c("titulo", "resumen", "enlace", "cuerpo", "tipo_medio", "tipo_delito_dominante", "año_mes"),
   nulos    = c(
-    sum(is.na(df_muestra_limpia$titulo)),
-    sum(is.na(df_muestra_limpia$resumen)),
-    sum(is.na(df_muestra_limpia$enlace)),
-    sum(is.na(df_muestra_limpia$cuerpo))
+    sum(is.na(df_muestra_final$titulo)),
+    sum(is.na(df_muestra_final$resumen)),
+    sum(is.na(df_muestra_final$enlace)),
+    sum(is.na(df_muestra_final$cuerpo)),
+    sum(is.na(df_muestra_final$tipo_medio)),
+    sum(is.na(df_muestra_final$tipo_delito_dominante)),
+    sum(is.na(df_muestra_final$año_mes))
   )
 )
 
-# Impresion academica estructurada de los cuadros estadisticos
 print(conteo_anual, row.names = FALSE)
-print(conteo_localidades, row.names = FALSE)
-print(conteo_fuentes, row.names = FALSE)
+print(conteo_tipo_medio, row.names = FALSE)
+print(conteo_delitos, row.names = FALSE)
+print(conteo_geografia, row.names = FALSE)
 print(valores_faltantes, row.names = FALSE)

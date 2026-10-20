@@ -20,8 +20,8 @@ conflict_prefer("select", "dplyr")
 source(here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
 
 # 1. Validacion de la matriz de consultas
-q_kennedy   <- df_consultas |> filter(localidad == "Kennedy") |> pull(cadena_busqueda)
-q_santafe   <- df_consultas |> filter(localidad == "Santa Fe") |> pull(cadena_busqueda)
+q_kennedy    <- df_consultas |> filter(localidad == "Kennedy") |> pull(cadena_busqueda)
+q_santafe    <- df_consultas |> filter(localidad == "Santa Fe") |> pull(cadena_busqueda)
 q_candelaria <- df_consultas |> filter(localidad == "La Candelaria") |> pull(cadena_busqueda)
 
 stopifnot(str_detect(q_kennedy, "hurto"))
@@ -56,8 +56,39 @@ stopifnot(length(unique(df_verif$localidad)) >= 19)
 stopifnot(max(as.Date(df_verif$fecha_chunk_desde), na.rm = TRUE) <= as.Date("2026-09-30"))
 stopifnot(min(as.Date(df_verif$fecha_chunk_desde), na.rm = TRUE) >= as.Date("2022-01-01"))
 
+# 5. Validacion de variables de enriquecimiento analitico (Mejoras 1 a 4)
+# Tipificacion de medios
+stopifnot("tipo_medio" %in% names(df_verif))
+stopifnot(sum(is.na(df_verif$tipo_medio)) == 0)
+stopifnot("Institucional" %in% unique(df_verif$tipo_medio))
+
+# Confianza geografica
+stopifnot("confianza_geografica" %in% names(df_verif))
+stopifnot(all(df_verif$confianza_geografica %in% c("Alta", "Media")))
+
+# Clasificacion delictiva
+stopifnot("tipo_delito_dominante" %in% names(df_verif))
+stopifnot(sum(is.na(df_verif$tipo_delito_dominante)) == 0)
+stopifnot("modalidad_personas" %in% names(df_verif))
+stopifnot("modalidad_comercio" %in% names(df_verif))
+
+# Estructura temporal de panel
+stopifnot(c("año", "mes", "año_mes", "trimestre", "semana_año") %in% names(df_verif))
+stopifnot(sum(is.na(df_verif$año_mes)) == 0)
+stopifnot(all(str_detect(df_verif$año_mes, "^202[2-6]-(0[1-9]|1[0-2])$")))
+
 # Resumen de verificacion exitosa
 print(data.frame(
-  control = c("consultas_booleanas", "endpoints_rss", "limpieza_urls", "integridad_parquet", "rango_temporal"),
-  estado  = rep("CONFORME", 5)
+  control = c(
+    "consultas_booleanas", 
+    "endpoints_rss", 
+    "limpieza_urls", 
+    "integridad_parquet", 
+    "rango_temporal",
+    "tipificacion_medios",
+    "confianza_geografica",
+    "clasificacion_delitos",
+    "variables_panel_tiempo"
+  ),
+  estado  = rep("CONFORME", 9)
 ), row.names = FALSE)
