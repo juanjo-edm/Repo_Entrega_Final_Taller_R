@@ -22,21 +22,24 @@ data/raw/noticias/
 └── cobertura_historica.json            # Metadatos de meses y fechas ya cubiertos por localidad
 
 data/raw/
-├── noticias_google_news_consolidado.parquet   # Base final validada (4.094 noticias únicas)
+├── noticias_google_news_consolidado.parquet   # Base final validada (3.928 noticias únicas 2022 a sept 2026)
 └── noticias_google_news_consolidado.rds       # Respaldo en formato nativo de R
 ```
 
 ---
 
-## 2. Flujo de Trabajo Metodológico
+## 2. Flujo de Trabajo Metodológico y Procedural
+
+El script `scraping_google_news.R` opera con un **flujo lineal secuencial (Paso 1 a Paso 7)**, sin complejas funciones envolventes anidadas, permitiendo su ejecución de arriba hacia abajo o paso a paso con `Ctrl + Enter` en RStudio:
 
 ```mermaid
 flowchart TD
-    A["19 Subtablas históricas brutas<br/>(4.276 noticias en data/raw/noticias/)"] --> B["Base Histórica<br/>(2.482 noticias 2022-2025)"]
-    C["Google News RSS<br/>(news.google.com/rss/search)"] --> D["Lotes RSS por localidad<br/>(chunk_rss_*.parquet: 1.703 noticias)"]
-    B & D --> E["Consolidación y Deduplicación<br/>(Por URL limpia y título)"]
-    E --> F["noticias_google_news_consolidado.parquet<br/>(4.094 noticias únicas con 0 NAs)"]
-    E --> G["cobertura_historica.json<br/>(Metadatos actualizados a 2026)"]
+    A["Paso 1: Parámetros del proyecto<br/>(2022-01-01 a 2026-09-30)"] --> B["Paso 2: Diccionario de 19 localidades<br/>y utilidades de limpieza"]
+    B --> C["Paso 3: Bucle de recolección RSS<br/>(news.google.com/rss/search)"]
+    C --> D["Paso 4: Carga y unión vertical<br/>(Base previa + Chunks Parquet)"]
+    D --> E["Paso 5: Deduplicación dual y filtro<br/>(Por URL limpia y por título exacto)"]
+    E --> F["Paso 6: Exportación columnar<br/>(Parquet, RDS y cobertura_historica.json)"]
+    F --> G["Paso 7: Diagnóstico y Auditoría<br/>(Distribución por año, top localidades y 0 NAs)"]
 ```
 
 ---
@@ -48,13 +51,14 @@ flowchart TD
 * **Garantía:** Reproduce con precisión matemática las filas del estudio original sin pérdida de información.
 
 ### `scraping_google_news.R`
-* **¿Qué hace?** Automatiza la recolección de noticias para las 19 localidades mediante el **motor oficial Google News RSS**.
+* **¿Qué hace?** Automatiza la recolección, limpieza, deduplicación y consolidación de noticias para las 19 localidades mediante un flujo lineal secuencial y el **motor oficial Google News RSS**.
 * **Ventajas clave:**
+  * Flujo procedimental paso a paso: fácil de leer, depurar y evaluar sin capas de funciones abstractas.
   * No requiere navegador web ni drivers de Selenium.
   * No genera bloqueos por IP ni reCAPTCHAs.
-  * Ejecuta la recolección completa en menos de 1 minuto.
   * Captura fecha real exacta de publicación (`pubDate`), medio de comunicación (`source`), titular y enlace limpio.
-* **Auditoría del corpus:** Función `auditar_corpus_noticias()` que entrega métricas de volumen, distribución anual, medios y chequeo de NAs.
+  * Parámetros explícitos en el encabezado (`FECHA_INICIO_ANALISIS`, `FECHA_FIN_ANALISIS`).
+* **Auditoría del corpus:** Genera automáticamente métricas de volumen por año (2022-2026), distribución territorial y chequeo de NAs.
 * **Ejecución típica:**
   ```r
   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
@@ -71,6 +75,6 @@ flowchart TD
 
 ## 4. Cobertura Histórica y Expansión Futura
 
-* **Periodo cubierto en subtablas históricas:** Enero de 2022 a Septiembre de 2025 (2.482 noticias validadas).
-* **Expansión con Google News RSS:** 1.703 artículos adicionales de 2025 y 2026.
-* **Total consolidado actual:** **4.094 noticias únicas** cubriendo hasta octubre de 2026 con 0 valores nulos en campos esenciales.
+* **Periodo cubierto en subtablas históricas:** Enero de 2022 a Septiembre de 2025 (2.533 noticias previas).
+* **Expansión con Google News RSS:** 1.395 artículos adicionales deduplicados cubriendo hasta septiembre de 2026.
+* **Total consolidado actual:** **3.928 noticias únicas** cubriendo desde `2022-01-01` hasta `2026-09-30` con 0 valores nulos en campos esenciales.

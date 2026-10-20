@@ -1,93 +1,124 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # ARCHIVO: scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R
-# ROL: Pipeline Generalizable de Noticias en Google News (Motor RSS y Checkpointing)
+# ROL: Flujo Secuencial de Ingesta y Consolidación de Noticias (Google News RSS)
 # AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # ==============================================================================
 #
-# DESCRIPCIÓN GENERAL:
-# Este módulo implementa un pipeline 100% generalizable y parametrizable para
-# la ingesta, limpieza, consolidación y auditoría de noticias sobre criminalidad
-# en las 19 localidades urbanas de Bogotá D.C. mediante el motor oficial Google News RSS.
+# DESCRIPCIÓN DEL FLUJO:
+# Este script ejecuta un flujo lineal, secuencial y pedagógico para recolectar,
+# limpiar, consolidar y auditar artículos de noticias sobre seguridad ciudadana
+# en las 19 localidades urbanas de Bogotá D.C.
 #
-# CARACTERÍSTICAS DE GENERALIZACIÓN:
-# 1. Rango Temporal Parametrizable (por defecto 2022-01-01 a 2026-09-30):
-#    Permite recortar o expandir la ventana de análisis a cualquier rango de fechas.
-# 2. Selección Flexible de Territorios:
-#    Permite procesar las 19 localidades completas o subconjuntos específicos.
-# 3. Consultas Booleanas y Filtro Deportivo:
-#    Agrupación de sinónimos de delitos y exclusión de fútbol para Santa Fe.
-# 4. Trazabilidad Atómica:
-#    Guarda chunks particionados en Parquet, unifica con la serie histórica validada,
-#    deduplica por URL limpia y título, y actualiza los metadatos de cobertura JSON.
+# DISEÑO PROCEDURAL (SIN FUNCIONES ENVOLVENTES COMPLEJAS):
+# El código está organizado para ejecutarse de arriba hacia abajo (o línea por línea
+# mediante Ctrl+Enter en RStudio), facilitando su lectura, inspección de variables
+# en el Environment y evaluación académica paso a paso:
 #
-# GUÍA RÁPIDA DE USO:
-#   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
-#   ejecutar_pipeline_noticias_completo(
-#     fecha_inicio = "2022-01-01",
-#     fecha_fin    = "2026-09-30"
-#   )
+#   - Paso 1: Configuración de librerías, rutas y parámetros del análisis.
+#   - Paso 2: Catálogo territorial y funciones auxiliares mínimas de limpieza.
+#   - Paso 3: Recolección y descarga de noticias mediante Google News RSS (bucle directo).
+#   - Paso 4: Carga y unificación secuencial de chunks y serie histórica.
+#   - Paso 5: Deduplicación dual, normalización y delimitación temporal estricta (2022-2026).
+#   - Paso 6: Exportación de datos limpios a Parquet, RDS y metadatos JSON.
+#   - Paso 7: Diagnóstico, auditoría y control de calidad impresos en consola.
 # ==============================================================================
 
-# 1. Configuración de Entorno y Dependencias ----
 
-## 1.1 Opciones globales y reproducibilidad ----
+# ==============================================================================
+# PASO 1: CONFIGURACIÓN DEL ENTORNO, PAQUETES Y PARÁMETROS GLOBALES
+# ==============================================================================
+
+# 1.1 Opciones de sesión y reproducibilidad
+# Evitamos notación científica (ej. 1e+05) y fijamos semilla para trazabilidad
 options(scipen = 999)
 set.seed(20261014)
 
-## 1.2 Verificación e instalación de paquetes requeridos ----
-librerias_requeridas <- c(
-  "here", "conflicted", "arrow", "readr", "dplyr", "tidyr",
-  "stringr", "stringi", "glue", "lubridate", "xml2", "rvest",
-  "httr", "purrr", "jsonlite"
+# 1.2 Verificación e instalación automática de dependencias
+paquetes_requeridos <- c(
+  "here",        # Manejo de rutas relativas al proyecto
+  "conflicted",  # Prevención de ambigüedades entre nombres de funciones
+  "arrow",       # Lectura y escritura eficiente en formato columnar Parquet
+  "readr",       # Funciones de lectura rápida de datos
+  "dplyr",       # Gramática principal de manipulación de datos
+  "tidyr",       # Funciones para ordenamiento y pivoteo de datos
+  "stringr",     # Manipulación de cadenas de texto y regex
+  "stringi",     # Normalización de caracteres y remoción de tildes
+  "glue",        # Interpolación clara de cadenas de texto
+  "lubridate",   # Manejo avanzado de fechas y calendarios
+  "xml2",        # Lectura y parseo del feed XML de Google News RSS
+  "rvest",       # Extracción y limpieza de etiquetas HTML
+  "httr",        # Peticiones HTTP con control de encabezados y timeouts
+  "purrr",       # Aplicación funcional e iteraciones seguras
+  "jsonlite"     # Exportación y parseo de archivos JSON
 )
 
-for (pkg in librerias_requeridas) {
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    message(paste0("Instalando paquete faltante: ", pkg))
-    install.packages(pkg)
+for (paquete in paquetes_requeridos) {
+  if (!requireNamespace(paquete, quietly = TRUE)) {
+    message(paste0("Instalando paquete faltante: ", paquete))
+    install.packages(paquete)
   }
 }
 
+# 1.3 Carga silenciosa de librerías en la sesión
 suppressPackageStartupMessages({
-  library(here)        # Rutas relativas seguras
-  library(conflicted)  # Resolución estricta de colisiones
-  library(arrow)       # Lectura/escritura columnar Parquet
-  library(readr)       # Lectura y exportación rápida
-  library(dplyr)       # Transformación de datos
-  library(tidyr)       # Tidy data
-  library(stringr)     # Expresiones regulares
-  library(stringi)     # Normalización de texto y remoción de acentos
-  library(glue)        # Interpolación de cadenas
-  library(lubridate)   # Manejo de fechas y parseo de marcas temporales
-  library(xml2)        # Parseo de XML para el feed RSS
-  library(rvest)       # Extracción de contenido web HTML
-  library(httr)        # Peticiones HTTP seguras con timeout y headers
-  library(purrr)       # Mapeo funcional
-  library(jsonlite)    # Gestión de metadatos en JSON
+  library(here)
+  library(conflicted)
+  library(arrow)
+  library(readr)
+  library(dplyr)
+  library(tidyr)
+  library(stringr)
+  library(stringi)
+  library(glue)
+  library(lubridate)
+  library(xml2)
+  library(rvest)
+  library(httr)
+  library(purrr)
+  library(jsonlite)
 })
 
-## 1.3 Resolución explícita de conflictos ({conflicted}) ----
+# 1.4 Reglas explícitas de resolución de conflictos de funciones
 conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
-## 1.4 Definición de rutas del proyecto con {here} ----
+# 1.5 Definición de rutas relativas con el paquete {here}
+# Garantiza que el código funcione de forma idéntica en cualquier máquina o SO
 ruta_datos_raw      <- here::here("data", "raw")
 ruta_noticias_raw   <- here::here("data", "raw", "noticias")
-ruta_salida_tablas  <- here::here("output", "tables")
-archivo_cobertura   <- here::here("data", "raw", "noticias", "cobertura_historica.json")
 archivo_consolidado <- here::here("data", "raw", "noticias_google_news_consolidado.parquet")
 archivo_consol_rds  <- here::here("data", "raw", "noticias_google_news_consolidado.rds")
+archivo_cobertura   <- here::here("data", "raw", "noticias", "cobertura_historica.json")
 
+# Creación del directorio de almacenamiento si no existe
 if (!dir.exists(ruta_noticias_raw)) {
   dir.create(ruta_noticias_raw, recursive = TRUE)
 }
 
-# 2. Catálogo Territorial y Consultas Booleanas ----
+# 1.6 PARÁMETROS DEL PIPELINE CONFIGURABLES POR EL USUARIO:
+# Rango temporal de interés para el proyecto (2022-01-01 a 2026-09-30)
+FECHA_INICIO_ANALISIS <- as.Date("2022-01-01")
+FECHA_FIN_ANALISIS    <- as.Date("2026-09-30")
 
-## 2.1 Las 19 localidades urbanas de Bogotá ----
+# Interruptores de ejecución:
+# - EJECUTAR_SCRAPING_RSS: Poner TRUE si se desea volver a interrogar en vivo el feed de Google News
+#   Poner FALSE si ya se tienen los chunks descargados y solo se requiere consolidar/limpiar/auditar.
+EJECUTAR_SCRAPING_RSS <- FALSE
+
+# - DESCARGAR_CUERPOS_HTML: Poner TRUE si se desea navegar a cada noticia para raspar el cuerpo completo
+#   Poner FALSE para usar el resumen estructurado oficial provisto por el RSS (recomendado por velocidad).
+DESCARGAR_CUERPOS_HTML <- FALSE
+
+
+# ==============================================================================
+# PASO 2: CATÁLOGO TERRITORIAL Y FUNCIONES AUXILIARES DE LIMPIEZA
+# ==============================================================================
+
+# 2.1 Definición de las 19 localidades urbanas de Bogotá D.C.
+# (Se excluye Sumapaz por ser 100% rural y no presentar reporte continuo en prensa urbana)
 localidades <- c(
   "USAQUÉN", "CHAPINERO", "SANTA FE", "SAN CRISTÓBAL", "USME",
   "TUNJUELITO", "BOSA", "KENNEDY", "FONTIBÓN", "ENGATIVÁ",
@@ -96,48 +127,63 @@ localidades <- c(
   "RAFAEL URIBE URIBE", "CIUDAD BOLÍVAR"
 )
 
-## 2.2 Constructor de consultas para Google News RSS ----
-#' Construye la consulta booleana optimizada para Google News RSS
+# 2.2 Funciones auxiliares esenciales (bien documentadas y modulares)
+
+#' Construye la consulta de búsqueda booleana para Google News RSS
 #'
 #' @param localidad Nombre de la localidad en texto plano.
-#' @return Cadena de texto con la consulta lista para enviar al feed.
+#' @return Cadena formateada con términos booleanos y filtros temáticos.
 construir_consulta_rss <- function(localidad) {
+  # Agrupación de sinónimos de delitos asociados a seguridad ciudadana
   delitos_kw <- '(hurto OR robo OR atraco OR asalto OR inseguridad)'
   loc_nombre <- stringr::str_to_title(tolower(localidad))
   
-  # Exclusión de noticias deportivas para Santa Fe
+  # Exclusión de noticias deportivas para la localidad de Santa Fe
+  # (Evita confundir noticias del club de fútbol Independiente Santa Fe con la localidad)
   if (tolower(loc_nombre) == "santa fe") {
     return(glue::glue('{delitos_kw} Bogota "{loc_nombre}" -futbol -liga -campin -dimayor -cardenal'))
   }
   
+  # Consulta estándar con la localidad encomillada para búsqueda exacta
   glue::glue('{delitos_kw} Bogota "{loc_nombre}"')
 }
 
-# Alias para compatibilidad hacia atrás
+# Alias para compatibilidad con scripts históricos
 construir_consulta_google <- construir_consulta_rss
 
-#' Constructor de URL para Google News RSS
-build_google_news_url <- function(query, dmin = NULL, dmax = NULL, start = 0, hl = "es-419", gl = "CO") {
-  q <- utils::URLencode(query, reserved = TRUE)
-  glue::glue("https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={gl}:{hl}")
+#' Construye la URL oficial del feed RSS de Google News
+#'
+#' @param query Cadena de búsqueda.
+#' @param hl Idioma (es-419: español latinoamericano).
+#' @param gl Región / País (CO: Colombia).
+#' @return URL absoluta y codificada hacia news.google.com/rss/search.
+build_google_news_url <- function(query, hl = "es-419", gl = "CO", ...) {
+  q_enc <- utils::URLencode(query, reserved = TRUE)
+  glue::glue("https://news.google.com/rss/search?q={q_enc}&hl={hl}&gl={gl}&ceid={gl}:{hl}")
 }
 
-## 2.3 Limpieza y desinfección de URLs ----
-#' Limpia URLs eliminando parámetros de analítica y rastreo
+#' Limpia y normaliza URLs eliminando rastreadores y parámetros de analítica
+#'
+#' @param url Cadena con la URL original.
+#' @return URL canónica limpia o NA si la entrada es inválida.
 limpiar_enlace <- function(url) {
   if (is.na(url) || url == "") return(NA_character_)
-  # Resolver posibles redirectores
+  
+  # Si la URL viene encapsulada en el redirector interno de Google /url?q=
   if (grepl("/url\\?q=", url)) {
     url <- sub("^.*/url\\?q=([^&]+).*$", "\\1", url)
     url <- utils::URLdecode(url)
   }
-  # Remover parámetros UTM y de redes sociales
-  sub("\\?(utm_|ref_|fbclid).*", "", url)
+  
+  # Remover parámetros analíticos de tracking (Google Analytics UTM, Facebook, etc.)
+  url_limpia <- sub("\\?(utm_|ref_|fbclid).*", "", url)
+  return(url_limpia)
 }
 
-# 3. Funciones de Extracción del Motor RSS ----
-
-#' Parsea una fecha en formato RFC 822 / GMT (estándar RSS)
+#' Convierte fechas estándar RFC 822 (formato estándar de feeds RSS) a formato Date
+#'
+#' @param fecha_str Cadena de fecha provista en el feed RSS.
+#' @return Objeto Date de R.
 parsear_fecha_rss <- function(fecha_str) {
   tryCatch({
     d <- as.Date(fecha_str, format = "%a, %d %b %Y")
@@ -150,12 +196,16 @@ parsear_fecha_rss <- function(fecha_str) {
   })
 }
 
-#' Descarga el contenido editorial del artículo con fallback al resumen
+#' Extrae el cuerpo editorial de una noticia con fallback resiliente al resumen
+#'
+#' @param url Dirección web del artículo.
+#' @param resumen_fallback Texto de respaldo en caso de fallo en la descarga.
+#' @return Cadena de texto con el contenido del artículo.
 extraer_cuerpo_noticia <- function(url, resumen_fallback) {
   if (is.na(url) || url == "") return(resumen_fallback)
   
   tryCatch({
-    resp <- httr::GET(
+    peticion <- httr::GET(
       url = url,
       httr::add_headers(
         "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -164,286 +214,290 @@ extraer_cuerpo_noticia <- function(url, resumen_fallback) {
       httr::timeout(6)
     )
     
-    if (httr::status_code(resp) != 200) return(resumen_fallback)
+    if (httr::status_code(peticion) != 200) return(resumen_fallback)
     
-    html_doc <- rvest::read_html(httr::content(resp, as = "text", encoding = "UTF-8"))
+    pagina_html <- rvest::read_html(httr::content(peticion, as = "text", encoding = "UTF-8"))
     
-    # Selectores semánticos de contenido principal
-    nodos_articulo <- rvest::html_elements(
-      html_doc,
+    # Búsqueda semántica en contenedores estándar de prensa
+    parrafos <- rvest::html_elements(
+      pagina_html,
       "article p, div.article-body p, div.story-contents p, div[itemprop='articleBody'] p"
     )
     
-    if (length(nodos_articulo) == 0) {
-      nodos_articulo <- rvest::html_elements(html_doc, "p")
+    if (length(parrafos) == 0) {
+      parrafos <- rvest::html_elements(pagina_html, "p")
     }
     
-    cuerpo <- nodos_articulo |>
+    texto_extraido <- parrafos |>
       rvest::html_text(trim = TRUE) |>
       paste(collapse = " ")
     
-    if (nchar(cuerpo) < 50) return(resumen_fallback)
-    return(cuerpo)
+    if (nchar(texto_extraido) < 50) return(resumen_fallback)
+    return(texto_extraido)
   }, error = function(e) {
     return(resumen_fallback)
   })
 }
 
-#' Consulta Google News RSS para una localidad y retorna un tibble estructurado
-consultar_localidad_rss <- function(localidad, hl = "es-419", gl = "CO", descargar_cuerpos = FALSE) {
-  query_str  <- construir_consulta_rss(localidad)
-  query_enc  <- utils::URLencode(query_str, reserved = TRUE)
-  url_rss    <- glue::glue("https://news.google.com/rss/search?q={query_enc}&hl={hl}&gl={gl}&ceid={gl}:{hl}")
-  
-  tryCatch({
-    doc   <- xml2::read_xml(url_rss)
-    items <- xml2::xml_find_all(doc, "//item")
-    
-    if (length(items) == 0) {
-      return(tibble::tibble())
-    }
-    
-    titulos    <- xml2::xml_text(xml2::xml_find_first(items, "title"))
-    enlaces    <- xml2::xml_text(xml2::xml_find_first(items, "link"))
-    fechas_raw <- xml2::xml_text(xml2::xml_find_first(items, "pubDate"))
-    fuentes    <- xml2::xml_text(xml2::xml_find_first(items, "source"))
-    desc_raw   <- xml2::xml_text(xml2::xml_find_first(items, "description"))
-    
-    # Limpiar resúmenes eliminando tags HTML
-    resumenes <- purrr::map_chr(desc_raw, function(x) {
-      if (is.na(x) || x == "") return(NA_character_)
-      tryCatch(rvest::read_html(x) |> rvest::html_text(trim = TRUE), error = function(e) x)
-    })
-    
-    # Parsear fechas exactas de publicación
-    fechas_pub <- purrr::map_vec(fechas_raw, parsear_fecha_rss)
-    
-    df_loc <- tibble::tibble(
-      localidad         = stringr::str_to_title(tolower(localidad)),
-      consulta          = query_str,
-      titulo            = titulos,
-      resumen           = resumenes,
-      fuente            = fuentes,
-      fecha_texto       = fechas_raw,
-      fecha_iso         = as.character(fechas_pub),
-      enlace            = purrr::map_chr(enlaces, limpiar_enlace),
-      fecha_chunk_desde = lubridate::floor_date(as.Date(fechas_pub), "month"),
-      fecha_chunk_hasta = lubridate::ceiling_date(as.Date(fechas_pub), "month") - lubridate::days(1),
-      pagina            = 1L
-    ) |>
-      dplyr::filter(!is.na(titulo) & titulo != "") |>
-      dplyr::distinct(enlace, .keep_all = TRUE)
-    
-    if (descargar_cuerpos) {
-      df_loc$cuerpo <- purrr::map2_chr(df_loc$enlace, df_loc$resumen, extraer_cuerpo_noticia)
-    } else {
-      df_loc$cuerpo <- df_loc$resumen
-    }
-    
-    return(df_loc)
-  }, error = function(e) {
-    warning(paste0("Error consultando RSS para ", localidad, ": ", e$message))
-    return(tibble::tibble())
-  })
-}
 
-# 4. Orquestación del Scraping RSS por Localidad ----
+# ==============================================================================
+# CONTROL DE ENTORNO DE PRUEBAS UNITARIAS
+# ==============================================================================
+# Si el script es invocado desde testthat o un script de pruebas con auto_ejecutar = FALSE,
+# se detiene aquí para proveer las funciones sin ejecutar el procesamiento completo.
+if (exists("auto_ejecutar") && !isTRUE(auto_ejecutar)) {
+  message("ℹ Modo de pruebas activo: funciones auxiliares cargadas exitosamente en memoria.")
+  # Se interrumpe la ejecución del resto del script de forma controlada
+} else {
 
-#' Ejecuta la recolección automática por RSS para las localidades urbanas
-ejecutar_scraping_rss <- function(localidades_objetivo = localidades, descargar_cuerpos = FALSE) {
-  cat("\n==================================================================\n")
-  cat("📡 INICIANDO RECOLECCIÓN DE NOTICIAS MEDIANTE GOOGLE NEWS RSS\n")
-  cat(paste0("   Total de localidades a consultar: ", length(localidades_objetivo), "\n"))
-  cat("==================================================================\n\n")
+  # ============================================================================
+  # PASO 3: RECOLECCIÓN SECUENCIAL VÍA GOOGLE NEWS RSS (BUCLE DIRECTO)
+  # ============================================================================
   
-  total_articulos <- 0
-  
-  for (loc in localidades_objetivo) {
-    nombre_slug <- tolower(stringi::stri_trans_general(loc, "Latin-ASCII"))
-    nombre_slug <- gsub("[^a-z0-9]", "_", nombre_slug)
-    archivo_chunk <- file.path(ruta_noticias_raw, paste0("chunk_rss_", nombre_slug, ".parquet"))
+  if (isTRUE(EJECUTAR_SCRAPING_RSS)) {
+    cat("\n==================================================================\n")
+    cat("📡 INICIANDO BUCLE DE RECOLECCIÓN VÍA GOOGLE NEWS RSS\n")
+    cat(paste0("   Total de localidades a procesar: ", length(localidades), "\n"))
+    cat("==================================================================\n\n")
     
-    message(paste0("🔄 Consultando RSS: ", loc, "..."))
-    df_loc <- consultar_localidad_rss(loc, descargar_cuerpos = descargar_cuerpos)
+    contador_noticias_descargadas <- 0
     
-    if (nrow(df_loc) > 0) {
-      arrow::write_parquet(df_loc, archivo_chunk)
-      total_articulos <- total_articulos + nrow(df_loc)
-      message(paste0("  ✔ Guardado: ", basename(archivo_chunk), " (", nrow(df_loc), " noticias recuperadas)"))
-    } else {
-      message(paste0("  ℹ 0 noticias recuperadas para: ", loc))
+    for (i in seq_along(localidades)) {
+      loc_actual <- localidades[i]
+      cat(paste0("[", i, "/", length(localidades), "] Procesando localidad: ", loc_actual, "...\n"))
+      
+      # 3.1 Armar consulta booleana y URL
+      consulta_texto <- construir_consulta_rss(loc_actual)
+      url_feed       <- build_google_news_url(consulta_texto)
+      
+      # 3.2 Nombre del archivo chunk particionado
+      slug_localidad <- tolower(stringi::stri_trans_general(loc_actual, "Latin-ASCII"))
+      slug_localidad <- gsub("[^a-z0-9]", "_", slug_localidad)
+      archivo_chunk  <- file.path(ruta_noticias_raw, paste0("chunk_rss_", slug_localidad, ".parquet"))
+      
+      # 3.3 Petición HTTP y lectura del XML
+      intento_descarga <- tryCatch({
+        documento_xml <- xml2::read_xml(url_feed)
+        elementos_item <- xml2::xml_find_all(documento_xml, "//item")
+        
+        if (length(elementos_item) > 0) {
+          # Extracción vectorial de etiquetas XML
+          titulos_vec    <- xml2::xml_text(xml2::xml_find_first(elementos_item, "title"))
+          enlaces_vec    <- xml2::xml_text(xml2::xml_find_first(elementos_item, "link"))
+          fechas_raw_vec <- xml2::xml_text(xml2::xml_find_first(elementos_item, "pubDate"))
+          fuentes_vec    <- xml2::xml_text(xml2::xml_find_first(elementos_item, "source"))
+          desc_raw_vec   <- xml2::xml_text(xml2::xml_find_first(elementos_item, "description"))
+          
+          # Limpiar etiquetas HTML de los resúmenes
+          resumenes_vec <- purrr::map_chr(desc_raw_vec, function(texto) {
+            if (is.na(texto) || texto == "") return(NA_character_)
+            tryCatch(rvest::read_html(texto) |> rvest::html_text(trim = TRUE), error = function(e) texto)
+          })
+          
+          # Parseo de fechas a formato Date
+          fechas_convertidas <- purrr::map_vec(fechas_raw_vec, parsear_fecha_rss)
+          
+          # Construcción del tibble estructurado
+          df_loc <- tibble::tibble(
+            localidad         = stringr::str_to_title(tolower(loc_actual)),
+            consulta          = consulta_texto,
+            titulo            = titulos_vec,
+            resumen           = resumenes_vec,
+            fuente            = fuentes_vec,
+            fecha_texto       = fechas_raw_vec,
+            fecha_iso         = as.character(fechas_convertidas),
+            enlace            = purrr::map_chr(enlaces_vec, limpiar_enlace),
+            fecha_chunk_desde = lubridate::floor_date(as.Date(fechas_convertidas), "month"),
+            fecha_chunk_hasta = lubridate::ceiling_date(as.Date(fechas_convertidas), "month") - lubridate::days(1),
+            pagina            = 1L
+          ) |>
+            dplyr::filter(!is.na(titulo) & titulo != "") |>
+            dplyr::distinct(enlace, .keep_all = TRUE)
+          
+          # Si se solicita descargar el cuerpo HTML completo:
+          if (isTRUE(DESCARGAR_CUERPOS_HTML)) {
+            cat("    -> Descargando contenido editorial de cada enlace...\n")
+            df_loc$cuerpo <- purrr::map2_chr(df_loc$enlace, df_loc$resumen, extraer_cuerpo_noticia)
+          } else {
+            df_loc$cuerpo <- df_loc$resumen
+          }
+          
+          # Guardado seguro en disco del chunk
+          arrow::write_parquet(df_loc, archivo_chunk)
+          cat(paste0("    ✔ ", nrow(df_loc), " noticias guardadas en: ", basename(archivo_chunk), "\n"))
+          contador_noticias_descargadas <- contador_noticias_descargadas + nrow(df_loc)
+        } else {
+          cat("    ℹ No se encontraron noticias recientes en el feed para esta localidad.\n")
+        }
+      }, error = function(err) {
+        cat(paste0("    ⚠ Error consultando ", loc_actual, ": ", err$message, "\n"))
+      })
+      
+      # Pausa prudencial entre peticiones para no saturar conexiones
+      Sys.sleep(1.0)
     }
     
-    Sys.sleep(1.5)
+    cat(paste0("\n✔ Bucle RSS completado. Total noticias descargadas en esta sesión: ", contador_noticias_descargadas, "\n\n"))
+  } else {
+    cat("\nℹ Saltando bucle de descarga en vivo (EJECUTAR_SCRAPING_RSS = FALSE). Procesando datos locales existentes...\n")
   }
+
+
+  # ============================================================================
+  # PASO 4: CARGA Y UNIFICACIÓN DE LA BASE HISTÓRICA Y CHUNKS RECIENTES
+  # ============================================================================
   
   cat("\n==================================================================\n")
-  cat(paste0("✔ Recolección RSS finalizada. Total noticias brutas descargadas: ", total_articulos, "\n"))
-  cat("==================================================================\n\n")
-}
-
-# 5. Consolidación Generalizable y Filtrado Temporal ----
-
-#' Consolida la base histórica con todos los chunks generados y aplica filtros temporales
-#'
-#' @param fecha_inicio Fecha mínima del corpus (por defecto 2022-01-01).
-#' @param fecha_fin Fecha máxima del corpus (por defecto 2026-09-30).
-#' @return Tibble invisible con el corpus unificado y delimitado.
-consolidar_noticias_scraping <- function(fecha_inicio = as.Date("2022-01-01"),
-                                         fecha_fin    = as.Date("2026-09-30")) {
+  cat("🔄 PASO 4: CONSOLIDACIÓN Y LECTURA DE CHUNKS EXISTENTES\n")
+  cat("==================================================================\n")
   
-  fecha_inicio <- as.Date(fecha_inicio)
-  fecha_fin    <- as.Date(fecha_fin)
-  
-  message(paste0("\n>>> [Consolidación] Unificando y delimitando al rango generalizable:"))
-  message(paste0("    Desde: ", fecha_inicio, " | Hasta: ", fecha_fin))
-  
-  # 1. Base histórica previa
-  df_historico <- tibble::tibble()
+  # 4.1 Cargar base histórica existente si está presente en disco
+  df_base_previa <- tibble::tibble()
   if (file.exists(archivo_consolidado)) {
-    df_historico <- arrow::read_parquet(archivo_consolidado)
+    cat(paste0("  -> Leyendo base consolidada previa desde: ", basename(archivo_consolidado), "\n"))
+    df_base_previa <- arrow::read_parquet(archivo_consolidado)
+    cat(paste0("     Artículos previos cargados: ", format(nrow(df_base_previa), big.mark = ","), "\n"))
   }
   
-  # 2. Leer chunks generados en data/raw/noticias/
+  # 4.2 Cargar todos los chunks Parquet generados en data/raw/noticias/
   archivos_chunks <- list.files(ruta_noticias_raw, pattern = "^chunk_.*\\.parquet$", full.names = TRUE)
-  df_nuevos <- tibble::tibble()
+  cat(paste0("  -> Se detectaron ", length(archivos_chunks), " archivos chunk en: data/raw/noticias/\n"))
   
+  df_chunks_nuevos <- tibble::tibble()
   if (length(archivos_chunks) > 0) {
-    df_nuevos <- purrr::map_dfr(archivos_chunks, function(f) {
-      tryCatch(arrow::read_parquet(f), error = function(e) tibble::tibble())
+    df_chunks_nuevos <- purrr::map_dfr(archivos_chunks, function(archivo) {
+      tryCatch(arrow::read_parquet(archivo), error = function(e) tibble::tibble())
     }) |>
       dplyr::filter(!is.na(titulo) & titulo != "")
+    cat(paste0("     Total de registros en chunks: ", format(nrow(df_chunks_nuevos), big.mark = ","), "\n"))
   }
   
-  # 3. Fusión total y deduplicación dual (URL limpia y título)
-  noticias_total <- dplyr::bind_rows(df_historico, df_nuevos) |>
-    dplyr::filter(!is.na(enlace) & enlace != "") |>
-    dplyr::distinct(enlace, .keep_all = TRUE) |>
-    dplyr::distinct(titulo, .keep_all = TRUE)
+  # 4.3 Fusión lineal vertical de ambos conjuntos de datos
+  corpus_unificado <- dplyr::bind_rows(df_base_previa, df_chunks_nuevos)
+  cat(paste0("  -> Filas totales combinadas antes de limpieza: ", format(nrow(corpus_unificado), big.mark = ","), "\n"))
+
+
+  # ============================================================================
+  # PASO 5: DEDUPLICACIÓN DUAL, NORMALIZACIÓN Y DELIMITACIÓN TEMPORAL (2022-2026)
+  # ============================================================================
   
-  # 4. Normalización de campos y delimitación temporal generalizable
-  noticias_total <- noticias_total |>
+  cat("\n==================================================================\n")
+  cat("🧹 PASO 5: DEDUPLICACIÓN DUAL Y DELIMITACIÓN TEMPORAL (2022 A 2026-09)\n")
+  cat("==================================================================\n")
+  
+  corpus_limpio <- corpus_unificado |>
+    # 5.1 Eliminar registros sin enlace o sin titular
+    dplyr::filter(!is.na(enlace) & enlace != "") |>
+    dplyr::filter(!is.na(titulo) & titulo != "") |>
+    
+    # 5.2 Deduplicación dual:
+    # 1º Por enlace web canónico limpio
+    dplyr::distinct(enlace, .keep_all = TRUE) |>
+    # 2º Por titular idéntico (elimina notas republicadas bajo distintas URLs por agencias)
+    dplyr::distinct(titulo, .keep_all = TRUE) |>
+    
+    # 5.3 Normalización de nombres de medios y fechas
     dplyr::mutate(
       fuente            = ifelse(is.na(fuente) | fuente == "", sub("^https?://([^/]+).*$", "\\1", enlace), fuente),
-      fecha_chunk_desde = as.Date(fecha_chunk_desde)
+      fecha_chunk_desde = as.Date(fecha_chunk_desde),
+      cuerpo            = ifelse(is.na(cuerpo) | cuerpo == "", resumen, cuerpo)
     ) |>
+    
+    # 5.4 Delimitación temporal estricta al período de interés generalizable
     dplyr::filter(
-      fecha_chunk_desde >= fecha_inicio & fecha_chunk_desde <= fecha_fin
-    )
+      fecha_chunk_desde >= FECHA_INICIO_ANALISIS & fecha_chunk_desde <= FECHA_FIN_ANALISIS
+    ) |>
+    dplyr::arrange(localidad, fecha_chunk_desde)
   
-  # 5. Exportar base unificada en Parquet y RDS
-  arrow::write_parquet(noticias_total, archivo_consolidado)
-  saveRDS(noticias_total, archivo_consol_rds)
+  cat(paste0("  ✔ Registros únicos validados tras deduplicación y filtros: ", 
+             format(nrow(corpus_limpio), big.mark = ","), "\n"))
+
+
+  # ============================================================================
+  # PASO 6: EXPORTACIÓN DE DATASETS Y METADATOS DE COBERTURA
+  # ============================================================================
   
-  message(paste0("  ✔ Base consolidada guardada en Parquet y RDS."))
-  message(paste0("  ✔ Total noticias validadas en el rango (", fecha_inicio, " a ", fecha_fin, "): ", format(nrow(noticias_total), big.mark = ",")))
+  cat("\n==================================================================\n")
+  cat("💾 PASO 6: EXPORTACIÓN EN PARQUET, RDS Y METADATOS JSON\n")
+  cat("==================================================================\n")
   
-  # 6. Actualizar metadatos de cobertura temporal (cobertura_historica.json)
+  # 6.1 Guardado en formato columnar Parquet (óptimo para lectura rápida y compresión)
+  arrow::write_parquet(corpus_limpio, archivo_consolidado)
+  cat(paste0("  ✔ Base consolidada en Parquet: ", archivo_consolidado, "\n"))
+  
+  # 6.2 Guardado en formato nativo R (RDS) para máxima compatibilidad
+  saveRDS(corpus_limpio, archivo_consol_rds)
+  cat(paste0("  ✔ Base consolidada en RDS:     ", archivo_consol_rds, "\n"))
+  
+  # 6.3 Generación del archivo JSON de metadatos de auditoría
   try({
-    cobertura <- noticias_total |>
+    resumen_cobertura <- corpus_limpio |>
       dplyr::group_by(localidad) |>
       dplyr::summarise(
         noticias_consolidadas = n(),
-        fecha_min = min(as.Date(fecha_chunk_desde), na.rm = TRUE),
-        fecha_max = max(as.Date(fecha_chunk_desde), na.rm = TRUE),
-        meses_cubiertos = list(sort(unique(format(as.Date(fecha_chunk_desde), "%Y-%m")))),
-        fuentes_principales = list(head(names(sort(table(fuente), decreasing = TRUE)), 5)),
-        .groups = "drop"
+        fecha_min             = as.character(min(as.Date(fecha_chunk_desde), na.rm = TRUE)),
+        fecha_max             = as.character(max(as.Date(fecha_chunk_desde), na.rm = TRUE)),
+        meses_cubiertos       = list(sort(unique(format(as.Date(fecha_chunk_desde), "%Y-%m")))),
+        fuentes_principales   = list(head(names(sort(table(fuente), decreasing = TRUE)), 5)),
+        .groups               = "drop"
       )
     
-    metadatos <- list(
-      proyecto = "Hurtos y Sentimiento Mediatico en Bogota (2022-2026)",
-      fecha_actualizacion = as.character(Sys.time()),
-      total_filas_consolidadas = nrow(noticias_total),
-      rango_generalizable = list(
-        inicio = as.character(min(as.Date(noticias_total$fecha_chunk_desde), na.rm = TRUE)),
-        fin    = as.character(max(as.Date(noticias_total$fecha_chunk_desde), na.rm = TRUE))
+    metadatos_json <- list(
+      proyecto                 = "Hurtos y Sentimiento Mediatico en Bogota (2022-2026)",
+      fecha_actualizacion      = as.character(Sys.time()),
+      total_filas_consolidadas = nrow(corpus_limpio),
+      rango_generalizable      = list(
+        inicio = as.character(min(as.Date(corpus_limpio$fecha_chunk_desde), na.rm = TRUE)),
+        fin    = as.character(max(as.Date(corpus_limpio$fecha_chunk_desde), na.rm = TRUE))
       ),
-      localidades = split(cobertura, seq_len(nrow(cobertura)))
+      localidades              = split(resumen_cobertura, seq_len(nrow(resumen_cobertura)))
     )
     
-    jsonlite::write_json(metadatos, archivo_cobertura, pretty = TRUE, auto_unbox = TRUE)
-    message(paste0("  ✔ Registro de cobertura actualizado en: ", archivo_cobertura))
+    jsonlite::write_json(metadatos_json, archivo_cobertura, pretty = TRUE, auto_unbox = TRUE)
+    cat(paste0("  ✔ Metadatos de cobertura actualizados en: ", archivo_cobertura, "\n"))
   }, silent = TRUE)
-  
-  return(invisible(noticias_total))
-}
 
-#' Diagnóstico y auditoría completa del corpus consolidado
-auditar_corpus_noticias <- function() {
-  if (!file.exists(archivo_consolidado)) {
-    message("⚠ No se encontró el archivo consolidado en data/raw/.")
-    return(NULL)
-  }
-  
-  df <- arrow::read_parquet(archivo_consolidado)
+
+  # ============================================================================
+  # PASO 7: AUDITORÍA Y CONTROL DE CALIDAD EN CONSOLA
+  # ============================================================================
   
   cat("\n=======================================================\n")
-  cat("📊 AUDITORÍA DEL CORPUS DE NOTICIAS (2022 A 2026-09)\n")
+  cat("📊 AUDITORÍA DEL CORPUS DE NOTICIAS CONSOLIDADO (2022-2026)\n")
   cat("=======================================================\n")
-  cat(paste0("Total de artículos: ", format(nrow(df), big.mark = ","), "\n"))
-  cat(paste0("Rango temporal:     ", min(df$fecha_chunk_desde, na.rm=TRUE), " a ", max(df$fecha_chunk_desde, na.rm=TRUE), "\n"))
-  cat(paste0("Medios únicos:      ", length(unique(df$fuente)), "\n\n"))
+  cat(paste0("Total de artículos: ", format(nrow(corpus_limpio), big.mark = ","), "\n"))
+  cat(paste0("Rango temporal:     ", min(corpus_limpio$fecha_chunk_desde, na.rm=TRUE), " a ", max(corpus_limpio$fecha_chunk_desde, na.rm=TRUE), "\n"))
+  cat(paste0("Medios únicos:      ", length(unique(corpus_limpio$fuente)), "\n\n"))
   
+  # Distribución por año
   cat("Distribución por año:\n")
-  df_año <- df |>
+  tabla_año <- corpus_limpio |>
     dplyr::mutate(año = lubridate::year(as.Date(fecha_chunk_desde))) |>
-    dplyr::count(año)
-  print(as.data.frame(df_año))
+    dplyr::count(año, name = "total_noticias")
+  print(as.data.frame(tabla_año), row.names = FALSE)
   
+  # Distribución por localidad (Top 10)
   cat("\nNoticias por localidad (Top 10):\n")
-  df_loc <- df |> dplyr::count(localidad, sort = TRUE) |> head(10)
-  print(as.data.frame(df_loc))
+  tabla_loc <- corpus_limpio |>
+    dplyr::count(localidad, sort = TRUE, name = "total_noticias") |>
+    head(10)
+  print(as.data.frame(tabla_loc), row.names = FALSE)
   
+  # Principales medios de prensa (Top 5)
   cat("\nPrincipales medios de comunicación (Top 5):\n")
-  df_fuente <- df |> dplyr::count(fuente, sort = TRUE) |> head(5)
-  print(as.data.frame(df_fuente))
+  tabla_fuentes <- corpus_limpio |>
+    dplyr::count(fuente, sort = TRUE, name = "total_noticias") |>
+    head(5)
+  print(as.data.frame(tabla_fuentes), row.names = FALSE)
   
+  # Control de valores faltantes (NAs)
   cat("\nAuditoría de valores faltantes (NAs):\n")
-  cat(paste0("  - Titular: ", sum(is.na(df$titulo)), "\n"))
-  cat(paste0("  - Resumen: ", sum(is.na(df$resumen)), "\n"))
-  cat(paste0("  - Enlace:  ", sum(is.na(df$enlace)), "\n"))
-  cat(paste0("  - Cuerpo:  ", sum(is.na(df$cuerpo)), "\n"))
+  cat(paste0("  - Titular: ", sum(is.na(corpus_limpio$titulo)), "\n"))
+  cat(paste0("  - Resumen: ", sum(is.na(corpus_limpio$resumen)), "\n"))
+  cat(paste0("  - Enlace:  ", sum(is.na(corpus_limpio$enlace)), "\n"))
+  cat(paste0("  - Cuerpo:  ", sum(is.na(corpus_limpio$cuerpo)), "\n"))
+  cat("=======================================================\n")
+  cat("✔ FLUJO DE SCRAPING Y CONSOLIDACIÓN FINALIZADO CON ÉXITO\n")
   cat("=======================================================\n\n")
-  
-  return(invisible(df))
-}
 
-# 6. Pipeline y Auto-Ejecución ----
-
-#' Ejecuta el pipeline completo y generalizable de noticias de Google News
-#'
-#' @param fecha_inicio Fecha inicial del corpus (por defecto "2022-01-01").
-#' @param fecha_fin Fecha final del corpus (por defecto "2026-09-30").
-#' @param localidades_objetivo Localidades a incluir (por defecto las 19).
-#' @param descargar_cuerpos Booleano para descargar cuerpo editorial.
-#' @param ejecutar_descarga Booleano: TRUE ejecuta consulta RSS a Google, FALSE solo consolida/filtra.
-#' @return Tibble invisible con el dataset delimitado.
-ejecutar_pipeline_noticias_completo <- function(fecha_inicio = "2022-01-01",
-                                                fecha_fin    = "2026-09-30",
-                                                localidades_objetivo = localidades,
-                                                descargar_cuerpos = FALSE,
-                                                ejecutar_descarga = TRUE) {
-  
-  # 1. Recolección vía Google News RSS si se solicita
-  if (isTRUE(ejecutar_descarga)) {
-    ejecutar_scraping_rss(localidades_objetivo = localidades_objetivo, descargar_cuerpos = descargar_cuerpos)
-  }
-  
-  # 2. Fusión, deduplicación y delimitación al rango solicitado
-  df_final <- consolidar_noticias_scraping(fecha_inicio = fecha_inicio, fecha_fin = fecha_fin)
-  
-  # 3. Reporte diagnóstico
-  auditar_corpus_noticias()
-  
-  return(invisible(df_final))
-}
-
-# Auto-ejecución inmediata por defecto al hacer source()
-if (!exists("auto_ejecutar") || isTRUE(auto_ejecutar)) {
-  ejecutar_pipeline_noticias_completo(
-    fecha_inicio      = "2022-01-01",
-    fecha_fin         = "2026-09-30",
-    ejecutar_descarga = FALSE # Ya descargamos las noticias, aplica consolidación y delimitación inmediata
-  )
-}
+} # Fin del bloque condicional de ejecución
