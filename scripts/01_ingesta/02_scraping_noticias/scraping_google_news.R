@@ -95,22 +95,38 @@ localidades_bogota <- c(
   "Rafael Uribe Uribe", "Ciudad Bolívar"
 )
 
-# Diccionario tematico de delitos asociados a la seguridad ciudadana
-terminos_delitos <- "(hurto OR robo OR atraco OR asalto OR inseguridad)"
+# Diccionario tematico ampliado de delitos de alto impacto y seguridad ciudadana
+terminos_delitos <- "(hurto OR robo OR atraco OR asalto OR fleteo OR sicariato OR homicidio OR extorsion OR delincuencia OR inseguridad)"
 
 # Construccion procedimental de la tabla de consultas:
 # - Se entrecomilla el territorio para forzar coincidencia textual exacta.
-# - Para Santa Fe se excluyen terminos futbolisticos para neutralizar el sesgo del club homonimo.
+# - Se aplican filtros de exclusion especificos por localidad para neutralizar homonimias
+#   deportivas (Santa Fe), internacionales (San Cristobal, Ciudad Bolivar),
+#   departamentales (La Candelaria) e institucionales (Antonio Narino, Rafael Uribe Uribe).
+# - Se incluye exclusion transversal de ruido no judicial (horoscopo, tarot).
 df_consultas <- tibble(localidad = localidades_bogota) |>
   mutate(
+    loc_slug           = tolower(stri_trans_general(localidad, "Latin-ASCII")),
     termino_localidad  = paste0('"', localidad, '"'),
-    filtro_exclusiones = if_else(
-      tolower(localidad) == "santa fe",
-      "-futbol -liga -campin -dimayor -cardenal",
-      ""
+    filtro_exclusiones = case_when(
+      loc_slug == "santa fe" ~ 
+        "-futbol -liga -campin -dimayor -cardenal -partido -estadio -gol -independiente -antioquia -ralito",
+      loc_slug == "san cristobal" ~ 
+        "-venezuela -tachira -mexico -chiapas -bolivar",
+      loc_slug == "la candelaria" ~ 
+        "-medellin -valle -antioquia -atlantico",
+      loc_slug == "ciudad bolivar" ~ 
+        "-venezuela -antioquia -orinoco",
+      loc_slug == "antonio narino" ~ 
+        "-universidad -uan -pregrado -matricula -facultad",
+      loc_slug == "rafael uribe uribe" ~ 
+        "-cali",
+      loc_slug == "bosa" ~ 
+        "-italia -cerdeña",
+      TRUE ~ ""
     ),
     cadena_busqueda    = str_squish(
-      paste(terminos_delitos, "Bogota", termino_localidad, filtro_exclusiones)
+      paste(terminos_delitos, "Bogota", termino_localidad, filtro_exclusiones, "-horoscopo -tarot")
     ),
     url_rss            = paste0(
       "https://news.google.com/rss/search?q=",
@@ -241,6 +257,14 @@ df_muestra_base <- df_unificado_bruto |>
   filter(
     fecha >= fecha_inicio_muestra,
     fecha <= fecha_fin_muestra
+  ) |>
+  # Filtro de exclusiones: supresion de falsos positivos deportivos y regionales foraneos
+  filter(
+    # Exclusion de partidos y eventos deportivos en Santa Fe sin hecho delictivo
+    !(localidad == "Santa Fe" & str_detect(titulo, "(?i)\\b(partido santa fe|santa fe vs|vs\\.? santa fe|el camp[ií]n|liga betplay|copa betplay|final del f[uú]tbol|f[uú]tbol colombiano)\\b")),
+    # Exclusion de notas cuyo titular localiza el hecho de forma exclusiva en otra ciudad sin mencion de Bogota
+    !(str_detect(titulo, "(?i)\\b(en medell[ií]n|en cali|en barranquilla|en bucaramanga|en cartagena|en c[uú]cuta|en pereira|en manizales|en ibagu[eé]|en santa marta|en villavicencio|en venezuela)\\b") & 
+      !str_detect(titulo, "(?i)\\bbogot[aá]\\b"))
   )
 
 
