@@ -33,13 +33,13 @@ source(file.path(ruta_ingesta_abiertos, "datos_abiertos_bogota.R"), echo = FALSE
 # 3. Consolidación e Ingesta de Noticias de Google News ----
 if (!file.exists(file.path(ruta_raw, "noticias", "noticias_google_news_consolidado.parquet"))) {
   message("\n>>> [2/3] Consolidando subtablas históricas de noticias...")
-  source(file.path(ruta_ingesta_scraping, "00_consolidar_subtablas_historicas.R"), echo = FALSE)
+  source(file.path(ruta_ingesta_scraping, "scraping_google_news.R"), echo = FALSE)
 } else {
-  message("\n>>> [2/3] Base de noticias consolidada verificada en data/raw/noticias_google_news_consolidado.parquet.")
+  message("\n>>> [2/3] Base de noticias consolidada verificada en data/raw/noticias/noticias_google_news_consolidado.parquet.")
 }
 
-message("\n>>> [3/3] Para ejecutar scraping incremental de meses adicionales con RSelenium:")
+message("\n>>> [3/3] Para ejecutar scraping incremental de meses adicionales de Google News:")
 message("    source(here::here('scripts', '01_ingesta', '02_scraping_noticias', 'scraping_google_news.R'))")
-message("    ejecutar_scraping_localidades()")
+message("    ")
 
 message("\n✔ Orquestador de Módulo 01 ejecutado con éxito.")

@@ -43,31 +43,20 @@ flowchart TD
 
 ---
 
-## 3. Scripts Disponibles
-
-### `00_consolidar_subtablas_historicas.R`
-* **¿Qué hace?** Lee las carpetas originales de las 19 localidades, guarda cada subtabla en `historico_por_localidad/` (formato Parquet y RDS), ejecuta la consolidación y validación territorial, exporta `noticias_google_news_consolidado.parquet` y crea el archivo `cobertura_historica.json`.
-* **Garantía:** Reproduce con precisión matemática las filas del estudio original sin pérdida de información.
+## 3. Script Principal
 
 ### `scraping_google_news.R`
-* **¿Qué hace?** Automatiza la recolección, limpieza, deduplicación y consolidación de noticias para las 19 localidades mediante un flujo lineal secuencial y el **motor oficial Google News RSS**.
+* **¿Qué hace?** Automatiza de manera integral y autónoma la recolección, consolidación histórica, deduplicación, enriquecimiento analítico (medios, geografía, delitos oficiales de alto impacto) y exportación del corpus para las 19 localidades urbanas mediante un flujo lineal procedimental y el **motor oficial Google News RSS**.
 * **Ventajas clave:**
+  * Script único, autónomo y reproducible sin dependencias externas ni rutas locales personales.
   * Flujo procedimental paso a paso: fácil de leer, depurar y evaluar sin capas de funciones abstractas.
   * No requiere navegador web ni drivers de Selenium.
   * No genera bloqueos por IP ni reCAPTCHAs.
   * Captura fecha real exacta de publicación (`pubDate`), medio de comunicación (`source`), titular y enlace limpio.
-  * Parámetros explícitos en el encabezado (`FECHA_INICIO_ANALISIS`, `FECHA_FIN_ANALISIS`).
-* **Auditoría del corpus:** Genera automáticamente métricas de volumen por año (2022-2026), distribución territorial y chequeo de NAs.
-* **Ejecución típica:**
+  * Incorpora la nomenclatura oficial de **Delitos de Alto Impacto (SCJ / SIEDCO)** para empalme directo con estadísticas policiales.
+* **Ejecución:**
   ```r
   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
-  ```
-
-### `test_scraping_noticias.R`
-* **¿Qué hace?** Batería de 15 pruebas automatizadas que valida la sintaxis booleana, exclusiones deportivas, codificación de URLs, limpieza de enlaces de tracking, fallback de cuerpo e integridad del dataset consolidado.
-* **Ejecución de pruebas:**
-  ```r
-  source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "test_scraping_noticias.R"))
   ```
 
 ---
