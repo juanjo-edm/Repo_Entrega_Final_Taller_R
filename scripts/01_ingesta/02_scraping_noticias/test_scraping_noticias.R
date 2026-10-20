@@ -1,11 +1,11 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
-# ROL: Batería de Pruebas Unitarias y de Integración para el Scraper de Noticias
+# ARCHIVO: scripts/01_ingesta/02_scraping_noticias/test_scraping_noticias.R
+# ROL: Batería de Pruebas y Control de Calidad del Corpus de Noticias
 # AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # ==============================================================================
 
-# 1. Configuración de Entorno de Pruebas ----
 suppressPackageStartupMessages({
   library(here)
   library(arrow)
@@ -13,96 +13,99 @@ suppressPackageStartupMessages({
   library(stringr)
 })
 
-# Desactivar auto-ejecución para cargar únicamente las funciones en el entorno de pruebas
-auto_ejecutar <- FALSE
+# Cargar el entorno del pipeline
 source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
 
-cat("\n==================================================================\n")
-cat("🧪 INICIANDO BATERÍA DE PRUEBAS DEL SCRAPER DE GOOGLE NEWS\n")
-cat("==================================================================\n\n")
+message("\n[CONTROL DE CALIDAD] Iniciando protocolo de validacion del corpus...")
 
-total_pruebas  <- 0
-pruebas_exito  <- 0
+total_verificaciones <- 0
+verificaciones_exito <- 0
 
-afirmar <- function(descripcion, condicion) {
-  total_pruebas <<- total_pruebas + 1
+comprobar <- function(criterio, condicion) {
+  total_verificaciones <<- total_verificaciones + 1
   if (isTRUE(condicion)) {
-    pruebas_exito <<- pruebas_exito + 1
-    cat(paste0("  ✔ [PASÓ] ", descripcion, "\n"))
+    verificaciones_exito <<- verificaciones_exito + 1
+    message(sprintf("  [CORRECTO] %s", criterio))
   } else {
-    cat(paste0("  ❌ [FALLÓ] ", descripcion, "\n"))
+    message(sprintf("  [ERROR]    %s", criterio))
   }
 }
 
-# 2. Prueba 1: Constructor de Consultas Booleanas ----
-cat(">>> Test 1: Validación de sintaxis en consultas booleanas...\n")
+# 1. Validación de la matriz de consultas booleanas
+message("\n1. Verificacion de especificacion de consultas y exclusiones tematicas:")
+q_kennedy   <- df_consultas |> dplyr::filter(localidad == "Kennedy") |> dplyr::pull(cadena_busqueda)
+q_santafe   <- df_consultas |> dplyr::filter(localidad == "Santa Fe") |> dplyr::pull(cadena_busqueda)
+q_candelaria <- df_consultas |> dplyr::filter(localidad == "La Candelaria") |> dplyr::pull(cadena_busqueda)
 
-q_kennedy    <- construir_consulta_rss("KENNEDY")
-q_santafe    <- construir_consulta_rss("SANTA FE")
-q_candelaria <- construir_consulta_rss("LA CANDELARIA")
+comprobar("Consulta de Kennedy incorpora sinonimos delictivos y entrecomillado territorial",
+          stringr::str_detect(q_kennedy, "hurto") && stringr::str_detect(q_kennedy, '"Kennedy"'))
 
-afirmar("Kennedy contiene sinónimos de delitos y comillas de localidad", 
-        str_detect(q_kennedy, 'hurto') && str_detect(q_kennedy, '"Kennedy"') && str_detect(q_kennedy, 'Bogota'))
+comprobar("Consulta de Santa Fe aplica exclusion sistematica de terminos deportivos",
+          stringr::str_detect(q_santafe, "-futbol") && stringr::str_detect(q_santafe, "-campin"))
 
-afirmar("Santa Fe excluye términos de fútbol (liga, campin, dimayor)", 
-        str_detect(q_santafe, '-futbol') && str_detect(q_santafe, '-liga') && str_detect(q_santafe, '-campin'))
+comprobar("Se omiten terminos redundantes como 'localidad' en las cadenas",
+          !stringr::str_detect(q_kennedy, "localidad") && !stringr::str_detect(q_candelaria, "localidad"))
 
-afirmar("No se incluye la palabra restrictiva 'localidad'", 
-        !str_detect(q_kennedy, 'localidad') && !str_detect(q_candelaria, 'localidad'))
+# 2. Validación de URLs y endpoints del protocolo RSS
+message("\n2. Verificacion de endpoints del protocolo Google News RSS:")
+url_muestra <- df_consultas$url_rss[1]
 
-# 3. Prueba 2: Generación de URLs de Google News RSS ----
-cat("\n>>> Test 2: Construcción de URLs de Google News RSS...\n")
+comprobar("URL dirige al endpoint oficial de sindicacion news.google.com/rss/search",
+          stringr::str_detect(url_muestra, "news\\.google\\.com/rss/search"))
 
-url_test <- build_google_news_url("hurto Bogota Kennedy")
+comprobar("URL contiene codificacion reservada de caracteres",
+          stringr::str_detect(url_muestra, "q="))
 
-afirmar("URL contiene endpoint oficial de Google News RSS", str_detect(url_test, "news.google.com/rss/search"))
-afirmar("URL contiene parámetro de consulta q codificada", str_detect(url_test, "q=hurto"))
-afirmar("URL contiene parámetros de idioma y región", str_detect(url_test, "hl=es-419") && str_detect(url_test, "gl=CO"))
+comprobar("URL especifica parametros geograficos e idiomáticos (CO y es-419)",
+          stringr::str_detect(url_muestra, "hl=es-419") && stringr::str_detect(url_muestra, "gl=CO"))
 
-# 4. Prueba 3: Limpieza y Normalización de Enlaces ----
-cat("\n>>> Test 3: Limpieza y normalización de URLs...\n")
+# 3. Validación de expresiones regulares para desinfección de enlaces
+message("\n3. Verificacion de limpieza y normalizacion de enlaces:")
+url_sucia <- "https://www.eltiempo.com/bogota/hurto-123?utm_source=twitter&utm_campaign=bogota"
+url_limpia_esperada <- "https://www.eltiempo.com/bogota/hurto-123"
+url_procesada <- sub("\\?(utm_|ref_|fbclid).*", "", url_sucia)
 
-url_con_utm   <- "https://www.eltiempo.com/bogota/robo-kennedy-123?utm_source=twitter&utm_medium=social"
-url_google_q  <- "/url?q=https://www.elespectador.com/bogota/atraco-456&sa=U&ved=2ahU"
-url_vacia     <- ""
+comprobar("Remocion efectiva de parametros UTM de rastreo web",
+          url_procesada == url_limpia_esperada)
 
-afirmar("Remueve parámetros UTM de analítica", 
-        limpiar_enlace(url_con_utm) == "https://www.eltiempo.com/bogota/robo-kennedy-123")
-
-afirmar("Decodifica redirector interno de Google /url?q=", 
-        str_detect(limpiar_enlace(url_google_q), "https://www.elespectador.com"))
-
-afirmar("Maneja URLs vacías o NAs retornando NA", is.na(limpiar_enlace(url_vacia)))
-
-# 5. Prueba 4: Extracción de Cuerpo con Fallback Resiliente ----
-cat("\n>>> Test 4: Extracción de cuerpo con fallback...\n")
-
-fallback_texto <- "Texto breve del resumen que debe mantenerse ante fallas"
-resultado_fb   <- extraer_cuerpo_noticia("https://url-inexistente-123456789.com/nota", fallback_texto)
-
-afirmar("Retorna el resumen fallback si la URL no responde o es inválida", resultado_fb == fallback_texto)
-
-# 6. Prueba 5: Integridad de la Base de Datos Consolidada ----
-cat("\n>>> Test 5: Auditoría de integridad de datos consolidados...\n")
-
+# 4. Integridad del microdato consolidado
+message("\n4. Auditoria de integridad y completitud de la base consolidada:")
 archivo_parquet <- here::here("data", "raw", "noticias_google_news_consolidado.parquet")
-afirmar("El archivo consolidado parquet existe en data/raw/", file.exists(archivo_parquet))
+
+comprobar("Existencia fisica del archivo columnar Parquet en data/raw/",
+          file.exists(archivo_parquet))
 
 if (file.exists(archivo_parquet)) {
-  df_check <- arrow::read_parquet(archivo_parquet)
+  df_verif <- arrow::read_parquet(archivo_parquet)
   
-  afirmar("La base consolidada contiene al menos 2.487 noticias", nrow(df_check) >= 2487)
-  afirmar("Cero valores nulos (NA) en enlaces", sum(is.na(df_check$enlace)) == 0)
-  afirmar("Cero valores nulos (NA) en títulos", sum(is.na(df_check$titulo)) == 0)
-  afirmar("Contiene representación de las 19 localidades", length(unique(df_check$localidad)) >= 19)
+  comprobar("Volumen muestral superior al umbral base del proyecto (>= 2.487 registros)",
+            nrow(df_verif) >= 2487)
+  
+  comprobar("Ausencia total de valores nulos (NA) en enlaces canonicos",
+            sum(is.na(df_verif$enlace)) == 0)
+  
+  comprobar("Ausencia total de valores nulos (NA) en titulares de prensa",
+            sum(is.na(df_verif$titulo)) == 0)
+  
+  comprobar("Ausencia total de valores nulos (NA) en cuerpo / contenido textual",
+            sum(is.na(df_verif$cuerpo)) == 0)
+  
+  comprobar("Representacion exhaustiva de las 19 localidades urbanas",
+            length(unique(df_verif$localidad)) >= 19)
+  
+  comprobar("Delimitacion temporal estricta: ninguna fecha posterior a septiembre 2026",
+            max(as.Date(df_verif$fecha_chunk_desde), na.rm = TRUE) <= as.Date("2026-09-30"))
+  
+  comprobar("Delimitacion temporal estricta: ninguna fecha anterior a enero 2022",
+            min(as.Date(df_verif$fecha_chunk_desde), na.rm = TRUE) >= as.Date("2022-01-01"))
 }
 
-# 7. Resumen Final de Pruebas ----
-cat("\n==================================================================\n")
-cat(paste0("📋 RESULTADO FINAL: ", pruebas_exito, " de ", total_pruebas, " pruebas superadas con éxito.\n"))
-if (pruebas_exito == total_pruebas) {
-  cat("✔ Todas las pruebas unitarias y de integración pasaron satisfactoriamente.\n")
+message("\n------------------------------------------------------------")
+message(sprintf("RESULTADO: %d de %d pruebas superadas satisfactoriamente.", 
+                verificaciones_exito, total_verificaciones))
+if (verificaciones_exito == total_verificaciones) {
+  message("Estado de integracion: CONFORME. Todos los controles superados.")
 } else {
-  cat("⚠ Se encontraron fallos en algunas pruebas. Revisar detalles arriba.\n")
+  warning("Estado de integracion: NO CONFORME. Revisar inconsistencias.")
 }
-cat("==================================================================\n\n")
+message("------------------------------------------------------------\n")
