@@ -31,7 +31,7 @@ message("\n>>> [1/2] Iniciando ingesta de Datos Abiertos (Delitos, Población, M
 source(file.path(ruta_ingesta_abiertos, "datos_abiertos_bogota.R"), echo = FALSE)
 
 # 3. Consolidación e Ingesta de Noticias de Google News ----
-if (!file.exists(file.path(ruta_raw, "noticias_google_news_consolidado.parquet"))) {
+if (!file.exists(file.path(ruta_raw, "noticias", "noticias_google_news_consolidado.parquet"))) {
   message("\n>>> [2/3] Consolidando subtablas históricas de noticias...")
   source(file.path(ruta_ingesta_scraping, "00_consolidar_subtablas_historicas.R"), echo = FALSE)
 } else {

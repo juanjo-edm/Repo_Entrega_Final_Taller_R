@@ -33,8 +33,8 @@ suppressPackageStartupMessages({
 dir_raiz              <- here::here()
 dir_noticias_raw      <- here::here("data", "raw", "noticias")
 dir_historico_loc     <- here::here("data", "raw", "noticias", "historico_por_localidad")
-archivo_consolidado_p <- here::here("data", "raw", "noticias_google_news_consolidado.parquet")
-archivo_consolidado_r <- here::here("data", "raw", "noticias_google_news_consolidado.rds")
+archivo_consolidado_p <- here::here("data", "raw", "noticias", "noticias_google_news_consolidado.parquet")
+archivo_consolidado_r <- here::here("data", "raw", "noticias", "noticias_google_news_consolidado.rds")
 archivo_metadatos     <- here::here("data", "raw", "noticias", "cobertura_historica.json")
 
 # Ruta externa original donde residen las carpetas por localidad

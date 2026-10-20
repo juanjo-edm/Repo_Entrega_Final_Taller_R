@@ -63,8 +63,8 @@ conflict_prefer("timestamp", "utils")
 # Definicion de rutas absolutas relativas a la raiz del repositorio
 ruta_datos_raw      <- here("data", "raw")
 ruta_noticias_raw   <- here("data", "raw", "noticias")
-archivo_consolidado <- here("data", "raw", "noticias_google_news_consolidado.parquet")
-archivo_consol_rds  <- here("data", "raw", "noticias_google_news_consolidado.rds")
+archivo_consolidado <- here("data", "raw", "noticias", "noticias_google_news_consolidado.parquet")
+archivo_consol_rds  <- here("data", "raw", "noticias", "noticias_google_news_consolidado.rds")
 archivo_cobertura   <- here("data", "raw", "noticias", "cobertura_historica.json")
 
 # Creacion del directorio de almacenamiento primario si no existe previamente

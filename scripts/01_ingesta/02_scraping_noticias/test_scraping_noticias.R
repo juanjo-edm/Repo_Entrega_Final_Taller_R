@@ -44,7 +44,7 @@ url_limpia <- sub("\\?(utm_|ref_|fbclid).*", "", url_prueba)
 stopifnot(url_limpia == "https://www.eltiempo.com/bogota/hurto-123")
 
 # 4. Integridad del archivo consolidado
-archivo_parquet <- here("data", "raw", "noticias_google_news_consolidado.parquet")
+archivo_parquet <- here("data", "raw", "noticias", "noticias_google_news_consolidado.parquet")
 stopifnot(file.exists(archivo_parquet))
 
 df_verif <- read_parquet(archivo_parquet)
