@@ -37,27 +37,27 @@ afirmar <- function(descripcion, condicion) {
 # 2. Prueba 1: Constructor de Consultas Booleanas ----
 cat(">>> Test 1: Validación de sintaxis en consultas booleanas...\n")
 
-q_kennedy  <- construir_consulta_google("KENNEDY")
-q_santafe  <- construir_consulta_google("SANTA FE")
-q_candelaria <- construir_consulta_google("LA CANDELARIA")
+q_kennedy    <- construir_consulta_rss("KENNEDY")
+q_santafe    <- construir_consulta_rss("SANTA FE")
+q_candelaria <- construir_consulta_rss("LA CANDELARIA")
 
-afirmar("Kennedy contiene sinónimos de hurto/robo y comillas exactas", 
-        str_detect(q_kennedy, 'hurto') && str_detect(q_kennedy, '"Kennedy"') && str_detect(q_kennedy, '"Bogotá"'))
+afirmar("Kennedy contiene sinónimos de delitos y comillas de localidad", 
+        str_detect(q_kennedy, 'hurto') && str_detect(q_kennedy, '"Kennedy"') && str_detect(q_kennedy, 'Bogota'))
 
-afirmar("Santa Fe excluye términos de fútbol (liga, campín, dimayor)", 
-        str_detect(q_santafe, '-fútbol') && str_detect(q_santafe, '-liga') && str_detect(q_santafe, '-campín'))
+afirmar("Santa Fe excluye términos de fútbol (liga, campin, dimayor)", 
+        str_detect(q_santafe, '-futbol') && str_detect(q_santafe, '-liga') && str_detect(q_santafe, '-campin'))
 
 afirmar("No se incluye la palabra restrictiva 'localidad'", 
         !str_detect(q_kennedy, 'localidad') && !str_detect(q_candelaria, 'localidad'))
 
-# 3. Prueba 2: Generación de URLs de Google News ----
-cat("\n>>> Test 2: Construcción de URLs de Google News...\n")
+# 3. Prueba 2: Generación de URLs de Google News RSS ----
+cat("\n>>> Test 2: Construcción de URLs de Google News RSS...\n")
 
-url_test <- build_google_news_url("hurto Bogotá", as.Date("2024-01-01"), as.Date("2024-01-31"), start = 10)
+url_test <- build_google_news_url("hurto Bogota Kennedy")
 
-afirmar("URL contiene endpoint de Google Search con tbm=nws", str_detect(url_test, "tbm=nws"))
-afirmar("URL contiene filtro de rango temporal cdr:1", str_detect(url_test, "tbs=cdr%3A1") || str_detect(url_test, "tbs=cdr:1"))
-afirmar("URL contiene paginación start=10", str_detect(url_test, "start=10"))
+afirmar("URL contiene endpoint oficial de Google News RSS", str_detect(url_test, "news.google.com/rss/search"))
+afirmar("URL contiene parámetro de consulta q codificada", str_detect(url_test, "q=hurto"))
+afirmar("URL contiene parámetros de idioma y región", str_detect(url_test, "hl=es-419") && str_detect(url_test, "gl=CO"))
 
 # 4. Prueba 3: Limpieza y Normalización de Enlaces ----
 cat("\n>>> Test 3: Limpieza y normalización de URLs...\n")

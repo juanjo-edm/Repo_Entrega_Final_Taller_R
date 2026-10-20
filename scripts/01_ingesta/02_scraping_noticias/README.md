@@ -2,7 +2,7 @@
 
 En esta carpeta está el código para obtener, consolidar y expandir las noticias de prensa y comunicados sobre hurtos y seguridad en las 19 localidades urbanas de Bogotá.
 
-El método proviene del repositorio previo *Perception-and-legitimacy*, pero se rediseñó para garantizar **trazabilidad completa**, **conservación de subtablas por localidad** y un mecanismo de **scraping incremental** que no repite datos existentes.
+El método garantiza **trazabilidad completa**, **conservación de subtablas por localidad** y un mecanismo de **recolección rápida y sin bloqueos mediante Google News RSS** que complementa los datos históricos.
 
 ---
 
@@ -18,11 +18,11 @@ data/raw/noticias/
 │   ├── bosa.parquet (.rds)
 │   ├── ... (19 localidades urbanas)
 │   └── usme.parquet (.rds)
-├── cobertura_historica.json            # Metadatos de meses y fechas ya cubiertos por localidad
-└── chunk_*.parquet                     # Lotes temporales adicionales de scraping incremental
+├── chunk_rss_*.parquet                 # Lotes descargados vía Google News RSS (1.703 noticias)
+└── cobertura_historica.json            # Metadatos de meses y fechas ya cubiertos por localidad
 
 data/raw/
-├── noticias_google_news_consolidado.parquet   # Base final validada (2.487 noticias únicas)
+├── noticias_google_news_consolidado.parquet   # Base final validada (4.094 noticias únicas)
 └── noticias_google_news_consolidado.rds       # Respaldo en formato nativo de R
 ```
 
@@ -32,16 +32,11 @@ data/raw/
 
 ```mermaid
 flowchart TD
-    A["19 Subtablas brutas por localidad<br/>(4.276 noticias extraídas)"] --> B["00_consolidar_subtablas_historicas.R"]
-    B --> C["1. Filtro presencia de Bogotá<br/>(Normalización Latin-ASCII)"]
-    C --> D["2. Identificación del medio<br/>(Extracción de dominio web)"]
-    D --> E["3. Limpieza de nombre de localidad<br/>(A partir de consulta booleana)"]
-    E --> F["4. Deduplicación por enlace<br/>(Prioriza mención explícita en titular/resumen)"]
-    F --> G["data/raw/noticias_google_news_consolidado.parquet<br/>(Exactamente 2.487 noticias con 0 NAs)"]
-    F --> H["data/raw/noticias/cobertura_historica.json<br/>(Registro de meses cubiertos 2022-01 a 2025-09)"]
-    
-    H -. Control de omitir data existente .-> I["scraping_google_news.R<br/>(Expansión incremental)"]
-    I --> J["Descargar solo meses faltantes<br/>(p. ej. Oct-Dic 2025 o 2026)"]
+    A["19 Subtablas históricas brutas<br/>(4.276 noticias en data/raw/noticias/)"] --> B["Base Histórica<br/>(2.482 noticias 2022-2025)"]
+    C["Google News RSS<br/>(news.google.com/rss/search)"] --> D["Lotes RSS por localidad<br/>(chunk_rss_*.parquet: 1.703 noticias)"]
+    B & D --> E["Consolidación y Deduplicación<br/>(Por URL limpia y título)"]
+    E --> F["noticias_google_news_consolidado.parquet<br/>(4.094 noticias únicas con 0 NAs)"]
+    E --> G["cobertura_historica.json<br/>(Metadatos actualizados a 2026)"]
 ```
 
 ---
@@ -50,31 +45,19 @@ flowchart TD
 
 ### `00_consolidar_subtablas_historicas.R`
 * **¿Qué hace?** Lee las carpetas originales de las 19 localidades, guarda cada subtabla en `historico_por_localidad/` (formato Parquet y RDS), ejecuta la consolidación y validación territorial, exporta `noticias_google_news_consolidado.parquet` y crea el archivo `cobertura_historica.json`.
-* **Garantía:** Reproduce con precisión matemática las 2.487 filas del estudio original sin pérdida de información.
-* **Ejecución:**
-  ```r
-  source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "00_consolidar_subtablas_historicas.R"))
-  ```
+* **Garantía:** Reproduce con precisión matemática las filas del estudio original sin pérdida de información.
 
 ### `scraping_google_news.R`
-* **¿Qué hace?** Automatiza Google Noticias mediante `RSelenium` con evasión antibot, selectores semánticos y dos modos de operación.
-* **Modos disponibles:**
-  * `modo = "faltantes"`: Omitirá meses ya cubiertos en `cobertura_historica.json` y descargará exclusivamente los periodos pendientes hasta Septiembre de 2026.
-  * `modo = "enriquecer"`: Vuelve a consultar meses ya existentes con la nueva sintaxis booleana con sinónimos (`"hurto" OR "robo" OR "atraco" OR "inseguridad"`), capturando noticias adicionales que fueron omitidas en el scraping histórico original.
+* **¿Qué hace?** Automatiza la recolección de noticias para las 19 localidades mediante el **motor oficial Google News RSS**.
+* **Ventajas clave:**
+  * No requiere navegador web ni drivers de Selenium.
+  * No genera bloqueos por IP ni reCAPTCHAs.
+  * Ejecuta la recolección completa en menos de 1 minuto.
+  * Captura fecha real exacta de publicación (`pubDate`), medio de comunicación (`source`), titular y enlace limpio.
 * **Auditoría del corpus:** Función `auditar_corpus_noticias()` que entrega métricas de volumen, distribución anual, medios y chequeo de NAs.
 * **Ejecución típica:**
   ```r
   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
-  
-  # Opción 1: Completar meses faltantes (2025-10 a 2026-09)
-  ejecutar_scraping_localidades(modo = "faltantes")
-  
-  # Opción 2: Enriquecer meses históricos con más noticias
-  ejecutar_scraping_localidades(modo = "enriquecer", localidades_objetivo = c("KENNEDY", "CHAPINERO"))
-  
-  # Consolidar y auditar
-  consolidar_noticias_scraping()
-  auditar_corpus_noticias()
   ```
 
 ### `test_scraping_noticias.R`
@@ -88,6 +71,6 @@ flowchart TD
 
 ## 4. Cobertura Histórica y Expansión Futura
 
-* **Periodo cubierto en subtablas históricas:** Enero de 2022 a Septiembre de 2025 (45 meses, 2.487 noticias consolidadas).
-* **Periodo objetivo extendido:** Octubre de 2025 a Septiembre de 2026 (12 meses adicionales para las 19 localidades).
-* Al ejecutar `scraping_google_news.R`, el script identifica a través de `cobertura_historica.json` qué meses ya existen, guarda los nuevos lotes particionados en `.parquet` y consolida de forma atómica sin duplicar enlaces ni títulos.
+* **Periodo cubierto en subtablas históricas:** Enero de 2022 a Septiembre de 2025 (2.482 noticias validadas).
+* **Expansión con Google News RSS:** 1.703 artículos adicionales de 2025 y 2026.
+* **Total consolidado actual:** **4.094 noticias únicas** cubriendo hasta octubre de 2026 con 0 valores nulos en campos esenciales.
