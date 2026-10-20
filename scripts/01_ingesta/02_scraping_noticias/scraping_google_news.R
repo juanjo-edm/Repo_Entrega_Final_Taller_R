@@ -206,6 +206,19 @@ df_unificado_bruto <- bind_rows(df_historico_previo, df_nuevas_rss)
 # 5. NORMALIZACION, DEDUPLICACION DUAL Y DELIMITACION TEMPORAL
 # ------------------------------------------------------------------------------
 
+# Unificacion de la variable temporal fecha
+col_fecha <- if ("fecha" %in% colnames(df_unificado_bruto)) {
+  as.Date(df_unificado_bruto$fecha)
+} else if ("fecha_iso" %in% colnames(df_unificado_bruto)) {
+  if_else(!is.na(df_unificado_bruto$fecha_iso) & df_unificado_bruto$fecha_iso != "",
+          as.Date(df_unificado_bruto$fecha_iso),
+          as.Date(df_unificado_bruto$fecha_chunk_desde))
+} else {
+  as.Date(df_unificado_bruto$fecha_chunk_desde)
+}
+
+df_unificado_bruto$fecha <- col_fecha
+
 df_muestra_base <- df_unificado_bruto |>
   # Estandarizacion de nombres de localidad (ej. Candelaria -> La Candelaria)
   mutate(
@@ -220,15 +233,14 @@ df_muestra_base <- df_unificado_bruto |>
       sub("^https?://([^/]+).*$", "\\1", enlace),
       fuente
     ),
-    fecha_chunk_desde = as.Date(fecha_chunk_desde),
     cuerpo            = if_else(is.na(cuerpo) | cuerpo == "", resumen, cuerpo)
   ) |>
   # Criterio de deduplicacion dual (URL canonica y titular textual exacto)
   distinct(enlace, .keep_all = TRUE) |>
   distinct(titulo, .keep_all = TRUE) |>
   filter(
-    fecha_chunk_desde >= fecha_inicio_muestra,
-    fecha_chunk_desde <= fecha_fin_muestra
+    fecha >= fecha_inicio_muestra,
+    fecha <= fecha_fin_muestra
   )
 
 
@@ -341,27 +353,47 @@ df_muestra_enriquecida <- df_muestra_enriquecida |>
       str_detect(texto_corpus, patron_politica_prev) ~ "Politica de seguridad y prevencion",
       str_detect(texto_corpus, "hurto|robo|atraco|ladron|delincuente") ~ "Hurto / Delincuencia comun no diferenciada",
       TRUE ~ "Hechos no asociados a delitos de alto impacto"
-    ),
-    
-    # Indicador binario agregado de pertenencia a delitos de alto impacto
-    es_delito_alto_impacto = delito_alto_impacto %in% c(
-      "Homicidio", "Hurto a personas", "Hurto a comercio", "Hurto a residencias",
-      "Hurto de automotores y autopartes", "Hurto de motocicletas", "Hurto de bicicletas",
-      "Hurto de celulares", "Extorsion", "Lesiones personales",
-      "Delitos sexuales y violencia intrafamiliar", "Trafico local de estupefacientes"
     )
   )
 
 # 6.4 MEJORA 4: Variables de calendario y estructura de panel econometrico
 df_muestra_final <- df_muestra_enriquecida |>
   mutate(
-    año        = year(fecha_chunk_desde),
-    mes        = month(fecha_chunk_desde),
-    año_mes    = format(fecha_chunk_desde, "%Y-%m"),
-    trimestre  = paste0(year(fecha_chunk_desde), "-T", quarter(fecha_chunk_desde)),
-    semana_año = isoweek(fecha_chunk_desde)
+    año        = year(fecha),
+    mes        = month(fecha),
+    año_mes    = format(fecha, "%Y-%m"),
+    trimestre  = paste0(year(fecha), "-T", quarter(fecha)),
+    semana_año = isoweek(fecha)
   ) |>
-  arrange(localidad, fecha_chunk_desde)
+  # Remocion exhaustiva de variables indicadoras logicas (booleanos)
+  select(-where(is.logical)) |>
+  # Remocion de variables auxiliares, metadatos y delimitadores de chunks
+  select(
+    -any_of(c(
+      "consulta", "fecha_texto", "fecha_chunk_desde", "fecha_chunk_hasta",
+      "fecha_iso", "pagina", "texto_corpus"
+    ))
+  ) |>
+  # Ordenamiento logico y academico de las columnas
+  select(
+    fecha,
+    año,
+    mes,
+    año_mes,
+    trimestre,
+    semana_año,
+    localidad,
+    confianza_geografica,
+    fuente,
+    tipo_medio,
+    delito_alto_impacto,
+    tipo_delito_dominante,
+    titulo,
+    resumen,
+    cuerpo,
+    enlace
+  ) |>
+  arrange(localidad, fecha)
 
 
 # ------------------------------------------------------------------------------
@@ -394,10 +426,9 @@ conteo_alto_impacto <- df_muestra_final |>
   count(delito_alto_impacto, sort = TRUE, name = "articulos") |>
   as.data.frame()
 
-# Cuadro 4: Frecuencia de la variable agregada de Delitos de Alto Impacto
-conteo_agregado_impacto <- df_muestra_final |>
-  count(es_delito_alto_impacto, name = "articulos") |>
-  mutate(proporcion = round(articulos / sum(articulos), 4)) |>
+# Cuadro 4: Distribucion por tipologia delictiva dominante
+conteo_dominante <- df_muestra_final |>
+  count(tipo_delito_dominante, sort = TRUE, name = "articulos") |>
   as.data.frame()
 
 # Cuadro 5: Nivel de confianza geografica territorial
@@ -407,15 +438,15 @@ conteo_geografia <- df_muestra_final |>
 
 # Cuadro 6: Auditoria de valores faltantes (NA) en campos criticos
 valores_faltantes <- data.frame(
-  variable = c("titulo", "resumen", "enlace", "cuerpo", "tipo_medio", "delito_alto_impacto", "es_delito_alto_impacto", "año_mes"),
+  variable = c("fecha", "titulo", "resumen", "enlace", "cuerpo", "tipo_medio", "delito_alto_impacto", "año_mes"),
   nulos    = c(
+    sum(is.na(df_muestra_final$fecha)),
     sum(is.na(df_muestra_final$titulo)),
     sum(is.na(df_muestra_final$resumen)),
     sum(is.na(df_muestra_final$enlace)),
     sum(is.na(df_muestra_final$cuerpo)),
     sum(is.na(df_muestra_final$tipo_medio)),
     sum(is.na(df_muestra_final$delito_alto_impacto)),
-    sum(is.na(df_muestra_final$es_delito_alto_impacto)),
     sum(is.na(df_muestra_final$año_mes))
   )
 )
@@ -423,6 +454,6 @@ valores_faltantes <- data.frame(
 print(conteo_anual, row.names = FALSE)
 print(conteo_tipo_medio, row.names = FALSE)
 print(conteo_alto_impacto, row.names = FALSE)
-print(conteo_agregado_impacto, row.names = FALSE)
+print(conteo_dominante, row.names = FALSE)
 print(conteo_geografia, row.names = FALSE)
 print(valores_faltantes, row.names = FALSE)

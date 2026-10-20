@@ -66,6 +66,19 @@ if (!dir.exists(ruta_salida_proc_dir)) {
 
 df_crudo <- read_parquet(ruta_entrada_raw)
 
+# Garantizar unificacion de la variable fecha si el insumo crudo proviene de chunks
+if (!"fecha" %in% colnames(df_crudo)) {
+  df_crudo$fecha <- if ("fecha_iso" %in% colnames(df_crudo)) {
+    if_else(!is.na(df_crudo$fecha_iso) & df_crudo$fecha_iso != "",
+            as.Date(df_crudo$fecha_iso),
+            as.Date(df_crudo$fecha_chunk_desde))
+  } else {
+    as.Date(df_crudo$fecha_chunk_desde)
+  }
+} else {
+  df_crudo$fecha <- as.Date(df_crudo$fecha)
+}
+
 
 # ------------------------------------------------------------------------------
 # 3. DEPURACION VECTORIZADA DEL CUERPO EDITORIAL DE LAS NOTICIAS
@@ -131,7 +144,40 @@ df_procesado <- df_crudo |>
     
     # Campo integrado optimizado para mineria de texto y analisis de sentimiento
     texto_completo_nlp      = str_squish(paste(titulo, ".", cuerpo))
-  )
+  ) |>
+  # Remocion exhaustiva de todas las variables indicadoras logicas (booleanos)
+  select(-where(is.logical)) |>
+  # Remocion de parametros de consulta, fechas en texto y delimitadores de chunks
+  select(
+    -any_of(c(
+      "consulta", "fecha_texto", "fecha_chunk_desde", "fecha_chunk_hasta",
+      "fecha_iso", "pagina", "texto_corpus"
+    ))
+  ) |>
+  # Ordenamiento logico y academico de las columnas finales
+  select(
+    fecha,
+    año,
+    mes,
+    año_mes,
+    trimestre,
+    semana_año,
+    localidad,
+    confianza_geografica,
+    fuente,
+    tipo_medio,
+    delito_alto_impacto,
+    tipo_delito_dominante,
+    titulo,
+    resumen,
+    cuerpo,
+    texto_completo_nlp,
+    palabras_titulo,
+    palabras_cuerpo,
+    caracteres_cuerpo,
+    enlace
+  ) |>
+  arrange(localidad, fecha)
 
 
 # ------------------------------------------------------------------------------
@@ -159,8 +205,9 @@ metricas_longitud <- data.frame(
 
 # Cuadro de integridad y valores faltantes
 valores_faltantes <- data.frame(
-  variable = c("titulo", "resumen", "cuerpo", "texto_completo_nlp", "delito_alto_impacto", "año_mes"),
+  variable = c("fecha", "titulo", "resumen", "cuerpo", "texto_completo_nlp", "delito_alto_impacto", "año_mes"),
   nulos    = c(
+    sum(is.na(df_procesado$fecha)),
     sum(is.na(df_procesado$titulo)),
     sum(is.na(df_procesado$resumen)),
     sum(is.na(df_procesado$cuerpo)),
