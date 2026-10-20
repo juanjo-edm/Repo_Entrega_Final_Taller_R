@@ -17,10 +17,10 @@
 #   Seccion 3: Recoleccion de notas de prensa recientes via feed Google News RSS.
 #   Seccion 4: Consolidacion y union vertical de subtablas historicas y lotes.
 #   Seccion 5: Normalizacion de campos, deduplicacion dual y delimitacion muestral.
-#   Seccion 6: Enriquecimiento analitico con diccionarios tematicos ampliados:
+#   Seccion 6: Enriquecimiento analitico:
 #              - Tipificacion de medios de comunicacion (sesgos editoriales).
 #              - Validacion territorial y determinacion de confianza geografica.
-#              - Clasificacion exhaustiva de modalidades delictivas y hechos de seguridad.
+#              - Nomenclatura oficial de Delitos de Alto Impacto (SCJ / SIEDCO).
 #              - Estructura temporal para modelacion en panel (ano, mes, trimestre, semana).
 #   Seccion 7: Almacenamiento optimizado de microdatos (Parquet, RDS) y metadatos JSON.
 #   Seccion 8: Resumen descriptivo de la muestra y diagnostico de integridad.
@@ -245,7 +245,7 @@ df_muestra_base <- df_unificado_bruto |>
 
 
 # ------------------------------------------------------------------------------
-# 6. ENRIQUECIMIENTO ANALITICO CON DICCIONARIOS TEMATICOS Y PANEL
+# 6. ENRIQUECIMIENTO ANALITICO: TIPOLOGIAS Y NOMENCLATURA DE ALTO IMPACTO
 # ------------------------------------------------------------------------------
 
 # 6.1 MEJORA 1: Tipificacion y categorizacion de medios de comunicacion
@@ -265,7 +265,6 @@ df_muestra_enriquecida <- df_muestra_base |>
   )
 
 # 6.2 MEJORA 2: Validacion de mencion territorial en el texto y confianza geografica
-# Comprueba si el titular o el resumen mencionan explicitamente la localidad o sus barrios representativos
 df_patrones_territorio <- tibble(
   localidad = localidades_bogota,
   patron_geografico = c(
@@ -302,62 +301,69 @@ df_muestra_enriquecida <- df_muestra_enriquecida |>
   ) |>
   select(-loc_slug, -patron_geografico, -texto_geografia)
 
-# 6.3 MEJORA 3: Diccionario semantico exhaustivo de delitos y hechos de seguridad
-# Normalizacion de texto sin tildes para optimizar busquedas lexicograficas
+# 6.3 MEJORA 3: Nomenclatura oficial de Delitos de Alto Impacto (SCJ / SIEDCO / Policia Nacional)
+# Alineacion taxonomica con el Sistema de Informacion Estadistico, Delincuencial,
+# Contravencional y Operativo (SIEDCO) y la Secretaria de Seguridad de Bogota.
 texto_corpus <- tolower(stri_trans_general(paste(df_muestra_enriquecida$titulo, df_muestra_enriquecida$resumen), "Latin-ASCII"))
 
-# Diccionarios semanticos expandidos por modalidad:
-patron_violencia <- "arma de fuego|pistola|revolver|cuchillo|arma blanca|punzon|punal|disparo|disparos|balacera|tiroteo|baleado|apunalado|herido|homicidio|asesinato|asesinado|asesino|sicariato|sicario|muerto|cadaver|embolsado|abatido|abatidos|cruces de disparos|lesiones personales|muerte|violenta|mataron"
-
-patron_personas  <- "celular|telefono|movil|peaton|transeunte|atraco|atracaron|asaltaron|raponazo|cosquilleo|pasajero|transmilenio|sitp|paradero|billetera|reloj|joya|bolso|mochila|morral|paseo millonario|taxista|fleteo|transeuntes|manada|hurto a personas|robo a personas|ladron de celular|robaron a"
-
-patron_comercio  <- "local|comercio|tienda|restaurante|panaderia|bodega|negocio|supermercado|almacen|banco|cajero|joyeria|establecimiento|farmacia|drogueria|comerciante|comerciantes|asaltaron local|salon de belleza|peluqueria|bar|discoteca|asadero"
-
-patron_residencias <- "casa|apartamento|vivienda|conjunto residencial|edificio|habitacion|residencia|apartamentero|apartamenteros|hurto a residencia|robo a casa"
-
-patron_vehiculos <- "carro|vehiculo|moto|motocicleta|camioneta|autopartes|llanta|espejo|computador del carro|bici|bicicleta|ciclista|bicitaxi|deshuesadero|hurto de automotores|halado|taxi"
-
-patron_infraestructura <- "cable|cables|medidor|medidores|alcantarilla|tapas de alcantarilla|alumbrado publico|infraestructura|fibra optica|energia|acueducto|residuos|basuras"
-
-patron_extorsion <- "extorsion|extorsiones|vacuna|vacunas|gota a gota|panfleto|panfletos|amenaza|amenazas|boleteo|chantaje|tren de aragua|satanas|milicias"
-
-patron_microtrafico <- "estupefacientes|microtrafico|droga|drogas|olla|ollas|papeleta|papeletas|dosis|bazuco|marihuana|cocaina|jibaro|jibaros|expendedor|expendedores|trafico de estupefacientes|narco"
-
-patron_operativos <- "capturado|capturada|capturados|capturan|cayo|cayeron|banda|bandas|desarticulada|desarticulan|allanamiento|allanamientos|operativo|golpe a|desmantelan|judicializados|cayeron los|detuvieron|detenido|detenidos|aprehendido|aprehendidos|incautaron|incautacion|porte ilegal|porte de armas|mini uzi|falsificacion|licor adulterado"
-
-patron_politica   <- "frente de seguridad|frentes de seguridad|camaras|camara|pie de fuerza|policias|dispositivo|comando|comandos|seguridad en navidad|alcaldesa|alcalde|patrullaje|patrullajes|cifras de seguridad|consejo de seguridad|vigilancia|estrategia de seguridad|percepcion de inseguridad|victimizacion|cifras|dane|secretaria de seguridad|seguridad en bogota|falta de seguridad"
-
-patron_fraude     <- "estafa|estafas|ciberdelito|ciberdelitos|falso servicio|suplantacion|engano|clonacion|lucrando"
+# Diccionarios de delitos oficiales de alto impacto:
+patron_homicidio          <- "homicidio|homicidios|asesinato|asesinatos|asesinado|asesinada|asesinaron|sicariato|sicario|sicarios|crimen por encargo|muerto a tiros|hallado muerto|cadaver|embolsado|embolsados|cuerpo sin vida|abatido|abatidos|mataron a"
+patron_lesiones           <- "lesiones personales|lesionado|lesionada|lesionados|herido con arma|herida de bala|baleado|baleada|apunalado|apunalada|punalada|punaladas|golpiza|golpeado|rinon|rina|rinas|disparo a quemarropa|recibio un disparo"
+patron_hurto_personas     <- "hurto a personas|robo a personas|atraco|atracaron|asaltaron|raponazo|cosquilleo|paseo millonario|transeunte|transeuntes|peaton|peatones|pasajero|pasajeros|transmilenio|sitp|paradero|billetera|bolso|mochila|morral|reloj|joya|joyas|fleteo|fleteros|ladron de calle"
+patron_hurto_celulares    <- "celular|celulares|telefono movil|smartphone|robo de celular|hurto de celular|le robaron el celular|quitaron el celular"
+patron_hurto_comercio     <- "hurto a comercio|robo a comercio|local|comercio|tienda|restaurante|panaderia|supermercado|almacen|bodega|banco|cajero|joyeria|farmacia|drogueria|comerciante|comerciantes|asaltaron el negocio|asaltaron el local|bar|discoteca|peluqueria|asadero"
+patron_hurto_residencias  <- "hurto a residencias|robo a residencias|casa|apartamento|vivienda|conjunto residencial|edificio|habitacion|apartamentero|apartamenteros|hurto a vivienda|robaron en su casa|ingresaron a la vivienda"
+patron_hurto_automotores  <- "hurto de automotores|hurto de vehiculos|robo de carro|robo de vehiculo|carro|automovil|camioneta|campero|deshuesadero|autopartes|espejos|computador del vehiculo|halado de vehiculo"
+patron_hurto_motos        <- "hurto de motocicletas|robo de moto|motocicleta|motocicletas|moto|motos|parrillero|halado de moto"
+patron_hurto_bicis        <- "hurto de bicicletas|robo de bicicleta|bicicleta|bicicletas|bici|ciclista|ciclistas|ciclorruta|bicitaxi"
+patron_extorsion          <- "extorsion|extorsiones|extorsivo|vacuna|vacunas|gota a gota|panfleto|panfletos|amenaza de muerte|boleteo|chantaje|tren de aragua|satanas"
+patron_sexual_intrafam    <- "delito sexual|delitos sexuales|abuso sexual|violacion|acoso sexual|violencia intrafamiliar|feminicidio|agresion a mujer|violencia de genero"
+patron_microtrafico       <- "estupefacientes|microtrafico|droga|drogas|olla de vicio|papeletas|dosis|bazuco|marihuana|cocaina|jibaro|expendedor|trafico de estupefacientes|narcomenudeo"
+patron_operatividad       <- "capturado|capturada|capturados|capturan|cayo|cayeron|banda|bandas|desarticulada|desarticulan|allanamiento|allanamientos|operativo policial|desmantelan|judicializados|detuvieron|aprehendido|incautacion|porte ilegal de armas|armas incautadas"
+patron_politica_prev      <- "frente de seguridad|frentes de seguridad|camaras de seguridad|pie de fuerza|dispositivo de seguridad|comando de policia|patrullaje|cifras de seguridad|consejo de seguridad|secretaria de seguridad|estrategia de seguridad|percepcion de seguridad|victimizacion"
 
 df_muestra_enriquecida <- df_muestra_enriquecida |>
   mutate(
-    # Variables indicadoras binarias por dimension
-    modalidad_personas       = str_detect(texto_corpus, patron_personas),
-    modalidad_comercio       = str_detect(texto_corpus, patron_comercio),
-    modalidad_residencias    = str_detect(texto_corpus, patron_residencias),
-    modalidad_automotores    = str_detect(texto_corpus, patron_vehiculos),
-    delito_con_violencia     = str_detect(texto_corpus, patron_violencia),
-    modalidad_extorsion      = str_detect(texto_corpus, patron_extorsion),
-    modalidad_microtrafico   = str_detect(texto_corpus, patron_microtrafico),
-    modalidad_operativos     = str_detect(texto_corpus, patron_operativos),
-    modalidad_prevencion     = str_detect(texto_corpus, patron_politica),
+    # Variables indicadoras binarias (dummies) por delito oficial
+    delito_homicidio            = str_detect(texto_corpus, patron_homicidio),
+    delito_hurto_personas       = str_detect(texto_corpus, patron_hurto_personas),
+    delito_hurto_comercio       = str_detect(texto_corpus, patron_hurto_comercio),
+    delito_hurto_residencias    = str_detect(texto_corpus, patron_hurto_residencias),
+    delito_hurto_automotores    = str_detect(texto_corpus, patron_hurto_automotores),
+    delito_hurto_motocicletas   = str_detect(texto_corpus, patron_hurto_motos),
+    delito_hurto_bicicletas     = str_detect(texto_corpus, patron_hurto_bicis),
+    delito_hurto_celulares      = str_detect(texto_corpus, patron_hurto_celulares),
+    delito_extorsion            = str_detect(texto_corpus, patron_extorsion),
+    delito_lesiones_personales  = str_detect(texto_corpus, patron_lesiones),
+    delito_sexual_intrafamiliar = str_detect(texto_corpus, patron_sexual_intrafam),
+    delito_microtrafico         = str_detect(texto_corpus, patron_microtrafico),
     
-    # Clasificacion tematica dominante exhaustiva
-    tipo_delito_dominante    = case_when(
-      str_detect(texto_corpus, patron_violencia) & str_detect(texto_corpus, patron_personas) ~ "Hurto a personas con violencia",
-      str_detect(texto_corpus, patron_personas)        ~ "Hurto a personas",
-      str_detect(texto_corpus, patron_comercio)       ~ "Hurto a comercio",
-      str_detect(texto_corpus, patron_vehiculos)      ~ "Hurto de vehiculos / autopartes / bicicletas",
-      str_detect(texto_corpus, patron_residencias)    ~ "Hurto a residencias",
-      str_detect(texto_corpus, patron_extorsion)      ~ "Extorsion y amenazas",
-      str_detect(texto_corpus, patron_microtrafico)   ~ "Microtrafico y estupefacientes",
-      str_detect(texto_corpus, patron_infraestructura)~ "Hurto de infraestructura y servicios publicos",
-      str_detect(texto_corpus, patron_violencia)      ~ "Hecho violento y homicidio",
-      str_detect(texto_corpus, patron_operativos)     ~ "Operativos policiales y captura de bandas",
-      str_detect(texto_corpus, patron_politica)       ~ "Politica de seguridad, vigilancia y prevencion",
-      str_detect(texto_corpus, patron_fraude)         ~ "Fraude, estafa y cibercrimen",
-      str_detect(texto_corpus, "hurto|robo|atraco|ladron|ladrones|delincuente|delincuentes|asaltante") ~ "Hurto y delincuencia comun general",
-      TRUE                                            ~ "Seguridad ciudadana y coyuntura no especificada"
+    # Nomenclatura oficial de Delitos de Alto Impacto (categoria prioritaria y jerarquica)
+    delito_alto_impacto = case_when(
+      delito_homicidio            ~ "Homicidio",
+      delito_sexual_intrafamiliar ~ "Delitos sexuales y violencia intrafamiliar",
+      delito_extorsion            ~ "Extorsion",
+      delito_hurto_celulares      ~ "Hurto de celulares",
+      delito_hurto_bicicletas     ~ "Hurto de bicicletas",
+      delito_hurto_motocicletas   ~ "Hurto de motocicletas",
+      delito_hurto_automotores    ~ "Hurto de automotores y autopartes",
+      delito_hurto_personas       ~ "Hurto a personas",
+      delito_hurto_comercio       ~ "Hurto a comercio",
+      delito_hurto_residencias    ~ "Hurto a residencias",
+      delito_lesiones_personales  ~ "Lesiones personales",
+      delito_microtrafico         ~ "Trafico local de estupefacientes",
+      str_detect(texto_corpus, patron_operatividad)  ~ "Operatividad y capturas policiales",
+      str_detect(texto_corpus, patron_politica_prev) ~ "Politica de seguridad y prevencion",
+      str_detect(texto_corpus, "hurto|robo|atraco|ladron|delincuente") ~ "Hurto / Delincuencia comun no diferenciada",
+      TRUE ~ "Hechos no asociados a delitos de alto impacto"
+    ),
+    
+    # Indicador binario agregado de pertenencia a delitos de alto impacto
+    es_delito_alto_impacto = delito_alto_impacto %in% c(
+      "Homicidio", "Hurto a personas", "Hurto a comercio", "Hurto a residencias",
+      "Hurto de automotores y autopartes", "Hurto de motocicletas", "Hurto de bicicletas",
+      "Hurto de celulares", "Extorsion", "Lesiones personales",
+      "Delitos sexuales y violencia intrafamiliar", "Trafico local de estupefacientes"
     )
   )
 
@@ -423,32 +429,40 @@ conteo_tipo_medio <- df_muestra_final |>
   count(tipo_medio, sort = TRUE, name = "articulos") |>
   as.data.frame()
 
-# Cuadro 3: Distribucion por modalidad delictiva dominante (taxonomia refinada)
-conteo_delitos <- df_muestra_final |>
-  count(tipo_delito_dominante, sort = TRUE, name = "articulos") |>
+# Cuadro 3: Distribucion por Nomenclatura Oficial de Delitos de Alto Impacto
+conteo_alto_impacto <- df_muestra_final |>
+  count(delito_alto_impacto, sort = TRUE, name = "articulos") |>
   as.data.frame()
 
-# Cuadro 4: Nivel de confianza geografica territorial
+# Cuadro 4: Frecuencia de la variable agregada de Delitos de Alto Impacto
+conteo_agregado_impacto <- df_muestra_final |>
+  count(es_delito_alto_impacto, name = "articulos") |>
+  mutate(proporcion = round(articulos / sum(articulos), 4)) |>
+  as.data.frame()
+
+# Cuadro 5: Nivel de confianza geografica territorial
 conteo_geografia <- df_muestra_final |>
   count(confianza_geografica, name = "articulos") |>
   as.data.frame()
 
-# Cuadro 5: Auditoria de valores faltantes (NA) en campos criticos
+# Cuadro 6: Auditoria de valores faltantes (NA) en campos criticos
 valores_faltantes <- data.frame(
-  variable = c("titulo", "resumen", "enlace", "cuerpo", "tipo_medio", "tipo_delito_dominante", "año_mes"),
+  variable = c("titulo", "resumen", "enlace", "cuerpo", "tipo_medio", "delito_alto_impacto", "es_delito_alto_impacto", "año_mes"),
   nulos    = c(
     sum(is.na(df_muestra_final$titulo)),
     sum(is.na(df_muestra_final$resumen)),
     sum(is.na(df_muestra_final$enlace)),
     sum(is.na(df_muestra_final$cuerpo)),
     sum(is.na(df_muestra_final$tipo_medio)),
-    sum(is.na(df_muestra_final$tipo_delito_dominante)),
+    sum(is.na(df_muestra_final$delito_alto_impacto)),
+    sum(is.na(df_muestra_final$es_delito_alto_impacto)),
     sum(is.na(df_muestra_final$año_mes))
   )
 )
 
 print(conteo_anual, row.names = FALSE)
 print(conteo_tipo_medio, row.names = FALSE)
-print(conteo_delitos, row.names = FALSE)
+print(conteo_alto_impacto, row.names = FALSE)
+print(conteo_agregado_impacto, row.names = FALSE)
 print(conteo_geografia, row.names = FALSE)
 print(valores_faltantes, row.names = FALSE)

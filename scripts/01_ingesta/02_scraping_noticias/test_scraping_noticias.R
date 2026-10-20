@@ -56,23 +56,32 @@ stopifnot(length(unique(df_verif$localidad)) >= 19)
 stopifnot(max(as.Date(df_verif$fecha_chunk_desde), na.rm = TRUE) <= as.Date("2026-09-30"))
 stopifnot(min(as.Date(df_verif$fecha_chunk_desde), na.rm = TRUE) >= as.Date("2022-01-01"))
 
-# 5. Validacion de variables de enriquecimiento analitico (Mejoras 1 a 4)
-# Tipificacion de medios
+# 5. Validacion de tipificacion de medios
 stopifnot("tipo_medio" %in% names(df_verif))
 stopifnot(sum(is.na(df_verif$tipo_medio)) == 0)
 stopifnot("Institucional" %in% unique(df_verif$tipo_medio))
 
-# Confianza geografica
+# 6. Validacion de confianza geografica
 stopifnot("confianza_geografica" %in% names(df_verif))
 stopifnot(all(df_verif$confianza_geografica %in% c("Alta", "Media")))
 
-# Clasificacion delictiva
-stopifnot("tipo_delito_dominante" %in% names(df_verif))
-stopifnot(sum(is.na(df_verif$tipo_delito_dominante)) == 0)
-stopifnot("modalidad_personas" %in% names(df_verif))
-stopifnot("modalidad_comercio" %in% names(df_verif))
+# 7. Validacion de Nomenclatura Oficial de Delitos de Alto Impacto (SCJ / SIEDCO)
+stopifnot("delito_alto_impacto" %in% names(df_verif))
+stopifnot("es_delito_alto_impacto" %in% names(df_verif))
+stopifnot(sum(is.na(df_verif$delito_alto_impacto)) == 0)
+stopifnot(sum(is.na(df_verif$es_delito_alto_impacto)) == 0)
+stopifnot("Homicidio" %in% unique(df_verif$delito_alto_impacto))
+stopifnot("Hurto a comercio" %in% unique(df_verif$delito_alto_impacto))
+stopifnot("Hurto a personas" %in% unique(df_verif$delito_alto_impacto))
+stopifnot("Hurto de automotores y autopartes" %in% unique(df_verif$delito_alto_impacto))
+stopifnot("Hurto de celulares" %in% unique(df_verif$delito_alto_impacto))
+stopifnot("Extorsion" %in% unique(df_verif$delito_alto_impacto))
 
-# Estructura temporal de panel
+# Dummies individuales por delito de alto impacto
+stopifnot(c("delito_homicidio", "delito_hurto_personas", "delito_hurto_comercio", 
+            "delito_hurto_celulares", "delito_extorsion") %in% names(df_verif))
+
+# 8. Estructura temporal de panel
 stopifnot(c("año", "mes", "año_mes", "trimestre", "semana_año") %in% names(df_verif))
 stopifnot(sum(is.na(df_verif$año_mes)) == 0)
 stopifnot(all(str_detect(df_verif$año_mes, "^202[2-6]-(0[1-9]|1[0-2])$")))
@@ -87,7 +96,7 @@ print(data.frame(
     "rango_temporal",
     "tipificacion_medios",
     "confianza_geografica",
-    "clasificacion_delitos",
+    "delitos_alto_impacto_siedco",
     "variables_panel_tiempo"
   ),
   estado  = rep("CONFORME", 9)
