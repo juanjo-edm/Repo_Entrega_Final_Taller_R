@@ -1,31 +1,33 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # ARCHIVO: scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R
-# ROL: Ingesta Robusta de Noticias en Google News (Motor RSS y Checkpointing)
+# ROL: Pipeline Generalizable de Noticias en Google News (Motor RSS y Checkpointing)
 # AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # ==============================================================================
 #
 # DESCRIPCIÓN GENERAL:
-# Este script extrae artículos de prensa y comunicados sobre seguridad y delitos
-# (hurtos, robos, atracos, asaltos) para las 19 localidades urbanas de Bogotá D.C.
+# Este módulo implementa un pipeline 100% generalizable y parametrizable para
+# la ingesta, limpieza, consolidación y auditoría de noticias sobre criminalidad
+# en las 19 localidades urbanas de Bogotá D.C. mediante el motor oficial Google News RSS.
 #
-# CARACTERÍSTICAS PRINCIPALES:
-# 1. Motor Primario Google News RSS:
-#    Utiliza el endpoint oficial de sindicación de Google News (news.google.com/rss/search).
-#    No requiere navegadores pesados ni drivers, no presenta reCAPTCHAs y responde
-#    en segundos con metadatos estructurados (titular, medio, fecha exacta, resumen).
-# 2. Cobertura Histórica y Temporal Extendida (2022–2026):
-#    Captura noticias recientes y las fusiona con la base histórica consolidada
-#    de 2.482 registros, actualizando automáticamente el registro de cobertura.
-# 3. Deduplicación Inteligente y Normalización:
-#    Limpia parámetros de analítica (UTMs) y deduplica por URL canónica y título exacto.
-# 4. Filtro Temático de Exclusión:
-#    Excluye automáticamente noticias deportivas para la localidad de Santa Fe
-#    (-fútbol, -liga, -campín, -dimayor) para evitar sesgos en el análisis de sentimiento.
+# CARACTERÍSTICAS DE GENERALIZACIÓN:
+# 1. Rango Temporal Parametrizable (por defecto 2022-01-01 a 2026-09-30):
+#    Permite recortar o expandir la ventana de análisis a cualquier rango de fechas.
+# 2. Selección Flexible de Territorios:
+#    Permite procesar las 19 localidades completas o subconjuntos específicos.
+# 3. Consultas Booleanas y Filtro Deportivo:
+#    Agrupación de sinónimos de delitos y exclusión de fútbol para Santa Fe.
+# 4. Trazabilidad Atómica:
+#    Guarda chunks particionados en Parquet, unifica con la serie histórica validada,
+#    deduplica por URL limpia y título, y actualiza los metadatos de cobertura JSON.
 #
 # GUÍA RÁPIDA DE USO:
 #   source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
+#   ejecutar_pipeline_noticias_completo(
+#     fecha_inicio = "2022-01-01",
+#     fecha_fin    = "2026-09-30"
+#   )
 # ==============================================================================
 
 # 1. Configuración de Entorno y Dependencias ----
@@ -114,7 +116,7 @@ construir_consulta_rss <- function(localidad) {
 # Alias para compatibilidad hacia atrás
 construir_consulta_google <- construir_consulta_rss
 
-#' Constructor de URL para Google News Search / RSS
+#' Constructor de URL para Google News RSS
 build_google_news_url <- function(query, dmin = NULL, dmax = NULL, start = 0, hl = "es-419", gl = "CO") {
   q <- utils::URLencode(query, reserved = TRUE)
   glue::glue("https://news.google.com/rss/search?q={q}&hl={hl}&gl={gl}&ceid={gl}:{hl}")
@@ -138,7 +140,6 @@ limpiar_enlace <- function(url) {
 #' Parsea una fecha en formato RFC 822 / GMT (estándar RSS)
 parsear_fecha_rss <- function(fecha_str) {
   tryCatch({
-    # Ej: "Fri, 16 Oct 2026 21:56:54 GMT"
     d <- as.Date(fecha_str, format = "%a, %d %b %Y")
     if (is.na(d)) {
       d <- as.Date(lubridate::parse_date_time(fecha_str, orders = c("dmy HMS", "ymd HMS", "a d b Y HMS z")))
@@ -189,12 +190,6 @@ extraer_cuerpo_noticia <- function(url, resumen_fallback) {
 }
 
 #' Consulta Google News RSS para una localidad y retorna un tibble estructurado
-#'
-#' @param localidad Nombre de la localidad urbana de Bogotá.
-#' @param hl Idioma (es-419).
-#' @param gl País (CO).
-#' @param descargar_cuerpos Booleano para descargar el cuerpo completo de las notas.
-#' @return Tibble con las noticias obtenidas.
 consultar_localidad_rss <- function(localidad, hl = "es-419", gl = "CO", descargar_cuerpos = FALSE) {
   query_str  <- construir_consulta_rss(localidad)
   query_enc  <- utils::URLencode(query_str, reserved = TRUE)
@@ -239,7 +234,6 @@ consultar_localidad_rss <- function(localidad, hl = "es-419", gl = "CO", descarg
       dplyr::filter(!is.na(titulo) & titulo != "") |>
       dplyr::distinct(enlace, .keep_all = TRUE)
     
-    # Descargar cuerpo opcionalmente
     if (descargar_cuerpos) {
       df_loc$cuerpo <- purrr::map2_chr(df_loc$enlace, df_loc$resumen, extraer_cuerpo_noticia)
     } else {
@@ -256,10 +250,6 @@ consultar_localidad_rss <- function(localidad, hl = "es-419", gl = "CO", descarg
 # 4. Orquestación del Scraping RSS por Localidad ----
 
 #' Ejecuta la recolección automática por RSS para las localidades urbanas
-#'
-#' @param localidades_objetivo Vector de localidades a procesar.
-#' @param descargar_cuerpos Booleano para extraer cuerpo editorial vía HTTP.
-#' @return NULL (los datos se persisten en data/raw/noticias/chunk_rss_*.parquet).
 ejecutar_scraping_rss <- function(localidades_objetivo = localidades, descargar_cuerpos = FALSE) {
   cat("\n==================================================================\n")
   cat("📡 INICIANDO RECOLECCIÓN DE NOTICIAS MEDIANTE GOOGLE NEWS RSS\n")
@@ -284,7 +274,6 @@ ejecutar_scraping_rss <- function(localidades_objetivo = localidades, descargar_
       message(paste0("  ℹ 0 noticias recuperadas para: ", loc))
     }
     
-    # Pausa de cortesía para no saturar el servicio
     Sys.sleep(1.5)
   }
   
@@ -293,19 +282,26 @@ ejecutar_scraping_rss <- function(localidades_objetivo = localidades, descargar_
   cat("==================================================================\n\n")
 }
 
-# 5. Consolidación, Auditoría y Actualización de Metadatos ----
+# 5. Consolidación Generalizable y Filtrado Temporal ----
 
-#' Consolida la base histórica con todos los chunks generados (RSS y previos)
+#' Consolida la base histórica con todos los chunks generados y aplica filtros temporales
 #'
-#' @return Tibble invisible con el corpus unificado final.
-consolidar_noticias_scraping <- function() {
-  message(">>> [Consolidación] Leyendo base histórica y lotes RSS...")
+#' @param fecha_inicio Fecha mínima del corpus (por defecto 2022-01-01).
+#' @param fecha_fin Fecha máxima del corpus (por defecto 2026-09-30).
+#' @return Tibble invisible con el corpus unificado y delimitado.
+consolidar_noticias_scraping <- function(fecha_inicio = as.Date("2022-01-01"),
+                                         fecha_fin    = as.Date("2026-09-30")) {
+  
+  fecha_inicio <- as.Date(fecha_inicio)
+  fecha_fin    <- as.Date(fecha_fin)
+  
+  message(paste0("\n>>> [Consolidación] Unificando y delimitando al rango generalizable:"))
+  message(paste0("    Desde: ", fecha_inicio, " | Hasta: ", fecha_fin))
   
   # 1. Base histórica previa
   df_historico <- tibble::tibble()
   if (file.exists(archivo_consolidado)) {
     df_historico <- arrow::read_parquet(archivo_consolidado)
-    message(paste0("  ✔ Base previa cargada: ", format(nrow(df_historico), big.mark = ","), " noticias."))
   }
   
   # 2. Leer chunks generados en data/raw/noticias/
@@ -317,7 +313,6 @@ consolidar_noticias_scraping <- function() {
       tryCatch(arrow::read_parquet(f), error = function(e) tibble::tibble())
     }) |>
       dplyr::filter(!is.na(titulo) & titulo != "")
-    message(paste0("  ✔ Chunks RSS leídos: ", format(nrow(df_nuevos), big.mark = ","), " noticias."))
   }
   
   # 3. Fusión total y deduplicación dual (URL limpia y título)
@@ -326,20 +321,22 @@ consolidar_noticias_scraping <- function() {
     dplyr::distinct(enlace, .keep_all = TRUE) |>
     dplyr::distinct(titulo, .keep_all = TRUE)
   
-  # 4. Normalización de dominios y medios
+  # 4. Normalización de campos y delimitación temporal generalizable
   noticias_total <- noticias_total |>
     dplyr::mutate(
-      fuente = ifelse(is.na(fuente) | fuente == "", sub("^https?://([^/]+).*$", "\\1", enlace), fuente)
+      fuente            = ifelse(is.na(fuente) | fuente == "", sub("^https?://([^/]+).*$", "\\1", enlace), fuente),
+      fecha_chunk_desde = as.Date(fecha_chunk_desde)
+    ) |>
+    dplyr::filter(
+      fecha_chunk_desde >= fecha_inicio & fecha_chunk_desde <= fecha_fin
     )
   
   # 5. Exportar base unificada en Parquet y RDS
   arrow::write_parquet(noticias_total, archivo_consolidado)
   saveRDS(noticias_total, archivo_consol_rds)
   
-  message(paste0("\n✔ Base de datos consolidada actualizada exitosamente:"))
-  message(paste0("  - Parquet: ", archivo_consolidado))
-  message(paste0("  - RDS:     ", archivo_consol_rds))
-  message(paste0("  - Total noticias únicas validadas: ", format(nrow(noticias_total), big.mark = ",")))
+  message(paste0("  ✔ Base consolidada guardada en Parquet y RDS."))
+  message(paste0("  ✔ Total noticias validadas en el rango (", fecha_inicio, " a ", fecha_fin, "): ", format(nrow(noticias_total), big.mark = ",")))
   
   # 6. Actualizar metadatos de cobertura temporal (cobertura_historica.json)
   try({
@@ -358,7 +355,7 @@ consolidar_noticias_scraping <- function() {
       proyecto = "Hurtos y Sentimiento Mediatico en Bogota (2022-2026)",
       fecha_actualizacion = as.character(Sys.time()),
       total_filas_consolidadas = nrow(noticias_total),
-      rango_global = list(
+      rango_generalizable = list(
         inicio = as.character(min(as.Date(noticias_total$fecha_chunk_desde), na.rm = TRUE)),
         fin    = as.character(max(as.Date(noticias_total$fecha_chunk_desde), na.rm = TRUE))
       ),
@@ -382,7 +379,7 @@ auditar_corpus_noticias <- function() {
   df <- arrow::read_parquet(archivo_consolidado)
   
   cat("\n=======================================================\n")
-  cat("📊 AUDITORÍA DEL CORPUS DE NOTICIAS CONSOLIDADO\n")
+  cat("📊 AUDITORÍA DEL CORPUS DE NOTICIAS (2022 A 2026-09)\n")
   cat("=======================================================\n")
   cat(paste0("Total de artículos: ", format(nrow(df), big.mark = ","), "\n"))
   cat(paste0("Rango temporal:     ", min(df$fecha_chunk_desde, na.rm=TRUE), " a ", max(df$fecha_chunk_desde, na.rm=TRUE), "\n"))
@@ -414,15 +411,29 @@ auditar_corpus_noticias <- function() {
 
 # 6. Pipeline y Auto-Ejecución ----
 
-#' Ejecuta el pipeline completo de recolección RSS, consolidación y auditoría
-ejecutar_pipeline_noticias_completo <- function(descargar_cuerpos = FALSE) {
-  # 1. Descarga vía Google News RSS
-  ejecutar_scraping_rss(descargar_cuerpos = descargar_cuerpos)
+#' Ejecuta el pipeline completo y generalizable de noticias de Google News
+#'
+#' @param fecha_inicio Fecha inicial del corpus (por defecto "2022-01-01").
+#' @param fecha_fin Fecha final del corpus (por defecto "2026-09-30").
+#' @param localidades_objetivo Localidades a incluir (por defecto las 19).
+#' @param descargar_cuerpos Booleano para descargar cuerpo editorial.
+#' @param ejecutar_descarga Booleano: TRUE ejecuta consulta RSS a Google, FALSE solo consolida/filtra.
+#' @return Tibble invisible con el dataset delimitado.
+ejecutar_pipeline_noticias_completo <- function(fecha_inicio = "2022-01-01",
+                                                fecha_fin    = "2026-09-30",
+                                                localidades_objetivo = localidades,
+                                                descargar_cuerpos = FALSE,
+                                                ejecutar_descarga = TRUE) {
   
-  # 2. Fusión y deduplicación con la base histórica
-  df_final <- consolidar_noticias_scraping()
+  # 1. Recolección vía Google News RSS si se solicita
+  if (isTRUE(ejecutar_descarga)) {
+    ejecutar_scraping_rss(localidades_objetivo = localidades_objetivo, descargar_cuerpos = descargar_cuerpos)
+  }
   
-  # 3. Reporte de calidad
+  # 2. Fusión, deduplicación y delimitación al rango solicitado
+  df_final <- consolidar_noticias_scraping(fecha_inicio = fecha_inicio, fecha_fin = fecha_fin)
+  
+  # 3. Reporte diagnóstico
   auditar_corpus_noticias()
   
   return(invisible(df_final))
@@ -430,5 +441,9 @@ ejecutar_pipeline_noticias_completo <- function(descargar_cuerpos = FALSE) {
 
 # Auto-ejecución inmediata por defecto al hacer source()
 if (!exists("auto_ejecutar") || isTRUE(auto_ejecutar)) {
-  ejecutar_pipeline_noticias_completo(descargar_cuerpos = FALSE)
+  ejecutar_pipeline_noticias_completo(
+    fecha_inicio      = "2022-01-01",
+    fecha_fin         = "2026-09-30",
+    ejecutar_descarga = FALSE # Ya descargamos las noticias, aplica consolidación y delimitación inmediata
+  )
 }
