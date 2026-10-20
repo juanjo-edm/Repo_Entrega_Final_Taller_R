@@ -145,16 +145,7 @@ df_procesado <- df_crudo |>
     # Campo integrado optimizado para mineria de texto y analisis de sentimiento
     texto_completo_nlp      = str_squish(paste(titulo, ".", cuerpo))
   ) |>
-  # Remocion exhaustiva de todas las variables indicadoras logicas (booleanos)
-  select(-where(is.logical)) |>
-  # Remocion de parametros de consulta, fechas en texto y delimitadores de chunks
-  select(
-    -any_of(c(
-      "consulta", "fecha_texto", "fecha_chunk_desde", "fecha_chunk_hasta",
-      "fecha_iso", "pagina", "texto_corpus"
-    ))
-  ) |>
-  # Ordenamiento logico y academico de las columnas finales
+  # Ordenamiento logico y academico de las columnas finales (esquema canónico sin booleanos)
   select(
     fecha,
     año,

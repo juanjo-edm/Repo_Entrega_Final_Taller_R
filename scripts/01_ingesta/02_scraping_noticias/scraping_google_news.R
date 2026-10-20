@@ -318,11 +318,13 @@ df_muestra_enriquecida <- df_muestra_enriquecida |>
   mutate(loc_slug = tolower(stri_trans_general(localidad, "Latin-ASCII"))) |>
   left_join(df_patrones_territorio |> select(loc_slug, patron_geografico), by = "loc_slug") |>
   mutate(
-    texto_geografia      = tolower(stri_trans_general(paste(titulo, resumen), "Latin-ASCII")),
-    menciona_territorio  = str_detect(texto_geografia, patron_geografico),
-    confianza_geografica = if_else(menciona_territorio, "Alta", "Media")
+    confianza_geografica = if_else(
+      str_detect(tolower(stri_trans_general(paste(titulo, resumen), "Latin-ASCII")), patron_geografico),
+      "Alta",
+      "Media"
+    )
   ) |>
-  select(-loc_slug, -patron_geografico, -texto_geografia)
+  select(-loc_slug, -patron_geografico)
 
 # 6.3 MEJORA 3: Nomenclatura oficial de Delitos de Alto Impacto (SCJ / SIEDCO / Policia Nacional)
 texto_corpus <- tolower(stri_trans_general(paste(df_muestra_enriquecida$titulo, df_muestra_enriquecida$resumen), "Latin-ASCII"))
@@ -343,38 +345,24 @@ patron_microtrafico       <- "estupefacientes|microtrafico|droga|drogas|olla de 
 patron_operatividad       <- "capturado|capturada|capturados|capturan|cayo|cayeron|banda|bandas|desarticulada|desarticulan|allanamiento|allanamientos|operativo policial|desmantelan|judicializados|detuvieron|aprehendido|incautacion|porte ilegal de armas|armas incautadas"
 patron_politica_prev      <- "frente de seguridad|frentes de seguridad|camaras de seguridad|pie de fuerza|dispositivo de seguridad|comando de policia|patrullaje|cifras de seguridad|consejo de seguridad|secretaria de seguridad|estrategia de seguridad|percepcion de seguridad|victimizacion"
 
+# Clasificacion directa sin creacion de variables intermedias booleanas
 df_muestra_enriquecida <- df_muestra_enriquecida |>
   mutate(
-    # Variables indicadoras binarias (dummies) por delito oficial
-    delito_homicidio            = str_detect(texto_corpus, patron_homicidio),
-    delito_hurto_personas       = str_detect(texto_corpus, patron_hurto_personas),
-    delito_hurto_comercio       = str_detect(texto_corpus, patron_hurto_comercio),
-    delito_hurto_residencias    = str_detect(texto_corpus, patron_hurto_residencias),
-    delito_hurto_automotores    = str_detect(texto_corpus, patron_hurto_automotores),
-    delito_hurto_motocicletas   = str_detect(texto_corpus, patron_hurto_motos),
-    delito_hurto_bicicletas     = str_detect(texto_corpus, patron_hurto_bicis),
-    delito_hurto_celulares      = str_detect(texto_corpus, patron_hurto_celulares),
-    delito_extorsion            = str_detect(texto_corpus, patron_extorsion),
-    delito_lesiones_personales  = str_detect(texto_corpus, patron_lesiones),
-    delito_sexual_intrafamiliar = str_detect(texto_corpus, patron_sexual_intrafam),
-    delito_microtrafico         = str_detect(texto_corpus, patron_microtrafico),
-    
-    # Nomenclatura oficial de Delitos de Alto Impacto (categoria prioritaria y jerarquica)
     delito_alto_impacto = case_when(
-      delito_homicidio            ~ "Homicidio",
-      delito_sexual_intrafamiliar ~ "Delitos sexuales y violencia intrafamiliar",
-      delito_extorsion            ~ "Extorsion",
-      delito_hurto_celulares      ~ "Hurto de celulares",
-      delito_hurto_bicicletas     ~ "Hurto de bicicletas",
-      delito_hurto_motocicletas   ~ "Hurto de motocicletas",
-      delito_hurto_automotores    ~ "Hurto de automotores y autopartes",
-      delito_hurto_personas       ~ "Hurto a personas",
-      delito_hurto_comercio       ~ "Hurto a comercio",
-      delito_hurto_residencias    ~ "Hurto a residencias",
-      delito_lesiones_personales  ~ "Lesiones personales",
-      delito_microtrafico         ~ "Trafico local de estupefacientes",
-      str_detect(texto_corpus, patron_operatividad)  ~ "Operatividad y capturas policiales",
-      str_detect(texto_corpus, patron_politica_prev) ~ "Politica de seguridad y prevencion",
+      str_detect(texto_corpus, patron_homicidio)          ~ "Homicidio",
+      str_detect(texto_corpus, patron_sexual_intrafam)    ~ "Delitos sexuales y violencia intrafamiliar",
+      str_detect(texto_corpus, patron_extorsion)          ~ "Extorsion",
+      str_detect(texto_corpus, patron_hurto_celulares)    ~ "Hurto de celulares",
+      str_detect(texto_corpus, patron_hurto_bicis)        ~ "Hurto de bicicletas",
+      str_detect(texto_corpus, patron_hurto_motos)        ~ "Hurto de motocicletas",
+      str_detect(texto_corpus, patron_hurto_automotores)  ~ "Hurto de automotores y autopartes",
+      str_detect(texto_corpus, patron_hurto_personas)     ~ "Hurto a personas",
+      str_detect(texto_corpus, patron_hurto_comercio)     ~ "Hurto a comercio",
+      str_detect(texto_corpus, patron_hurto_residencias)  ~ "Hurto a residencias",
+      str_detect(texto_corpus, patron_lesiones)           ~ "Lesiones personales",
+      str_detect(texto_corpus, patron_microtrafico)       ~ "Trafico local de estupefacientes",
+      str_detect(texto_corpus, patron_operatividad)       ~ "Operatividad y capturas policiales",
+      str_detect(texto_corpus, patron_politica_prev)      ~ "Politica de seguridad y prevencion",
       str_detect(texto_corpus, "hurto|robo|atraco|ladron|delincuente") ~ "Hurto / Delincuencia comun no diferenciada",
       TRUE ~ "Hechos no asociados a delitos de alto impacto"
     )
@@ -389,8 +377,6 @@ df_muestra_final <- df_muestra_enriquecida |>
     trimestre  = paste0(year(fecha), "-T", quarter(fecha)),
     semana_año = isoweek(fecha)
   ) |>
-  # Remocion exhaustiva de variables indicadoras logicas (booleanos)
-  select(-where(is.logical)) |>
   # Remocion de variables auxiliares, metadatos y delimitadores de chunks
   select(
     -any_of(c(
