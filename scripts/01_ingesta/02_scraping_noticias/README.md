@@ -13,14 +13,6 @@ Para que cualquier persona pueda auditar cómo se construyó la base final, cons
 ```text
 data/raw/
 └── noticias/
-    ├── historico_por_localidad/            # Subtablas brutas individuales (4.276 filas en total)
-    │   ├── antonio_narino.parquet (.rds)
-    │   ├── barrios_unidos.parquet (.rds)
-    │   ├── bosa.parquet (.rds)
-    │   ├── ... (19 localidades urbanas)
-    │   └── usme.parquet (.rds)
-    ├── chunk_rss_*.parquet                 # Lotes descargados vía Google News RSS (1.703 noticias)
-    ├── cobertura_historica.json            # Metadatos de meses y fechas ya cubiertos por localidad
     ├── noticias_google_news_consolidado.parquet   # Base final validada y enriquecida (3.928 noticias únicas)
     └── noticias_google_news_consolidado.rds       # Respaldo en formato nativo de R
 ```

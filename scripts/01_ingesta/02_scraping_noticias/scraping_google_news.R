@@ -11,18 +11,20 @@
 # construccion y enriquecimiento analitico del corpus periodistico sobre
 # criminalidad y percepcion de seguridad en Bogota D.C. (2022 - 2026).
 #
-# ESTRUCTURA PROCEDIMENTAL DEL PIPELINE:
+# SALIDAS FINALES DEL PIPELINE:
+# Toda la informacion consolidada y enriquecida se almacena de manera unica y
+# centralizada en dos archivos estructurados dentro de data/raw/noticias/:
+#   1. noticias_google_news_consolidado.parquet (formato columnar de alta compresion)
+#   2. noticias_google_news_consolidado.rds     (formato binario nativo de R)
+#
+# ESTRUCTURA PROCEDIMENTAL:
 #   Seccion 1: Configuracion del entorno, resolucion de colisiones y librerias.
 #   Seccion 2: Definicion del catalogo territorial y consultas booleanas.
-#   Seccion 3: Recoleccion de notas de prensa recientes via feed Google News RSS.
-#   Seccion 4: Consolidacion y union vertical de subtablas historicas y lotes.
+#   Seccion 3: Recoleccion en memoria via feed Google News RSS (si se activa).
+#   Seccion 4: Carga y fusion con la serie consolidada previa.
 #   Seccion 5: Normalizacion de campos, deduplicacion dual y delimitacion muestral.
-#   Seccion 6: Enriquecimiento analitico:
-#              - Tipificacion de medios de comunicacion (sesgos editoriales).
-#              - Validacion territorial y determinacion de confianza geografica.
-#              - Nomenclatura oficial de Delitos de Alto Impacto (SCJ / SIEDCO).
-#              - Estructura temporal para modelacion en panel (ano, mes, trimestre, semana).
-#   Seccion 7: Almacenamiento optimizado de microdatos (Parquet, RDS) y metadatos JSON.
+#   Seccion 6: Enriquecimiento analitico (medios, geografia, delitos de alto impacto, panel).
+#   Seccion 7: Almacenamiento unico y definitivo en Parquet y RDS.
 #   Seccion 8: Resumen descriptivo de la muestra y diagnostico de integridad.
 # ==============================================================================
 
@@ -50,7 +52,6 @@ library(lubridate)
 library(xml2)
 library(rvest)
 library(httr)
-library(jsonlite)
 
 # Resolucion explicita de colisiones entre funciones mediante {conflicted}
 conflict_prefer("filter", "dplyr")
@@ -65,7 +66,6 @@ ruta_datos_raw      <- here("data", "raw")
 ruta_noticias_raw   <- here("data", "raw", "noticias")
 archivo_consolidado <- here("data", "raw", "noticias", "noticias_google_news_consolidado.parquet")
 archivo_consol_rds  <- here("data", "raw", "noticias", "noticias_google_news_consolidado.rds")
-archivo_cobertura   <- here("data", "raw", "noticias", "cobertura_historica.json")
 
 # Creacion del directorio de almacenamiento primario si no existe previamente
 if (!dir.exists(ruta_noticias_raw)) {
@@ -78,7 +78,7 @@ fecha_fin_muestra     <- as.Date("2026-09-30")
 
 # Interruptor de ejecucion de raspado web:
 # FALSE: Utiliza y consolida la informacion local ya descargada.
-# TRUE: Ejecuta consultas web adicionales a Google News RSS.
+# TRUE: Ejecuta consultas web adicionales a Google News RSS en memoria.
 ejecutar_descarga_rss <- FALSE
 
 
@@ -121,17 +121,15 @@ df_consultas <- tibble(localidad = localidades_bogota) |>
 
 
 # ------------------------------------------------------------------------------
-# 3. RECOLECCION SECUENCIAL VIA GOOGLE NEWS RSS (BUCLE DIRECTO)
+# 3. RECOLECCION VIA GOOGLE NEWS RSS (DIRECTO EN MEMORIA)
 # ------------------------------------------------------------------------------
+
+lista_descarga_rss <- vector("list", nrow(df_consultas))
 
 if (isTRUE(ejecutar_descarga_rss)) {
   for (i in seq_len(nrow(df_consultas))) {
     loc_nombre <- df_consultas$localidad[i]
     url_actual <- df_consultas$url_rss[i]
-    
-    slug_loc <- tolower(stri_trans_general(loc_nombre, "Latin-ASCII"))
-    slug_loc <- gsub("[^a-z0-9]", "_", slug_loc)
-    archivo_chunk <- file.path(ruta_noticias_raw, paste0("chunk_rss_", slug_loc, ".parquet"))
     
     tryCatch({
       doc_xml    <- read_xml(url_actual)
@@ -177,7 +175,7 @@ if (isTRUE(ejecutar_descarga_rss)) {
           filter(!is.na(enlace) & enlace != "") |>
           distinct(enlace, .keep_all = TRUE)
         
-        write_parquet(df_chunk, archivo_chunk)
+        lista_descarga_rss[[i]] <- df_chunk
       }
     }, error = function(e) {
       warning(paste("Fallo en peticion para:", loc_nombre))
@@ -187,31 +185,21 @@ if (isTRUE(ejecutar_descarga_rss)) {
   }
 }
 
+df_nuevas_rss <- bind_rows(lista_descarga_rss)
+
 
 # ------------------------------------------------------------------------------
-# 4. CONSOLIDACION DE REGISTROS HISTORICOS Y PARTICIONES RECIENTES
+# 4. CARGA Y FUSION DE REGISTROS MUESTRALES
 # ------------------------------------------------------------------------------
 
-# Carga de la serie consolidada preexistente
+# Carga de la base consolidada preexistente
 df_historico_previo <- tibble()
 if (file.exists(archivo_consolidado)) {
   df_historico_previo <- read_parquet(archivo_consolidado)
 }
 
-# Carga de todos los lotes Parquet particionados
-archivos_particiones <- list.files(ruta_noticias_raw, pattern = "^chunk_.*\\.parquet$", full.names = TRUE)
-
-lista_particiones <- vector("list", length(archivos_particiones))
-for (j in seq_along(archivos_particiones)) {
-  lista_particiones[[j]] <- tryCatch(
-    read_parquet(archivos_particiones[j]),
-    error = function(e) tibble()
-  )
-}
-df_particiones <- bind_rows(lista_particiones)
-
-# Fusion vertical
-df_unificado_bruto <- bind_rows(df_historico_previo, df_particiones)
+# Fusion con cualquier nuevo lote descargado en memoria
+df_unificado_bruto <- bind_rows(df_historico_previo, df_nuevas_rss)
 
 
 # ------------------------------------------------------------------------------
@@ -249,7 +237,6 @@ df_muestra_base <- df_unificado_bruto |>
 # ------------------------------------------------------------------------------
 
 # 6.1 MEJORA 1: Tipificacion y categorizacion de medios de comunicacion
-# Permite controlar econométricamente por sesgos editoriales (institucional vs. alarma ciudadana)
 fuente_lower <- tolower(df_muestra_base$fuente)
 
 df_muestra_enriquecida <- df_muestra_base |>
@@ -302,8 +289,6 @@ df_muestra_enriquecida <- df_muestra_enriquecida |>
   select(-loc_slug, -patron_geografico, -texto_geografia)
 
 # 6.3 MEJORA 3: Nomenclatura oficial de Delitos de Alto Impacto (SCJ / SIEDCO / Policia Nacional)
-# Alineacion taxonomica con el Sistema de Informacion Estadistico, Delincuencial,
-# Contravencional y Operativo (SIEDCO) y la Secretaria de Seguridad de Bogota.
 texto_corpus <- tolower(stri_trans_general(paste(df_muestra_enriquecida$titulo, df_muestra_enriquecida$resumen), "Latin-ASCII"))
 
 # Diccionarios de delitos oficiales de alto impacto:
@@ -380,7 +365,7 @@ df_muestra_final <- df_muestra_enriquecida |>
 
 
 # ------------------------------------------------------------------------------
-# 7. ALMACENAMIENTO DE MICRODATOS Y METADATOS MUESTRALES
+# 7. ALMACENAMIENTO UNICO Y DEFINITIVO (UN PARQUET Y UN RDS)
 # ------------------------------------------------------------------------------
 
 # 7.1 Exportacion columnar definitiva a Parquet
@@ -388,31 +373,6 @@ write_parquet(df_muestra_final, archivo_consolidado)
 
 # 7.2 Exportacion en formato nativo serializado de R (.rds)
 saveRDS(df_muestra_final, archivo_consol_rds)
-
-# 7.3 Generacion y serializacion de metadatos de auditoria muestral (JSON)
-tabla_cobertura <- df_muestra_final |>
-  group_by(localidad) |>
-  summarise(
-    noticias_consolidadas = n(),
-    fecha_min             = as.character(min(fecha_chunk_desde, na.rm = TRUE)),
-    fecha_max             = as.character(max(fecha_chunk_desde, na.rm = TRUE)),
-    meses_cubiertos       = list(sort(unique(format(fecha_chunk_desde, "%Y-%m")))),
-    fuentes_principales   = list(head(names(sort(table(fuente), decreasing = TRUE)), 5)),
-    .groups               = "drop"
-  )
-
-metadatos_auditoria <- list(
-  proyecto                 = "Hurtos y Sentimiento Mediatico en Bogota (2022-2026)",
-  fecha_actualizacion      = as.character(Sys.time()),
-  total_filas_consolidadas = nrow(df_muestra_final),
-  rango_generalizable      = list(
-    inicio = as.character(min(df_muestra_final$fecha_chunk_desde, na.rm = TRUE)),
-    fin    = as.character(max(df_muestra_final$fecha_chunk_desde, na.rm = TRUE))
-  ),
-  localidades              = split(tabla_cobertura, seq_len(nrow(tabla_cobertura)))
-)
-
-write_json(metadatos_auditoria, archivo_cobertura, pretty = TRUE, auto_unbox = TRUE)
 
 
 # ------------------------------------------------------------------------------

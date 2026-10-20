@@ -11,10 +11,7 @@ data/
 ├── raw/                              # Datos tal como bajan de las fuentes oficiales (sin tocar)
 │   └── noticias/                                # Carpeta exclusiva de ingesta de noticias (Google News)
 │       ├── noticias_google_news_consolidado.parquet # Base final consolidada y enriquecida (3.928 noticias)
-│       ├── noticias_google_news_consolidado.rds     # Respaldo nativo de R
-│       ├── historico_por_localidad/             # 19 subtablas brutas individuales (Parquet/RDS)
-│       ├── cobertura_historica.json             # Registro de meses cubiertos para auditoria
-│       └── chunk_*.parquet                      # Lotes particionados de scraping
+│       └── noticias_google_news_consolidado.rds     # Respaldo en formato nativo de R
 └── processed/                        # Datos listos y normalizados para los modelos y gráficos
     ├── tasas_hurtos_localidad.parquet# Tasas de hurto calculadas por cada 100.000 habitantes
     ├── sentimiento_noticias.parquet  # Puntuaciones de sentimiento de sentometrics
