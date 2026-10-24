@@ -9,15 +9,9 @@ En esta carpeta guardamos los datos del proyecto, separando claramente lo que ba
 ```text
 data/
 ├── raw/                              # Datos tal como bajan de las fuentes oficiales (sin tocar)
-│   ├── delitos_alto_impacto_raw.parquet # Hurtos registrados vía API de Socrata (SDSCJ)
-│   ├── poblacion_localidades_raw.parquet# Habitantes por localidad 2005-2035 (SDS)
-│   ├── localidades_bogota_raw.geojson  # Mapas y polígonos de las localidades (SDP)
-│   ├── noticias_google_news_consolidado.parquet # Base final de noticias validadas (2.487 noticias)
-│   ├── noticias_google_news_consolidado.rds     # Respaldo nativo de R
-│   └── noticias/                                # Carpeta de ingesta de noticias
-│       ├── historico_por_localidad/             # 19 subtablas brutas individuales (Parquet/RDS)
-│       ├── cobertura_historica.json             # Registro de meses cubiertos para scraping incremental
-│       └── chunk_*.parquet                      # Lotes mensuales adicionales de scraping
+│   └── noticias/                                # Carpeta exclusiva de ingesta de noticias (Google News)
+│       ├── noticias_google_news_consolidado.parquet # Base final consolidada y enriquecida (3.928 noticias)
+│       └── noticias_google_news_consolidado.rds     # Respaldo en formato nativo de R
 └── processed/                        # Datos listos y normalizados para los modelos y gráficos
     ├── tasas_hurtos_localidad.parquet# Tasas de hurto calculadas por cada 100.000 habitantes
     ├── sentimiento_noticias.parquet  # Puntuaciones de sentimiento de sentometrics

@@ -8,21 +8,32 @@ author:
   - "Juan Esteban Carvajal Cruz — 202614312"
   - "Miguelangel Palma — 202621481"
   - "Juan José Echeverry — 202616233"
-date: today
+date: "2026-10-24"
 format:
   pdf:
+    pdf-engine: pdflatex
     documentclass: article
     papersize: letter
     geometry:
-      - top=20mm
-      - bottom=20mm
-      - left=20mm
-      - right=20mm
+      - top=18mm
+      - bottom=18mm
+      - left=18mm
+      - right=18mm
     fontsize: 10pt
-    linestretch: 1.15
+    linestretch: 1.05
     number-sections: true
     toc: false
     fig-pos: "H"
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{caption}
+        \captionsetup{font=small,labelfont=bf,skip=3pt}
+        \usepackage{titlesec}
+        \titlespacing*{\section}{0pt}{5pt plus 1pt minus 1pt}{2pt plus 1pt minus 1pt}
+        \titlespacing*{\subsection}{0pt}{4pt plus 1pt minus 1pt}{2pt plus 1pt minus 1pt}
+        \setlength{\parskip}{2.5pt}
+        \renewcommand{\maketitle}{}
   html:
     theme: flatly
     toc: true
@@ -33,6 +44,21 @@ execute:
   warning: false
   message: false
 ---
+
+::: {.content-visible when-format="pdf"}
+\begin{center}
+{\Large \textbf{Propuesta de Trabajo Final: Hurtos y Sentimiento Mediático en Bogotá}}\\[0.25em]
+{\large Taller de Programación en R — Primera Entrega (Semana 11)}\\[0.25em]
+{\footnotesize Maestría en Economía Aplicada (MECA) — Universidad de los Andes}\\[0.6em]
+\begin{tabular}{cc}
+\textbf{Gabriel Arturo Echeverry Castaño} — 201016705 & \textbf{Olga Lucía Ramírez Contreras} — 202624900 \\
+\textbf{Sergio Alejandro López Valderrama} — 202111932 & \textbf{Juan Esteban Carvajal Cruz} — 202614312 \\
+\textbf{Miguelangel Palma} — 202621481 & \textbf{Juan José Echeverry} — 202616233 \\
+\end{tabular}\\[0.4em]
+{\footnotesize 24 de octubre de 2026}
+\end{center}
+\vspace{0.4em}
+:::
 
 ```{r}
 #| label: setup-entorno
@@ -51,100 +77,159 @@ library(readr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-library(sentometrics)
+library(scales)
+library(knitr)
+library(kableExtra)
+library(ggrepel)
 
 # 1.2 Resolución explícita de conflictos ----
 conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
-# 1.3 Definición de rutas relativas con {here} ----
-ruta_datos_raw      <- here::here("data", "raw")
-ruta_datos_clean    <- here::here("data", "processed")
-ruta_salida_tablas  <- here::here("output", "tables")
-ruta_salida_figuras <- here::here("output", "figures")
+# 1.3 Carga de datos procesados ----
+ruta_proc <- here::here("data", "processed")
+archivo_panel    <- file.path(ruta_proc, "panel_consolidado_localidad_anual.parquet")
+archivo_noticias <- file.path(ruta_proc, "noticias", "noticias_con_sentimiento.parquet")
+
+stopifnot(file.exists(archivo_panel))
+stopifnot(file.exists(archivo_noticias))
+
+panel_df    <- arrow::read_parquet(archivo_panel)
+noticias_df <- arrow::read_parquet(archivo_noticias)
 ```
 
-# Pregunta de Investigación (Máximo 150 palabras)
+# Pregunta de Investigación
 
-<!-- 
-Pautas del enunciado:
-- Plantear una pregunta de investigación (con una hipótesis a probar) económica y/o social clara.
-- Debe ser diferente y original.
-- Máximo 150 palabras.
--->
+¿Cómo se relacionan los registros de hurto con el tono de las noticias sobre inseguridad en las 19 localidades urbanas de Bogotá entre 2022 y 2026? Se analizan hurtos a personas, residencias y motocicletas mediante tasas anuales por 100.000 habitantes y se comparan con índices de sentimiento calculados con `sentometrics`.
 
+**Hipótesis:** Las localidades con mayores tasas de hurto reciben coberturas de prensa más frecuentes y con mayor polaridad negativa. No obstante, esta relación presenta divergencias espaciales: las zonas comerciales y céntricas concentran una atención periodística desfavorable que supera la proporción esperada por su población residente. El alcance del trabajo es descriptivo y evalúa la correspondencia entre estadísticas oficiales y contenido noticioso, reconociendo que la agenda de los medios no sustituye las encuestas de percepción ciudadana.
 
-# Motivación (Máximo 150 palabras)
+# Motivación
 
-<!-- 
-Pautas del enunciado:
-- Plantear por qué la pregunta es relevante desde el punto de vista económico y social.
-- Justificación sólida y directa con la pregunta problema.
-- Máximo 150 palabras.
--->
+El hurto condiciona decisiones económicas cotidianas: la localización de comercios, las rutas de transporte y el uso del espacio público. Sin embargo, la atención de los medios no siempre sigue el ritmo de las denuncias en las estaciones de policía. Cuando la prensa concentra su cobertura en ciertos sectores, altera la reputación barrial e influye en la demanda ciudadana por recursos de vigilancia. Determinar si las noticias reflejan la criminalidad registrada o si introducen sesgos territoriales permite evaluar el papel de los medios en el debate de seguridad. Este trabajo cruza estadísticas delictivas y demográficas oficiales con minería de texto en prensa local, aportando evidencia empírica reproducible para analizar estas brechas espaciales en Bogotá.
 
+# Descripción de los Datos
 
-# Descripción de los Datos (Máximo 150 palabras)
+El estudio combina tres fuentes públicas:
+1. *Secretaría Distrital de Seguridad (SDSCJ):* registros de delitos de alto impacto por localidad (2022–2026).
+2. *Secretaría Distrital de Salud (SDS):* proyecciones de población por localidad para calcular tasas por 100.000 habitantes.
+3. *Google News RSS:* 3.916 artículos de prensa regional y nacional sobre delincuencia en Bogotá (2022–2026).
 
-<!-- 
-Pautas del enunciado:
-- Fuente de los datos (SDSCJ, SDS, Google News RSS, SDP).
-- Unidad de observación de los datos (Localidad x Año / Noticia).
-- Variables relevantes para el análisis y tipos de variables.
-- Número de observaciones y formato de la base de datos (.csv, .parquet, .geojson).
-- Llaves de vinculación entre bases (código/nombre de localidad + año).
-- Máximo 150 palabras.
--->
+La base agregada es un panel de localidad por año con 95 observaciones (19 localidades urbanas durante 5 años), mientras que las noticias se conservan como microdatos individuales. Las variables incluyen denuncias y tasas de hurto (discretas y continuas), volumen noticioso, puntaje de polaridad léxica y proporción de notas negativas. Los archivos se estructuran en formatos Parquet y GeoJSON, vinculados por código oficial de localidad y año.
 
+# Plan General del Manejo de los Datos y Metodología
 
-# Plan General del Manejo de los Datos / Metodología (Máximo 150 palabras)
+El procedimiento incluye cuatro etapas reproducibles:
+1. *Ingesta y almacenamiento:* descarga automatizada de registros abiertos y consolidación en Parquet para optimizar memoria.
+2. *Depuración y homologación:* exclusión del área rural de Sumapaz, estandarización de nombres de las 19 localidades urbanas y limpieza textual (remoción de etiquetas HTML, cuñas publicitarias y avisos de navegación).
+3. *Minería de texto:* cómputo de sentimiento proporcional por noticia mediante `sentometrics` y el léxico NRC en español, calculando el balance neto entre términos positivos y negativos.
+4. *Clasificación territorial:* cálculo de tasas por 100.000 habitantes residentes y segmentación mediante *K-means* (seleccionando grupos según el coeficiente de silueta), combinando delincuencia registrada y polaridad mediática.
 
-<!-- 
-Pautas del enunciado:
-- Plan de trabajo general sobre manipulación (limpieza de caracteres, imputación, joins).
-- Bosquejo de herramientas analíticas (sentometrics, K-means, series temporales, tasas por 100k hab.).
-- Máximo 150 palabras.
--->
+El análisis incorpora la distorsión que genera la población flotante en las tasas céntricas y sintetiza las relaciones espaciales en una aplicación interactiva en Shiny.
 
+# Análisis Preliminar de Datos y Storytelling
 
-# Análisis Preliminar de Datos y Storytelling (Máximo 700 palabras)
-
-<!-- 
-Pautas del enunciado:
-1. Estadísticas descriptivas calculadas a partir de los datos reales (medias, medianas, desviaciones, proporciones, etc.).
-2. Incluir al menos dos (2) gráficos distintos y autocontenidos (título claro, ejes rotulados, unidades explícitas y leyendas).
-3. Construir una narrativa preliminar (storytelling) que conecte los hallazgos entre sí y con la hipótesis:
-   qué patrón o tensión revelan los datos y qué preguntas quedan abiertas para la entrega final.
-- Máximo 700 palabras en esta sección.
--->
+El panel reúne 95 observaciones anuales por localidad entre 2022 y 2026, junto con 3.916 artículos de prensa depurados. La @tbl-descriptivas resume las variables centrales.
 
 ```{r}
 #| label: tbl-descriptivas
-#| eval: false
+#| tbl-cap: "Estadísticas descriptivas consolidadas: delitos, demografía y métricas de prensa (2022–2026)"
 
-# [Placeholder] Código para generar tabla de estadísticas descriptivas calculadas
+tabla_resumen <- tibble::tribble(
+  ~Variable, ~Media, ~Mediana, ~`Desv. Est.`, ~Mínimo, ~Máximo,
+  "Tasa hurto a personas (por 100k hab.)", mean(panel_df$tasa_hurto_personas), median(panel_df$tasa_hurto_personas), sd(panel_df$tasa_hurto_personas), min(panel_df$tasa_hurto_personas), max(panel_df$tasa_hurto_personas),
+  "Tasa hurto a residencias (por 100k hab.)", mean(panel_df$tasa_hurto_residencias), median(panel_df$tasa_hurto_residencias), sd(panel_df$tasa_hurto_residencias), min(panel_df$tasa_hurto_residencias), max(panel_df$tasa_hurto_residencias),
+  "Tasa hurto a motocicletas (por 100k hab.)", mean(panel_df$tasa_hurto_motos), median(panel_df$tasa_hurto_motos), sd(panel_df$tasa_hurto_motos), min(panel_df$tasa_hurto_motos), max(panel_df$tasa_hurto_motos),
+  "Volumen de noticias (por localidad-año)", mean(panel_df$noticias_conteo), median(panel_df$noticias_conteo), sd(panel_df$noticias_conteo), min(panel_df$noticias_conteo), max(panel_df$noticias_conteo),
+  "Índice de sentimiento neto (sentometrics)", mean(panel_df$sentimiento_promedio), median(panel_df$sentimiento_promedio), sd(panel_df$sentimiento_promedio), min(panel_df$sentimiento_promedio), max(panel_df$sentimiento_promedio),
+  "Proporción de noticias negativas (%)", mean(panel_df$prop_negativas), median(panel_df$prop_negativas), sd(panel_df$prop_negativas), min(panel_df$prop_negativas), max(panel_df$prop_negativas)
+) |>
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
+
+kable(tabla_resumen, booktabs = TRUE, linesep = "", align = c("l", rep("r", 5))) |>
+  kable_styling(latex_options = c("HOLD_position", "scale_down"), font_size = 8)
 ```
+
+Las denuncias muestran diferencias marcadas entre modalidades y territorios. El hurto a personas promedia 2.911 casos anuales por 100.000 habitantes, con una desviación estándar de 2.946 que refleja contrastes notorios: mientras Usme registra 620 hechos por 100.000 habitantes, Los Mártires alcanza 8.390 y La Candelaria 7.615. En cambio, el hurto a residencias (media de 108,4) y el hurto de motocicletas (media de 68,2) mantienen magnitudes menores y rangos más estrechos en la ciudad. El sentimiento promedio de las noticias es predominantemente negativo (-0,02), y en el 47,8% de las notas analizadas prevalecen términos de pérdida o agresión sobre expresiones de tranquilidad o acción policial.
 
 ```{r}
 #| label: fig-grafico-1
-#| fig-cap: "Gráfico 1: [Título descriptivo autocontenido]"
-#| eval: false
+#| fig-cap: "Tasa promedio anual de hurto a personas por localidad en Bogotá (2022–2026). Expresada en hechos denunciados por cada 100.000 habitantes."
+#| fig-height: 2.85
+#| fig-width: 6.5
 
-# [Placeholder] Código para el primer gráfico autocontenido
+loc_summary <- panel_df |>
+  group_by(localidad) |>
+  summarise(
+    tasa_personas_media = mean(tasa_hurto_personas),
+    noticias_media      = mean(noticias_conteo),
+    prop_neg_media      = mean(prop_negativas),
+    .groups = "drop"
+  )
+
+ggplot(loc_summary, aes(x = reorder(localidad, tasa_personas_media), y = tasa_personas_media)) +
+  geom_col(fill = "#1f4e79", width = 0.68) +
+  geom_text(aes(label = format(round(tasa_personas_media, 0), big.mark = ",")),
+            hjust = -0.12, size = 2.4, color = "#222222", fontface = "bold") +
+  coord_flip() +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.16)), labels = scales::comma) +
+  labs(
+    x = NULL,
+    y = "Tasa por 100.000 habitantes",
+    caption = "Fuente: Elaboración propia a partir de microdatos de SDSCJ y proyecciones poblacionales SDS (2022–2026)."
+  ) +
+  theme_minimal(base_size = 8.5) +
+  theme(
+    plot.title = element_blank(),
+    axis.text.y = element_text(size = 7.5, face = "bold", color = "#1a1a1a"),
+    axis.text.x = element_text(size = 7),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    plot.caption = element_text(size = 6, color = "#666666", margin = margin(t = 3))
+  )
 ```
+
+La @fig-grafico-1 detalla la distribución espacial del hurto a personas. El cuadrante central y comercial compuesto por Los Mártires, La Candelaria, Chapinero y Santa Fe presenta tasas que multiplican por más de ocho las de localidades del sur y occidente como Bosa, San Cristóbal y Ciudad Bolívar. Esta brecha responde en parte a la construcción del indicador: el denominador censal cuenta habitantes residentes, pero el centro recibe a diario trabajadores, compradores y estudiantes de toda la ciudad. Por ello, la tasa per cápita mide la exposición respecto a la población base fija, reflejando la concentración de hechos en zonas de alta concurrencia.
 
 ```{r}
 #| label: fig-grafico-2
-#| fig-cap: "Gráfico 2: [Título descriptivo autocontenido]"
-#| eval: false
+#| fig-cap: "Contraste entre criminalidad registrada (tasa de hurto a personas) y porcentaje de cobertura periodística con tono negativo (2022–2026)."
+#| fig-height: 2.75
+#| fig-width: 6.5
 
-# [Placeholder] Código para el segundo gráfico autocontenido
+ggplot(loc_summary, aes(x = tasa_personas_media, y = prop_neg_media)) +
+  geom_point(aes(size = noticias_media), color = "#b03a2e", alpha = 0.75) +
+  geom_smooth(method = "lm", se = FALSE, color = "#2471a3", linetype = "dashed", linewidth = 0.6) +
+  geom_text_repel(aes(label = localidad), size = 2.4, max.overlaps = 25, box.padding = 0.25) +
+  scale_x_continuous(labels = scales::comma) +
+  scale_size_continuous(range = c(2, 5.5), name = "Noticias prom./año") +
+  labs(
+    x = "Tasa de hurto a personas (por 100.000 habitantes)",
+    y = "Proporción de noticias con tono negativo (%)",
+    caption = "Fuente: Elaboración propia a partir de SDSCJ, SDS y Google News procesado con sentometrics (NRC Spanish, 2022–2026)."
+  ) +
+  theme_minimal(base_size = 8.5) +
+  theme(
+    plot.title = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_text(size = 7.5, face = "bold"),
+    legend.text = element_text(size = 7),
+    legend.box.margin = margin(t = -5, b = -3),
+    panel.grid.minor = element_blank(),
+    plot.caption = element_text(size = 6, color = "#666666", margin = margin(t = 2))
+  )
 ```
 
+Al contrastar las tasas de hurto con el tono de las noticias, la @fig-grafico-2 muestra una correspondencia parcial con la hipótesis:
+1. *Visibilidad del centro y zonas comerciales:* Chapinero, Santa Fe y Teusaquillo concentran coberturas frecuentes con proporciones de notas negativas superiores al 50%, impulsadas por su actividad bancaria, universitaria y nocturna.
+2. *Persistencia del tono adverso en periferias pobladas:* Localidades con tasas per cápita más bajas pero gran tamaño demográfico (como Kennedy, Suba y Bosa) sostienen entre 45% y 55% de artículos negativos. Los medios cubren hechos violentos particulares sin considerar la escala de la población expuesta.
+
+La evidencia preliminar sugiere que la atención de la prensa responde tanto a la gravedad del hecho como a la notoriedad del sector, antes que a la tasa matemática de criminalidad. Para la entrega final, se empleará un algoritmo de *K-means* que agrupe las localidades según sus tres tasas de hurto y sus indicadores de sentimiento. Este ejercicio permitirá distinguir territorios con alta incidencia y alta cobertura de aquellos con estigmatización mediática no correspondida por sus denuncias, sirviendo de base para la herramienta interactiva en Shiny.
 
 # Referencias
 
-<!-- 
-Listado de fuentes oficiales, paquetes de R y referencias bibliográficas del proyecto.
--->
+* Ardia, D., Bluteau, K., Borms, S., & Boudt, K. (2021). The R Package sentometrics to Compute, Aggregate and Predict with Textual Sentiment. *Journal of Statistical Software*, 99(2), 1–40.
+* Mohammad, S. M., & Turney, P. D. (2013). Crowdsourcing a Word-Emotion Association Lexicon. *Computational Intelligence*, 29(3), 436–465.
+* Secretaría Distrital de Seguridad, Convivencia y Justicia — SDSCJ. (2026). *Delito de Alto Impacto. Bogotá D.C.* Portal Datos Abiertos Bogotá.
+* Secretaría Distrital de Salud — SDS. (2026). *Pirámide Poblacional y Proyecciones Demográficas 2005–2035*. Alcaldía Mayor de Bogotá.

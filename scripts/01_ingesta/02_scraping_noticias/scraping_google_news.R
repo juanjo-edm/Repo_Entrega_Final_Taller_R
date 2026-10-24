@@ -1,356 +1,469 @@
 # ==============================================================================
-# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2025)
-# ROL: Web Scraping Robusto de Noticias en Google News con Checkpointing
-# AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)
-# PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
+# PROYECTO: Hurtos y Sentimiento Mediatico en Bogota (2022-2026)
+# ARCHIVO: scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R
+# ROL: Ingesta, depuracion, enriquecimiento y consolidacion de prensa digital
+# AUTORES: Juan Jose Echeverry, Miguelangel Palma, Sergio Lopez (Grupo 10)
+# PROGRAMA: Maestria en Economia Aplicada (MECA) — Universidad de los Andes
+# ==============================================================================
+#
+# METODOLOGIA Y FLUJO SECUENCIAL:
+# Este script implementa un pipeline procedimental puro y lineal para la
+# construccion y enriquecimiento analitico del corpus periodistico sobre
+# criminalidad y percepcion de seguridad en Bogota D.C. (2022 - 2026).
+#
+# SALIDAS FINALES DEL PIPELINE:
+# Toda la informacion consolidada y enriquecida se almacena de manera unica y
+# centralizada en dos archivos estructurados dentro de data/raw/noticias/:
+#   1. noticias_google_news_consolidado.parquet (formato columnar de alta compresion)
+#   2. noticias_google_news_consolidado.rds     (formato binario nativo de R)
+#
+# ESTRUCTURA PROCEDIMENTAL:
+#   Seccion 1: Configuracion del entorno, resolucion de colisiones y librerias.
+#   Seccion 2: Definicion del catalogo territorial y consultas booleanas.
+#   Seccion 3: Recoleccion en memoria via feed Google News RSS (si se activa).
+#   Seccion 4: Carga y fusion con la serie consolidada previa.
+#   Seccion 5: Normalizacion de campos, deduplicacion dual y delimitacion muestral.
+#   Seccion 6: Enriquecimiento analitico (medios, geografia, delitos de alto impacto, panel).
+#   Seccion 7: Almacenamiento unico y definitivo en Parquet y RDS.
+#   Seccion 8: Resumen descriptivo de la muestra y diagnostico de integridad.
 # ==============================================================================
 
-# 1. Configuración y Dependencias ----
 
-## 1.1 Opciones globales y semilla ----
-rm(list = ls())
+# ------------------------------------------------------------------------------
+# 1. ENTORNO DE TRABAJO, RESOLUCION DE CONFLICTOS Y LIBRERIAS
+# ------------------------------------------------------------------------------
+
+# Desactivar notacion cientifica para preservar codigos numericos e identificadores
 options(scipen = 999)
+
+# Fijar semilla pseudoaleatoria para reproducibilidad global
 set.seed(20261014)
 
-## 1.2 Instalación y carga de librerías ----
-librerias_requeridas <- c(
-  "here", "conflicted", "RSelenium", "netstat", "arrow", "readr",
-  "dplyr", "tidyr", "stringr", "glue", "lubridate", "rvest", "httr"
-)
-
-for (pkg in librerias_requeridas) {
-  if (!requireNamespace(pkg, quietly = TRUE)) {
-    install.packages(pkg)
-  }
-}
-
+# Carga de paquetes del ecosistema R requeridos
 library(here)
 library(conflicted)
-library(RSelenium)
-library(netstat)
 library(arrow)
 library(readr)
 library(dplyr)
 library(tidyr)
 library(stringr)
-library(glue)
+library(stringi)
 library(lubridate)
+library(xml2)
 library(rvest)
 library(httr)
 
-## 1.3 Resolución explícita de conflictos ({conflicted}) ----
-conflict_prefer("filter", "dplyr", quiet = TRUE)
-conflict_prefer("lag",    "dplyr", quiet = TRUE)
-conflict_prefer("select", "dplyr", quiet = TRUE)
+# Resolucion explicita de colisiones entre funciones mediante {conflicted}
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("duration", "lubridate")
+conflict_prefer("guess_encoding", "readr")
+conflict_prefer("timestamp", "utils")
 
-## 1.4 Definición de rutas relativas con {here} ----
-ruta_datos_raw      <- here::here("data", "raw")
-ruta_noticias_raw   <- here::here("data", "raw", "noticias")
-ruta_salida_tablas  <- here::here("output", "tables")
-archivo_cobertura   <- here::here("data", "raw", "noticias", "cobertura_historica.json")
+# Definicion de rutas absolutas relativas a la raiz del repositorio
+ruta_datos_raw      <- here("data", "raw")
+ruta_noticias_raw   <- here("data", "raw", "noticias")
+archivo_consolidado <- here("data", "raw", "noticias", "noticias_google_news_consolidado.parquet")
+archivo_consol_rds  <- here("data", "raw", "noticias", "noticias_google_news_consolidado.rds")
 
-if (!dir.exists(ruta_noticias_raw)) dir.create(ruta_noticias_raw, recursive = TRUE)
+# Creacion del directorio de almacenamiento primario si no existe previamente
+if (!dir.exists(ruta_noticias_raw)) {
+  dir.create(ruta_noticias_raw, recursive = TRUE)
+}
 
-# 2. Configuración de Parámetros y Consultas Booleanas ----
+# Parametros del horizonte temporal de investigacion (2022-01-01 a 2026-09-30)
+fecha_inicio_muestra  <- as.Date("2022-01-01")
+fecha_fin_muestra     <- as.Date("2026-09-30")
 
-## 2.1 Catálogo de las 19 localidades urbanas ----
-localidades <- c(
-  "USAQUÉN", "CHAPINERO", "SANTA FE", "SAN CRISTÓBAL", "USME",
-  "TUNJUELITO", "BOSA", "KENNEDY", "FONTIBÓN", "ENGATIVÁ",
-  "SUBA", "BARRIOS UNIDOS", "TEUSAQUILLO", "LOS MÁRTIRES",
-  "ANTONIO NARIÑO", "PUENTE ARANDA", "LA CANDELARIA", 
-  "RAFAEL URIBE URIBE", "CIUDAD BOLÍVAR"
+# Interruptor de ejecucion de raspado web:
+# FALSE: Utiliza y consolida la informacion local ya descargada.
+# TRUE: Ejecuta consultas web adicionales a Google News RSS en memoria.
+ejecutar_descarga_rss <- FALSE
+
+
+# ------------------------------------------------------------------------------
+# 2. CATALOGO DE LOCALIDADES Y ESPECIFICACION DE CONSULTAS BOOLEANAS
+# ------------------------------------------------------------------------------
+
+# Vector con las 19 localidades urbanas del Distrito Capital de Bogota
+localidades_bogota <- c(
+  "Usaquén", "Chapinero", "Santa Fe", "San Cristóbal", "Usme",
+  "Tunjuelito", "Bosa", "Kennedy", "Fontibón", "Engativá",
+  "Suba", "Barrios Unidos", "Teusaquillo", "Los Mártires",
+  "Antonio Nariño", "Puente Aranda", "La Candelaria", 
+  "Rafael Uribe Uribe", "Ciudad Bolívar"
 )
 
-## 2.2 Función para forzar AND Booleano estricto (+) en Google ----
-palabras_obligatorias <- function(texto) {
-  palabras <- strsplit(texto, " ")[[1]]
-  paste0("+", palabras, collapse = " ")
-}
+# Diccionario tematico ampliado de delitos de alto impacto y seguridad ciudadana
+terminos_delitos <- "(hurto OR robo OR atraco OR asalto OR fleteo OR sicariato OR homicidio OR extorsion OR delincuencia OR inseguridad)"
 
-## 2.3 Rango temporal mensual (2022 a 2025) ----
-fecha_inicio <- as.Date("2022-01-01")
-fecha_fin    <- as.Date("2025-12-31")
-
-inicios_mes <- seq(from = floor_date(fecha_inicio, "month"),
-                   to   = floor_date(fecha_fin, "month"),
-                   by   = "1 month")
-fines_mes   <- pmin(inicios_mes %m+% months(1) - days(1), fecha_fin)
-
-## 2.4 Parámetros de navegación y scraping ----
-hl                  <- "es-419" # Español Latinoamérica
-gl                  <- "CO"     # Colombia
-max_paginas_por_mes <- 15       # Hasta 150 resultados por mes/localidad
-espera_min          <- 2.0
-espera_max          <- 4.0
-
-formatear_mmddyyyy <- function(fecha) format(as.Date(fecha), "%m/%d/%Y")
-
-build_google_news_url <- function(query, dmin, dmax, start = 0, hl = "es-419", gl = "CO") {
-  q      <- utils::URLencode(query, reserved = TRUE)
-  cd_min <- formatear_mmddyyyy(dmin)
-  cd_max <- formatear_mmddyyyy(dmax)
-  glue::glue(
-    "https://www.google.com/search?q={q}",
-    "&tbm=nws&hl={hl}&gl={gl}",
-    "&tbs=cdr:1,cd_min:{cd_min},cd_max:{cd_max}",
-    "&start={start}"
-  )
-}
-
-# 3. Funciones de Extracción y Resiliencia en Navegador ----
-
-## 3.1 Gestión de consentimiento de cookies ----
-aceptar_consentimiento <- function(remDr) {
-  try({
-    Sys.sleep(runif(1, espera_min, espera_max))
-    btns <- remDr$findElements(
-      "css selector",
-      "button#L2AGLb, button[aria-label*='Acepto'], button[aria-label*='Estoy de acuerdo']"
-    )
-    if (length(btns) > 0) {
-      btns[[1]]$clickElement()
-      Sys.sleep(runif(1, 1.0, 2.0))
-    }
-  }, silent = TRUE)
-}
-
-## 3.2 Selectores en cascada para atributos y textos ----
-get_first_text <- function(node, css_vec) {
-  for (css in css_vec) {
-    kids <- try(node$findChildElements("css selector", css), silent = TRUE)
-    if (!inherits(kids, "try-error") && length(kids) > 0) {
-      val <- try(kids[[1]]$getElementText()[[1]], silent = TRUE)
-      if (!inherits(val, "try-error") && !is.null(val) && nchar(val) > 0) return(val)
-    }
-  }
-  NA_character_
-}
-
-get_first_attr <- function(node, css_vec, attr) {
-  for (css in css_vec) {
-    kids <- try(node$findChildElements("css selector", css), silent = TRUE)
-    if (!inherits(kids, "try-error") && length(kids) > 0) {
-      val <- try(kids[[1]]$getElementAttribute(attr)[[1]], silent = TRUE)
-      if (!inherits(val, "try-error") && !is.null(val) && nchar(val) > 0) return(val)
-    }
-  }
-  NA_character_
-}
-
-## 3.3 Extracción de página de resultados SERP ----
-extraer_pagina_serp <- function(remDr, consulta, localidad, dmin, dmax, pagina_idx) {
-  Sys.sleep(runif(1, espera_min, espera_max))
-  contenedores <- remDr$findElements(
-    "css selector",
-    "div.SoaBEf, div.dbsr, div.Gx5Zad.fP1Qef.xpd.EtOod.pkphOe"
-  )
-  if (length(contenedores) == 0) return(tibble::tibble())
-  
-  rows <- lapply(contenedores, function(b) {
-    titulo      <- get_first_text(b, c("div[role='heading']", "h3", "div.JheGif.nDgy9d"))
-    enlace      <- get_first_attr(b, c("a.VDXfz", "a"), "href")
-    fuente      <- get_first_text(b, c("div.SVJrMe a", "div.CEMjEf span", "span.xQ82C.e8fRJf", "span.wmnc8c"))
-    fecha_texto <- get_first_text(b, c("time", "span.WG9SHc span", "span.OSrXXb"))
-    fecha_iso   <- get_first_attr(b, c("time"), "datetime")
-    resumen     <- get_first_text(b, c("div.GI74Re", "div.Y3v8qd", "div.gG0TJc"))
-    
-    tibble::tibble(
-      localidad         = localidad,
-      consulta          = consulta,
-      titulo            = titulo,
-      resumen           = resumen,
-      fuente            = fuente,
-      fecha_texto       = fecha_texto,
-      fecha_iso         = fecha_iso,
-      enlace            = enlace,
-      fecha_chunk_desde = as.Date(dmin),
-      fecha_chunk_hasta = as.Date(dmax),
-      pagina            = pagina_idx
-    )
-  })
-  
-  dplyr::bind_rows(rows) |>
-    dplyr::filter(!is.na(titulo) | !is.na(enlace)) |>
-    dplyr::distinct()
-}
-
-## 3.4 Extracción de cuerpo con fallback a resumen ----
-extraer_cuerpo_noticia <- function(url, resumen_fallback) {
-  if (is.na(url) || url == "") return(resumen_fallback)
-  
-  tryCatch({
-    resp <- httr::GET(
-      url = url,
-      httr::add_headers(
-        "User-Agent" = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        "Accept-Language" = "es-CO,es;q=0.9"
-      ),
-      httr::timeout(5)
-    )
-    
-    if (httr::status_code(resp) != 200) return(resumen_fallback)
-    
-    html_doc <- rvest::read_html(httr::content(resp, as = "text", encoding = "UTF-8"))
-    cuerpo   <- html_doc |>
-      rvest::html_elements("p") |>
-      rvest::html_text(trim = TRUE) |>
-      paste(collapse = " ")
-    
-    if (nchar(cuerpo) < 50) return(resumen_fallback)
-    return(cuerpo)
-  }, error = function(e) {
-    return(resumen_fallback)
-  })
-}
-
-# 4. Loop Principal de Scraping con Checkpointing Incremental ----
-
-ejecutar_scraping_localidades <- function(headless = FALSE) {
-  message(">>> Iniciando navegador con RSelenium...")
-  
-  extra_caps <- list(
-    chromeOptions = list(
-      args = c(
-        "--disable-blink-features=AutomationControlled",
-        "--disable-infobars",
-        "--no-sandbox"
-      )
+# Construccion procedimental de la tabla de consultas:
+# - Se entrecomilla el territorio para forzar coincidencia textual exacta.
+# - Se aplican filtros de exclusion especificos por localidad para neutralizar homonimias
+#   deportivas (Santa Fe), internacionales (San Cristobal, Ciudad Bolivar),
+#   departamentales (La Candelaria) e institucionales (Antonio Narino, Rafael Uribe Uribe).
+# - Se incluye exclusion transversal de ruido no judicial (horoscopo, tarot).
+df_consultas <- tibble(localidad = localidades_bogota) |>
+  mutate(
+    loc_slug           = tolower(stri_trans_general(localidad, "Latin-ASCII")),
+    termino_localidad  = paste0('"', localidad, '"'),
+    filtro_exclusiones = case_when(
+      loc_slug == "santa fe" ~ 
+        "-futbol -liga -campin -dimayor -cardenal -partido -estadio -gol -independiente -antioquia -ralito",
+      loc_slug == "san cristobal" ~ 
+        "-venezuela -tachira -mexico -chiapas -bolivar",
+      loc_slug == "la candelaria" ~ 
+        "-medellin -valle -antioquia -atlantico",
+      loc_slug == "ciudad bolivar" ~ 
+        "-venezuela -antioquia -orinoco",
+      loc_slug == "antonio narino" ~ 
+        "-universidad -uan -pregrado -matricula -facultad",
+      loc_slug == "rafael uribe uribe" ~ 
+        "-cali",
+      loc_slug == "bosa" ~ 
+        "-italia -cerdeña",
+      TRUE ~ ""
+    ),
+    cadena_busqueda    = str_squish(
+      paste(terminos_delitos, "Bogota", termino_localidad, filtro_exclusiones, "-horoscopo -tarot")
+    ),
+    url_rss            = paste0(
+      "https://news.google.com/rss/search?q=",
+      URLencode(cadena_busqueda, reserved = TRUE),
+      "&hl=es-419&gl=CO&ceid=CO:es-419"
     )
   )
-  
-  rD <- RSelenium::rsDriver(
-    browser   = "chrome",
-    chromever = NULL,
-    port      = netstat::free_port(),
-    verbose   = FALSE,
-    check     = FALSE,
-    phantomver = NULL,
-    extraCapabilities = extra_caps
-  )
-  
-  remDr <- rD$client
-  on.exit({
-    try(remDr$close(), silent = TRUE)
-    try(rD$server$stop(), silent = TRUE)
-  })
-  
-  for (loc in localidades) {
-    consulta <- paste0("+seguridad +Bogotá +localidad +hurtos ", palabras_obligatorias(loc))
-    message(paste0("\n=== Localidad en proceso: ", loc, " ==="))
+
+
+# ------------------------------------------------------------------------------
+# 3. RECOLECCION VIA GOOGLE NEWS RSS (DIRECTO EN MEMORIA)
+# ------------------------------------------------------------------------------
+
+lista_descarga_rss <- vector("list", nrow(df_consultas))
+
+if (isTRUE(ejecutar_descarga_rss)) {
+  for (i in seq_len(nrow(df_consultas))) {
+    loc_nombre <- df_consultas$localidad[i]
+    url_actual <- df_consultas$url_rss[i]
     
-    for (i_mes in seq_along(inicios_mes)) {
-      dmin <- inicios_mes[i_mes]
-      dmax <- fines_mes[i_mes]
-      nombre_limpio <- tolower(gsub("[^a-zA-Z0-9]", "_", loc))
-      archivo_chunk <- file.path(
-        ruta_noticias_raw,
-        paste0("chunk_", nombre_limpio, "_", format(dmin, "%Y_%m"), ".parquet")
-      )
-      mes_str <- format(dmin, "%Y-%m")
+    tryCatch({
+      doc_xml    <- read_xml(url_actual)
+      nodos_item <- xml_find_all(doc_xml, "//item")
       
-      # Control de checkpointing y cobertura histórica: si ya existe el mes, se omite
-      if (file.exists(archivo_chunk)) {
-        message(paste0("  [Checkpoint] Omitiendo ", loc, " | ", mes_str, " (chunk ya procesado)."))
-        next
-      }
-      
-      # Consultar si el mes ya está cubierto en el histórico consolidado
-      if (file.exists(archivo_cobertura)) {
-        try({
-          meta <- jsonlite::fromJSON(archivo_cobertura)
-          loc_match <- purrr::keep(meta$localidades, ~ tolower(stringi::stri_trans_general(.x$localidad, "Latin-ASCII")) == tolower(stringi::stri_trans_general(loc, "Latin-ASCII")))
-          if (length(loc_match) > 0 && mes_str %in% loc_match[[1]]$meses_cubiertos) {
-            message(paste0("  [Historico] Omitiendo ", loc, " | ", mes_str, " (ya cubierto en base histórica)."))
-            next
-          }
-        }, silent = TRUE)
-      }
-      
-      datos_mes <- list()
-      start     <- 0L
-      
-      for (i_pag in 1:max_paginas_por_mes) {
-        url <- build_google_news_url(consulta, dmin, dmax, start = start, hl = hl, gl = gl)
-        remDr$navigate(url)
-        aceptar_consentimiento(remDr)
+      if (length(nodos_item) > 0) {
+        titulos_raw <- xml_text(xml_find_first(nodos_item, "title"))
+        enlaces_raw <- xml_text(xml_find_first(nodos_item, "link"))
+        fechas_raw  <- xml_text(xml_find_first(nodos_item, "pubDate"))
+        fuentes_raw <- xml_text(xml_find_first(nodos_item, "source"))
+        desc_raw    <- xml_text(xml_find_first(nodos_item, "description"))
         
-        # Detección de CAPTCHA
-        page_html <- try(remDr$getPageSource()[[1]], silent = TRUE)
-        if (!inherits(page_html, "try-error") && str_detect(page_html, regex("unusual traffic|recaptcha", ignore_case = TRUE))) {
-          warning("🚨 CAPTCHA detectado. Resuelve el desafío manualmente en el navegador.")
-          Sys.sleep(30)
-          remDr$navigate(url)
-          aceptar_consentimiento(remDr)
+        resumenes_limpios <- character(length(desc_raw))
+        for (k in seq_along(desc_raw)) {
+          resumenes_limpios[k] <- tryCatch(
+            read_html(desc_raw[k]) |> html_text(trim = TRUE),
+            error = function(e) desc_raw[k]
+          )
         }
         
-        df_pag <- extraer_pagina_serp(remDr, consulta, loc, dmin, dmax, pagina_idx = i_pag)
+        fechas_parseadas <- as.Date(parse_date_time(
+          fechas_raw,
+          orders = c("dmy HMS", "ymd HMS", "a d b Y HMS z", "a d b Y")
+        ))
         
-        if (nrow(df_pag) == 0) {
-          break
-        } else {
-          datos_mes[[length(datos_mes) + 1]] <- df_pag
-          start <- start + 10L
-        }
+        enlaces_limpios <- sub("\\?(utm_|ref_|fbclid).*", "", enlaces_raw)
+        
+        df_chunk <- tibble(
+          localidad         = loc_nombre,
+          consulta          = df_consultas$cadena_busqueda[i],
+          titulo            = titulos_raw,
+          resumen           = resumenes_limpios,
+          fuente            = fuentes_raw,
+          fecha_texto       = fechas_raw,
+          fecha_iso         = as.character(fechas_parseadas),
+          enlace            = enlaces_limpios,
+          fecha_chunk_desde = floor_date(fechas_parseadas, "month"),
+          fecha_chunk_hasta = ceiling_date(fechas_parseadas, "month") - days(1),
+          pagina            = 1L,
+          cuerpo            = resumenes_limpios
+        ) |>
+          filter(!is.na(titulo) & titulo != "") |>
+          filter(!is.na(enlace) & enlace != "") |>
+          distinct(enlace, .keep_all = TRUE)
+        
+        lista_descarga_rss[[i]] <- df_chunk
       }
-      
-      if (length(datos_mes) > 0) {
-        chunk_df <- dplyr::bind_rows(datos_mes) |>
-          dplyr::distinct(enlace, .keep_all = TRUE)
-        
-        # Fase 2: Extracción de cuerpo con fallback
-        chunk_df$cuerpo <- purrr::map2_chr(chunk_df$enlace, chunk_df$resumen, extraer_cuerpo_noticia)
-        
-        # Guardado del checkpoint de este mes
-        arrow::write_parquet(chunk_df, archivo_chunk)
-        message(paste0("  ✔ Guardado chunk: ", basename(archivo_chunk), " (", nrow(chunk_df), " noticias)"))
-      } else {
-        # Guardar tibble vacío para marcar el mes como completado sin noticias
-        vacio_df <- tibble::tibble(
-          localidad = loc, consulta = consulta, titulo = character(0),
-          resumen = character(0), fuente = character(0), fecha_texto = character(0),
-          fecha_iso = character(0), enlace = character(0), fecha_chunk_desde = as.Date(character(0)),
-          fecha_chunk_hasta = as.Date(character(0)), pagina = integer(0), cuerpo = character(0)
-        )
-        arrow::write_parquet(vacio_df, archivo_chunk)
-      }
-    }
+    }, error = function(e) {
+      warning(paste("Fallo en peticion para:", loc_nombre))
+    })
+    
+    Sys.sleep(1.0)
   }
-  message("\n✔ Proceso de scraping finalizado.")
 }
 
-# 5. Consolidación y Validación Territorial ----
+df_nuevas_rss <- bind_rows(lista_descarga_rss)
 
-consolidar_noticias_scraping <- function() {
-  archivos_chunks <- list.files(ruta_noticias_raw, pattern = "^chunk_.*\\.parquet$", full.names = TRUE)
-  if (length(archivos_chunks) == 0) {
-    message("ℹ No hay chunks generados aún en data/raw/noticias/.")
-    return(NULL)
-  }
-  
-  message(paste0(">>> Consolidando ", length(archivos_chunks), " archivos particionados..."))
-  noticias_total <- purrr::map_dfr(archivos_chunks, arrow::read_parquet) |>
-    dplyr::filter(!is.na(titulo) & titulo != "") |>
-    dplyr::distinct(enlace, .keep_all = TRUE)
-  
-  # Validación territorial: confirma que la localidad aparezca en el texto
-  noticias_validadas <- noticias_total |>
-    dplyr::filter(
-      stringr::str_detect(titulo, stringr::regex(localidad, ignore_case = TRUE)) |
-      stringr::str_detect(resumen, stringr::regex(localidad, ignore_case = TRUE)) |
-      stringr::str_detect(cuerpo, stringr::regex(localidad, ignore_case = TRUE))
+
+# ------------------------------------------------------------------------------
+# 4. CARGA Y FUSION DE REGISTROS MUESTRALES
+# ------------------------------------------------------------------------------
+
+# Carga de la base consolidada preexistente
+df_historico_previo <- tibble()
+if (file.exists(archivo_consolidado)) {
+  df_historico_previo <- read_parquet(archivo_consolidado)
+}
+
+# Fusion con cualquier nuevo lote descargado en memoria
+df_unificado_bruto <- bind_rows(df_historico_previo, df_nuevas_rss)
+
+
+# ------------------------------------------------------------------------------
+# 5. NORMALIZACION, DEDUPLICACION DUAL Y DELIMITACION TEMPORAL
+# ------------------------------------------------------------------------------
+
+# Unificacion de la variable temporal fecha
+col_fecha <- if ("fecha" %in% colnames(df_unificado_bruto)) {
+  as.Date(df_unificado_bruto$fecha)
+} else if ("fecha_iso" %in% colnames(df_unificado_bruto)) {
+  if_else(!is.na(df_unificado_bruto$fecha_iso) & df_unificado_bruto$fecha_iso != "",
+          as.Date(df_unificado_bruto$fecha_iso),
+          as.Date(df_unificado_bruto$fecha_chunk_desde))
+} else {
+  as.Date(df_unificado_bruto$fecha_chunk_desde)
+}
+
+df_unificado_bruto$fecha <- col_fecha
+
+df_muestra_base <- df_unificado_bruto |>
+  # Estandarizacion de nombres de localidad (ej. Candelaria -> La Candelaria)
+  mutate(
+    localidad = if_else(localidad == "Candelaria", "La Candelaria", localidad)
+  ) |>
+  filter(!is.na(enlace) & enlace != "") |>
+  filter(!is.na(titulo) & titulo != "") |>
+  mutate(
+    enlace            = sub("\\?(utm_|ref_|fbclid).*", "", enlace),
+    fuente            = if_else(
+      is.na(fuente) | fuente == "",
+      sub("^https?://([^/]+).*$", "\\1", enlace),
+      fuente
+    ),
+    cuerpo            = if_else(is.na(cuerpo) | cuerpo == "", resumen, cuerpo)
+  ) |>
+  # Criterio de deduplicacion dual (URL canonica y titular textual exacto)
+  distinct(enlace, .keep_all = TRUE) |>
+  distinct(titulo, .keep_all = TRUE) |>
+  filter(
+    fecha >= fecha_inicio_muestra,
+    fecha <= fecha_fin_muestra
+  ) |>
+  # Filtro de exclusiones: supresion de falsos positivos deportivos y regionales foraneos
+  filter(
+    # Exclusion de partidos y eventos deportivos en Santa Fe sin hecho delictivo
+    !(localidad == "Santa Fe" & str_detect(titulo, "(?i)\\b(partido santa fe|santa fe vs|vs\\.? santa fe|el camp[ií]n|liga betplay|copa betplay|final del f[uú]tbol|f[uú]tbol colombiano)\\b")),
+    # Exclusion de notas cuyo titular localiza el hecho de forma exclusiva en otra ciudad sin mencion de Bogota
+    !(str_detect(titulo, "(?i)\\b(en medell[ií]n|en cali|en barranquilla|en bucaramanga|en cartagena|en c[uú]cuta|en pereira|en manizales|en ibagu[eé]|en santa marta|en villavicencio|en venezuela)\\b") & 
+      !str_detect(titulo, "(?i)\\bbogot[aá]\\b"))
+  )
+
+
+# ------------------------------------------------------------------------------
+# 6. ENRIQUECIMIENTO ANALITICO: TIPOLOGIAS Y NOMENCLATURA DE ALTO IMPACTO
+# ------------------------------------------------------------------------------
+
+# 6.1 MEJORA 1: Tipificacion y categorizacion de medios de comunicacion
+fuente_lower <- tolower(df_muestra_base$fuente)
+
+df_muestra_enriquecida <- df_muestra_base |>
+  mutate(
+    tipo_medio = case_when(
+      str_detect(fuente_lower, "bogota\\.gov|alcaldia|concejodebogota|policia|fiscalia|personeria|gobierno") ~ "Institucional",
+      str_detect(fuente_lower, "eltiempo|el tiempo|elespectador|el espectador|semana|portafolio|el pais|el nuevo siglo|la republica") ~ "Prensa Tradicional",
+      str_detect(fuente_lower, "citytv|city tv|caracol|rcn|blu radio|w radio|la fm|canal capital|red\\+ noticias") ~ "Television y Radio",
+      str_detect(fuente_lower, "infobae|pulzo|las2orillas|kienyke|minuto30|valora analitik") ~ "Nativo Digital",
+      str_detect(fuente_lower, "suba alternativa|barrios de bogota|periodico|comunitari|adn") ~ "Prensa Local y Comunitaria",
+      TRUE ~ "Prensa Digital General"
     )
-  
-  archivo_consolidado <- file.path(ruta_datos_raw, "noticias_google_news_consolidado.parquet")
-  arrow::write_parquet(noticias_validadas, archivo_consolidado)
-  
-  message(paste0("✔ Base consolidada guardada en: ", archivo_consolidado))
-  message(paste0("  Total noticias únicas validadas: ", format(nrow(noticias_validadas), big.mark = ",")))
-  return(noticias_validadas)
-}
+  )
 
-# 6. Modo de Ejecución Directo ----
-if (!interactive()) {
-  # Si se ejecuta desde terminal con Rscript
-  message("Para ejecutar el scraping interactivo, llame a ejecutar_scraping_localidades()")
-}
+# 6.2 MEJORA 2: Validacion de mencion territorial en el texto y confianza geografica
+df_patrones_territorio <- tibble(
+  localidad = localidades_bogota,
+  patron_geografico = c(
+    "usaquen|cedritos|santa barbara|san cristobal norte|torca|unicentro",
+    "chapinero|chico|rosales|el retiro|lago|marly|antiguo country",
+    "santa fe|la macarena|las aguas|germania|las nieves|san victorino|la perseverancia",
+    "san cristobal|20 de julio|la victoria|libertadores|quindio",
+    "usme|yomasa|alfonso lopez|danubio|monteblanco",
+    "tunjuelito|venecia|san carlos|tunal|el tunal|san benito",
+    "bosa|brasil|carbonell|porvenir|san bernardino|la libertad",
+    "kennedy|patio bonito|castilla|tintal|el tintal|corabastos|mandalay|carvajal|timiza",
+    "fontibon|modelia|salitre|capellania|zona franca|san pablo",
+    "engativa|minuto de dios|boyaca real|alamos|quirigua|garces navas",
+    "suba|rincon|niza|colina campestre|tibabuyes|prado veraniego|pontevedra|la campina",
+    "barrios unidos|7 de agosto|siete de agosto|polo club|doce de octubre|rincon del salitre|la castellana",
+    "teusaquillo|palermo|galerias|salitre greco|parkway|ciudad salitre|la soledad",
+    "los martires|martires|santa isabel|ricaurte|eduardo santos|la sabana|voto nacional",
+    "antonio narino|antonio nariño|restrepo|santander|policarpa|ciudad berna",
+    "puente aranda|ciudad montes|salazar gomez|gorgonzola|cundinamarca",
+    "candelaria|la candelaria|centro historico|plaza de bolivar|belen",
+    "rafael uribe|olaya|quiroga|san jose|diana turbay|marruecos",
+    "ciudad bolivar|meissen|sierra morena|arborizadora|lucero|san francisco|jerusalen"
+  )
+) |>
+  mutate(loc_slug = tolower(stri_trans_general(localidad, "Latin-ASCII")))
+
+df_muestra_enriquecida <- df_muestra_enriquecida |>
+  mutate(loc_slug = tolower(stri_trans_general(localidad, "Latin-ASCII"))) |>
+  left_join(df_patrones_territorio |> select(loc_slug, patron_geografico), by = "loc_slug") |>
+  mutate(
+    confianza_geografica = if_else(
+      str_detect(tolower(stri_trans_general(paste(titulo, resumen), "Latin-ASCII")), patron_geografico),
+      "Alta",
+      "Media"
+    )
+  ) |>
+  select(-loc_slug, -patron_geografico)
+
+# 6.3 MEJORA 3: Nomenclatura oficial de Delitos de Alto Impacto (SCJ / SIEDCO / Policia Nacional)
+texto_corpus <- tolower(stri_trans_general(paste(df_muestra_enriquecida$titulo, df_muestra_enriquecida$resumen), "Latin-ASCII"))
+
+# Diccionarios de delitos oficiales de alto impacto:
+patron_homicidio          <- "homicidio|homicidios|asesinato|asesinatos|asesinado|asesinada|asesinaron|sicariato|sicario|sicarios|crimen por encargo|muerto a tiros|hallado muerto|cadaver|embolsado|embolsados|cuerpo sin vida|abatido|abatidos|mataron a"
+patron_lesiones           <- "lesiones personales|lesionado|lesionada|lesionados|herido con arma|herida de bala|baleado|baleada|apunalado|apunalada|punalada|punaladas|golpiza|golpeado|rinon|rina|rinas|disparo a quemarropa|recibio un disparo"
+patron_hurto_personas     <- "hurto a personas|robo a personas|atraco|atracaron|asaltaron|raponazo|cosquilleo|paseo millonario|transeunte|transeuntes|peaton|peatones|pasajero|pasajeros|transmilenio|sitp|paradero|billetera|bolso|mochila|morral|reloj|joya|joyas|fleteo|fleteros|ladron de calle"
+patron_hurto_celulares    <- "celular|celulares|telefono movil|smartphone|robo de celular|hurto de celular|le robaron el celular|quitaron el celular"
+patron_hurto_comercio     <- "hurto a comercio|robo a comercio|local|comercio|tienda|restaurante|panaderia|supermercado|almacen|bodega|banco|cajero|joyeria|farmacia|drogueria|comerciante|comerciantes|asaltaron el negocio|asaltaron el local|bar|discoteca|peluqueria|asadero"
+patron_hurto_residencias  <- "hurto a residencias|robo a residencias|casa|apartamento|vivienda|conjunto residencial|edificio|habitacion|apartamentero|apartamenteros|hurto a vivienda|robaron en su casa|ingresaron a la vivienda"
+patron_hurto_automotores  <- "hurto de automotores|hurto de vehiculos|robo de carro|robo de vehiculo|carro|automovil|camioneta|campero|deshuesadero|autopartes|espejos|computador del vehiculo|halado de vehiculo"
+patron_hurto_motos        <- "hurto de motocicletas|robo de moto|motocicleta|motocicletas|moto|motos|parrillero|halado de moto"
+patron_hurto_bicis        <- "hurto de bicicletas|robo de bicicleta|bicicleta|bicicletas|bici|ciclista|ciclistas|ciclorruta|bicitaxi"
+patron_extorsion          <- "extorsion|extorsiones|extorsivo|vacuna|vacunas|gota a gota|panfleto|panfletos|amenaza de muerte|boleteo|chantaje|tren de aragua|satanas"
+patron_sexual_intrafam    <- "delito sexual|delitos sexuales|abuso sexual|violacion|acoso sexual|violencia intrafamiliar|feminicidio|agresion a mujer|violencia de genero"
+patron_microtrafico       <- "estupefacientes|microtrafico|droga|drogas|olla de vicio|papeletas|dosis|bazuco|marihuana|cocaina|jibaro|expendedor|trafico de estupefacientes|narcomenudeo"
+patron_operatividad       <- "capturado|capturada|capturados|capturan|cayo|cayeron|banda|bandas|desarticulada|desarticulan|allanamiento|allanamientos|operativo policial|desmantelan|judicializados|detuvieron|aprehendido|incautacion|porte ilegal de armas|armas incautadas"
+patron_politica_prev      <- "frente de seguridad|frentes de seguridad|camaras de seguridad|pie de fuerza|dispositivo de seguridad|comando de policia|patrullaje|cifras de seguridad|consejo de seguridad|secretaria de seguridad|estrategia de seguridad|percepcion de seguridad|victimizacion"
+
+# Clasificacion directa sin creacion de variables intermedias booleanas
+df_muestra_enriquecida <- df_muestra_enriquecida |>
+  mutate(
+    delito_alto_impacto = case_when(
+      str_detect(texto_corpus, patron_homicidio)          ~ "Homicidio",
+      str_detect(texto_corpus, patron_sexual_intrafam)    ~ "Delitos sexuales y violencia intrafamiliar",
+      str_detect(texto_corpus, patron_extorsion)          ~ "Extorsion",
+      str_detect(texto_corpus, patron_hurto_celulares)    ~ "Hurto de celulares",
+      str_detect(texto_corpus, patron_hurto_bicis)        ~ "Hurto de bicicletas",
+      str_detect(texto_corpus, patron_hurto_motos)        ~ "Hurto de motocicletas",
+      str_detect(texto_corpus, patron_hurto_automotores)  ~ "Hurto de automotores y autopartes",
+      str_detect(texto_corpus, patron_hurto_personas)     ~ "Hurto a personas",
+      str_detect(texto_corpus, patron_hurto_comercio)     ~ "Hurto a comercio",
+      str_detect(texto_corpus, patron_hurto_residencias)  ~ "Hurto a residencias",
+      str_detect(texto_corpus, patron_lesiones)           ~ "Lesiones personales",
+      str_detect(texto_corpus, patron_microtrafico)       ~ "Trafico local de estupefacientes",
+      str_detect(texto_corpus, patron_operatividad)       ~ "Operatividad y capturas policiales",
+      str_detect(texto_corpus, patron_politica_prev)      ~ "Politica de seguridad y prevencion",
+      str_detect(texto_corpus, "hurto|robo|atraco|ladron|delincuente") ~ "Hurto / Delincuencia comun no diferenciada",
+      TRUE ~ "Hechos no asociados a delitos de alto impacto"
+    )
+  )
+
+# 6.4 MEJORA 4: Variables de calendario y estructura de panel econometrico
+df_muestra_final <- df_muestra_enriquecida |>
+  mutate(
+    año        = year(fecha),
+    mes        = month(fecha),
+    año_mes    = format(fecha, "%Y-%m"),
+    trimestre  = paste0(year(fecha), "-T", quarter(fecha)),
+    semana_año = isoweek(fecha)
+  ) |>
+  # Remocion de variables auxiliares, metadatos y delimitadores de chunks
+  select(
+    -any_of(c(
+      "consulta", "fecha_texto", "fecha_chunk_desde", "fecha_chunk_hasta",
+      "fecha_iso", "pagina", "texto_corpus"
+    ))
+  ) |>
+  # Ordenamiento logico y academico de las columnas
+  select(
+    fecha,
+    año,
+    mes,
+    año_mes,
+    trimestre,
+    semana_año,
+    localidad,
+    confianza_geografica,
+    fuente,
+    tipo_medio,
+    delito_alto_impacto,
+    tipo_delito_dominante,
+    titulo,
+    resumen,
+    cuerpo,
+    enlace
+  ) |>
+  arrange(localidad, fecha)
+
+
+# ------------------------------------------------------------------------------
+# 7. ALMACENAMIENTO UNICO Y DEFINITIVO (UN PARQUET Y UN RDS)
+# ------------------------------------------------------------------------------
+
+# 7.1 Exportacion columnar definitiva a Parquet
+write_parquet(df_muestra_final, archivo_consolidado)
+
+# 7.2 Exportacion en formato nativo serializado de R (.rds)
+saveRDS(df_muestra_final, archivo_consol_rds)
+
+
+# ------------------------------------------------------------------------------
+# 8. RESUMEN DESCRIPTIVO DE LA MUESTRA PROCESADA
+# ------------------------------------------------------------------------------
+
+# Cuadro 1: Distribucion anual de notas periodisticas
+conteo_anual <- df_muestra_final |>
+  count(año, name = "articulos") |>
+  as.data.frame()
+
+# Cuadro 2: Distribucion por categoria de medio de comunicacion
+conteo_tipo_medio <- df_muestra_final |>
+  count(tipo_medio, sort = TRUE, name = "articulos") |>
+  as.data.frame()
+
+# Cuadro 3: Distribucion por Nomenclatura Oficial de Delitos de Alto Impacto
+conteo_alto_impacto <- df_muestra_final |>
+  count(delito_alto_impacto, sort = TRUE, name = "articulos") |>
+  as.data.frame()
+
+# Cuadro 4: Distribucion por tipologia delictiva dominante
+conteo_dominante <- df_muestra_final |>
+  count(tipo_delito_dominante, sort = TRUE, name = "articulos") |>
+  as.data.frame()
+
+# Cuadro 5: Nivel de confianza geografica territorial
+conteo_geografia <- df_muestra_final |>
+  count(confianza_geografica, name = "articulos") |>
+  as.data.frame()
+
+# Cuadro 6: Auditoria de valores faltantes (NA) en campos criticos
+valores_faltantes <- data.frame(
+  variable = c("fecha", "titulo", "resumen", "enlace", "cuerpo", "tipo_medio", "delito_alto_impacto", "año_mes"),
+  nulos    = c(
+    sum(is.na(df_muestra_final$fecha)),
+    sum(is.na(df_muestra_final$titulo)),
+    sum(is.na(df_muestra_final$resumen)),
+    sum(is.na(df_muestra_final$enlace)),
+    sum(is.na(df_muestra_final$cuerpo)),
+    sum(is.na(df_muestra_final$tipo_medio)),
+    sum(is.na(df_muestra_final$delito_alto_impacto)),
+    sum(is.na(df_muestra_final$año_mes))
+  )
+)
+
+print(conteo_anual, row.names = FALSE)
+print(conteo_tipo_medio, row.names = FALSE)
+print(conteo_alto_impacto, row.names = FALSE)
+print(conteo_dominante, row.names = FALSE)
+print(conteo_geografia, row.names = FALSE)
+print(valores_faltantes, row.names = FALSE)
