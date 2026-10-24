@@ -98,6 +98,9 @@ Repo_Entrega_Final_Taller_R/
 │   │   ├── poblacion_localidades_raw.parquet # Habitantes por localidad (SDS)
 │   │   └── localidades_bogota_raw.geojson    # Mapas de las localidades (SDP)
 │   └── processed/                            # Bases limpias listas para analizar (.parquet / .rds)
+│       ├── README.md                         # Diccionario de datos y esquemas de variables
+│       ├── hurtos/                           # Paneles oficiales de tasas delictivas y demografía
+│       └── noticias/                         # Corpus periodístico depurado y calificado
 │
 ├── output/                                   # Resultados generados
 │   ├── tables/                               # Tablas resumen (.csv, .tex)
@@ -122,7 +125,13 @@ Repo_Entrega_Final_Taller_R/
 │
 ├── notebook/                                 # Documentos Quarto
 │   ├── README.md                             # Instrucciones para compilar
-│   └── 01_entrega_1_propuesta_eda.qmd        # Primera Entrega (propuesta y EDA, máx. 3 páginas)
+│   ├── entregas/                             # Documentos evaluativos para el curso
+│   │   ├── 01_entrega_1_propuesta_eda.qmd    # Primera Entrega (propuesta y EDA, máx. 3 páginas)
+│   │   ├── 01_entrega_1_propuesta_eda.html   # Reporte web interactivo
+│   │   └── 01_entrega_1_propuesta_eda.pdf    # PDF académico listo para entrega
+│   └── metodologia/                          # Cuadernos metodológicos de modelado y analítica
+│       ├── 02_modelado_clustering_sentometrics.qmd  # Tasas, clustering K-means y Sentometrics
+│       └── 02_modelado_clustering_sentometrics.html # Reporte interactivo con código
 │
 └── app/                                      # Aplicación Shiny
     ├── README.md                             # Cómo funciona el tablero
@@ -164,7 +173,7 @@ source(here::here("scripts", "master.R"))
 
 ### Paso 4: Compilar el informe en PDF (Entrega 1)
 ```bash
-quarto render notebook/01_entrega_1_propuesta_eda.qmd --to pdf
+quarto render notebook/entregas/01_entrega_1_propuesta_eda.qmd --to pdf
 ```
 
 ### Paso 5: Abrir el tablero interactivo de Shiny

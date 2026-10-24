@@ -98,7 +98,7 @@ noticias_agg <- df_noticias_enriquecida |>
   )
 
 # 5. Integración con el Panel Delictivo ----
-panel_delitos <- arrow::read_parquet(file.path(ruta_proc, "panel_delitos_poblacion_localidad.parquet"))
+panel_delitos <- arrow::read_parquet(file.path(ruta_proc, "hurtos", "panel_delitos_poblacion_localidad.parquet"))
 
 panel_consolidado <- panel_delitos |>
   left_join(noticias_agg, by = c("localidad", "año")) |>
@@ -110,6 +110,6 @@ panel_consolidado <- panel_delitos |>
     prop_neutras         = replace_na(prop_neutras, 0)
   )
 
-archivo_panel_final <- file.path(ruta_proc, "panel_consolidado_localidad_anual.parquet")
+archivo_panel_final <- file.path(ruta_proc, "hurtos", "panel_consolidado_localidad_anual.parquet")
 arrow::write_parquet(panel_consolidado, archivo_panel_final)
 message("✔ Panel consolidado (delitos + población + sentometrics) guardado en: ", archivo_panel_final)

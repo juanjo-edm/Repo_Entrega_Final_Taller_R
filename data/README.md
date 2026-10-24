@@ -12,11 +12,14 @@ data/
 │   └── noticias/                                # Carpeta exclusiva de ingesta de noticias (Google News)
 │       ├── noticias_google_news_consolidado.parquet # Base final consolidada y enriquecida (3.928 noticias)
 │       └── noticias_google_news_consolidado.rds     # Respaldo en formato nativo de R
-└── processed/                        # Datos listos y normalizados para los modelos y gráficos
-    ├── tasas_hurtos_localidad.parquet# Tasas de hurto calculadas por cada 100.000 habitantes
-    ├── sentimiento_noticias.parquet  # Puntuaciones de sentimiento de sentometrics
-    ├── clusters_localidades.parquet  # Perfiles de inseguridad calculados con K-means
-    └── datos_consolidados_shiny.rds  # Archivo único listo para que la app Shiny lo lea
+└── processed/                        # Datos listos y normalizados (ver processed/README.md)
+    ├── hurtos/                       # Paneles de delitos oficiales y tasas por 100k hab
+    │   ├── panel_delitos_poblacion_localidad.parquet
+    │   └── panel_consolidado_localidad_anual.parquet
+    └── noticias/                     # Corpus periodístico depurado y calificado con NLP
+        ├── noticias_procesadas.parquet
+        ├── noticias_procesadas.rds
+        └── noticias_con_sentimiento.parquet
 ```
 
 ---

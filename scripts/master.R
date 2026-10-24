@@ -74,9 +74,10 @@ source(file.path(ruta_scripts, "05_export_insumos_shiny.R"), echo = FALSE)
 
 ## 3.1 Comprobación programática de artefactos clave ----
 archivos_esperados <- c(
-  file.path(ruta_datos_clean, "tasas_hurtos_localidad.parquet"),
-  file.path(ruta_datos_clean, "sentimiento_noticias.parquet"),
-  file.path(ruta_datos_clean, "datos_consolidados_shiny.rds")
+  file.path(ruta_datos_clean, "hurtos", "panel_delitos_poblacion_localidad.parquet"),
+  file.path(ruta_datos_clean, "hurtos", "panel_consolidado_localidad_anual.parquet"),
+  file.path(ruta_datos_clean, "noticias", "noticias_procesadas.parquet"),
+  file.path(ruta_datos_clean, "noticias", "noticias_con_sentimiento.parquet")
 )
 
 # Validación de existencia de insumos finales

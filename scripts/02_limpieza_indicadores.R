@@ -135,6 +135,9 @@ panel_indicadores <- panel_delitos |>
 stopifnot(nrow(panel_indicadores) == 95)
 stopifnot(length(unique(panel_indicadores$codigo_localidad)) == 19)
 
-archivo_panel_parquet <- file.path(ruta_proc, "panel_delitos_poblacion_localidad.parquet")
+ruta_hurtos_proc <- file.path(ruta_proc, "hurtos")
+if (!dir.exists(ruta_hurtos_proc)) dir.create(ruta_hurtos_proc, recursive = TRUE)
+
+archivo_panel_parquet <- file.path(ruta_hurtos_proc, "panel_delitos_poblacion_localidad.parquet")
 arrow::write_parquet(panel_indicadores, archivo_panel_parquet)
 message("✔ Panel de delitos y población guardado exitosamente en: ", archivo_panel_parquet)

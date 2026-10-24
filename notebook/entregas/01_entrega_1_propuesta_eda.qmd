@@ -89,7 +89,7 @@ conflict_prefer("select", "dplyr", quiet = TRUE)
 
 # 1.3 Carga de datos procesados ----
 ruta_proc <- here::here("data", "processed")
-archivo_panel    <- file.path(ruta_proc, "panel_consolidado_localidad_anual.parquet")
+archivo_panel    <- file.path(ruta_proc, "hurtos", "panel_consolidado_localidad_anual.parquet")
 archivo_noticias <- file.path(ruta_proc, "noticias", "noticias_con_sentimiento.parquet")
 
 stopifnot(file.exists(archivo_panel))
