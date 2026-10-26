@@ -62,6 +62,10 @@ source(file.path(ruta_scripts, "02_limpieza_indicadores.R"), echo = FALSE)
 message("\n>>> [3/5] Ejecutando: 03_analisis_sentometrics.R...")
 source(file.path(ruta_scripts, "03_analisis_sentometrics.R"), echo = FALSE)
 
+## 2.3b Módulo 3b: Depuración del corpus según los 11 DAI de la SDSCJ ----
+message("\n>>> [3b/5] Ejecutando: 02b_depuracion_noticias_dai.R...")
+source(file.path(ruta_scripts, "02b_depuracion_noticias_dai.R"), echo = FALSE)
+
 ## 2.4 Módulo 4: Clustering territorial de criminalidad (K-means) ----
 message("\n>>> [4/5] Ejecutando: 04_clustering_kmeans.R...")
 source(file.path(ruta_scripts, "04_clustering_kmeans.R"), echo = FALSE)
