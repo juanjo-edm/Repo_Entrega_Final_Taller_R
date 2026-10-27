@@ -6,10 +6,12 @@
 # ==============================================================================
 
 # 1. Configuración y Dependencias ----
-# rm(list = ls())
+
+## 1.1 Opciones globales y semilla ----
 options(scipen = 999)
 set.seed(20261014)
 
+## 1.2 Carga de librerías y resolución de conflictos ----
 library(here)
 library(conflicted)
 library(httr)
@@ -22,7 +24,7 @@ conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
-## 1.1 Rutas de salida ----
+## 1.3 Rutas relativas de almacenamiento ----
 ruta_raw_poblacion <- here::here("data", "raw", "poblacion")
 ruta_salida        <- file.path(ruta_raw_poblacion, "poblacion_localidades_raw.parquet")
 
@@ -31,6 +33,8 @@ if (!dir.exists(ruta_raw_poblacion)) {
 }
 
 # 2. Descarga de Proyecciones Demográficas ----
+
+## 2.1 Consulta paginada a la API CKAN (datastore_search) ----
 if (!file.exists(ruta_salida)) {
   message(">>> Iniciando descarga de proyecciones poblacionales SDS...")
   
@@ -39,7 +43,6 @@ if (!file.exists(ruta_salida)) {
   limite_pagina <- 30000
   
   poblacion_01_raw <- tryCatch({
-    # Intentar descarga vía CKAN API
     resp_ficha <- httr::GET(
       paste0(url_api, "/package_show"),
       query = list(id = slug_dataset),
@@ -96,11 +99,13 @@ if (!file.exists(ruta_salida)) {
     }
     bind_rows(bloques)
   }, error = function(e) {
+    ## 2.2 Mecanismo de respaldo directo en CSV ----
     message("Aviso CKAN API: Descarga paginada falló. Usando recurso directo CSV de respaldo...")
     url_csv_respaldo <- "https://datosabiertos.bogota.gov.co/dataset/85bf790d-84d1-4eda-bd6f-40af62e71d95/resource/37e58cb3-c870-4608-8c37-ce45db0eb7c1/download/osb_demografia-poblacion-localidad.csv"
     readr::read_delim(url_csv_respaldo, delim = ";", show_col_types = FALSE)
   })
   
+  ## 2.3 Materialización en Apache Parquet ----
   arrow::write_parquet(as.data.frame(poblacion_01_raw), ruta_salida)
   message("✔ Archivo de población guardado en: ", ruta_salida)
 } else {
@@ -108,7 +113,9 @@ if (!file.exists(ruta_salida)) {
   poblacion_01_raw <- arrow::read_parquet(ruta_salida)
 }
 
-# 3. Verificación de Integridad ----
+# 3. Verificación de Integridad y Diagnóstico ----
+
+## 3.1 Comprobación de cobertura temporal (2005–2035) ----
 stopifnot(file.exists(ruta_salida))
 col_anio <- if ("ANO" %in% names(poblacion_01_raw)) "ANO" else "año"
 col_loc  <- if ("CODIGO_LOCALIDAD" %in% names(poblacion_01_raw)) "CODIGO_LOCALIDAD" else "codigo_localidad"
@@ -116,5 +123,6 @@ col_loc  <- if ("CODIGO_LOCALIDAD" %in% names(poblacion_01_raw)) "CODIGO_LOCALID
 anios_disponibles <- unique(poblacion_01_raw[[col_anio]])
 stopifnot(all(2022:2026 %in% anios_disponibles))
 
+## 3.2 Reporte de auditoría en consola ----
 tamanio_kb <- round(file.info(ruta_salida)$size / 1024, 2)
 message("✔ Integridad verificada: ", nrow(poblacion_01_raw), " filas, cobertura temporal ", min(anios_disponibles), " a ", max(anios_disponibles), " (", tamanio_kb, " KB).")

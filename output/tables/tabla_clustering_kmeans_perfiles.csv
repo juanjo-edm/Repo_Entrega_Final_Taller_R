@@ -1,0 +1,20 @@
+codigo_localidad,localidad,tasa_personas_prom,tasa_resid_prom,tasa_motos_prom,cluster_id,perfil_seguridad
+01,Usaquén,1335.476,98.586,16.616,1,Alta criticidad en hurto a personas
+02,Chapinero,6640.736,192.378,42.48,3,Baja tasa relativa general
+03,Santa Fe,6176.612,124.664,62.800000000000004,3,Baja tasa relativa general
+04,San Cristóbal,807.1759999999999,63.378,58.812,1,Alta criticidad en hurto a personas
+05,Usme,619.698,60.126000000000005,49.93,1,Alta criticidad en hurto a personas
+06,Tunjuelito,1329.556,57.374,48.26,1,Alta criticidad en hurto a personas
+07,Bosa,761.492,45.292,55.186,1,Alta criticidad en hurto a personas
+08,Kennedy,1106.5,65.21,78.092,1,Alta criticidad en hurto a personas
+09,Fontibón,2010.348,84.9,42.564,1,Alta criticidad en hurto a personas
+10,Engativá,1461.166,96.87,58.628,1,Alta criticidad en hurto a personas
+11,Suba,1045.32,71.958,30.494,1,Alta criticidad en hurto a personas
+12,Barrios Unidos,3691.72,167.676,73.426,3,Baja tasa relativa general
+13,Teusaquillo,5049.328,217.482,60.778,3,Baja tasa relativa general
+14,Los Mártires,8389.902,189.348,178.178,2,Moderada afectación residencial
+15,Antonio Nariño,3065.92,112.47800000000001,127.816,2,Moderada afectación residencial
+16,Puente Aranda,2423.092,111.14,92.47200000000001,1,Alta criticidad en hurto a personas
+17,La Candelaria,7615.048,177.16400000000002,64.688,3,Baja tasa relativa general
+18,Rafael Uribe Uribe,1035.634,71.27,72.20400000000001,1,Alta criticidad en hurto a personas
+19,Ciudad Bolívar,738.71,53.15,82.25,1,Alta criticidad en hurto a personas

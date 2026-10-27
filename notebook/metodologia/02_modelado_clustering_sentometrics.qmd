@@ -85,11 +85,11 @@ Definimos las rutas de acceso hacia las subcarpetas reorganizadas en `data/proce
 ```{r}
 #| label: setup-rutas
 # 1.4 Definición de rutas con {here} ----
-ruta_proc_hurtos   <- here::here("data", "processed", "hurtos")
-ruta_proc_noticias <- here::here("data", "processed", "noticias")
+ruta_proc_pob      <- here::here("data", "processed", "02_poblacion")
+ruta_proc_noticias <- here::here("data", "processed", "03_noticias")
 
-archivo_panel_delitos <- file.path(ruta_proc_hurtos, "panel_delitos_poblacion_localidad.parquet")
-archivo_panel_consol  <- file.path(ruta_proc_hurtos, "panel_consolidado_localidad_anual.parquet")
+archivo_panel_delitos <- file.path(ruta_proc_pob, "panel_delitos_poblacion_localidad.parquet")
+archivo_panel_consol  <- here::here("data", "processed", "panel_consolidado_localidad_anual.parquet")
 archivo_noticias_proc <- file.path(ruta_proc_noticias, "noticias_procesadas.parquet")
 
 stopifnot(file.exists(archivo_panel_delitos))

@@ -1,12 +1,17 @@
 # ==============================================================================
-# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2025)
+# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/03_analisis_sentometrics.R
 # ROL: Análisis Cuantitativo de Sentimiento con sentometrics y Fusión de Panel
+# PRODUCE: data/processed/panel_consolidado_localidad_anual.parquet
 # ==============================================================================
 
+# 1. Configuración y Dependencias ----
+
+## 1.1 Opciones globales y semilla ----
 options(scipen = 999)
 set.seed(20261014)
 
+## 1.2 Carga de librerías y resolución de conflictos ----
 library(here)
 library(conflicted)
 library(arrow)
@@ -21,24 +26,16 @@ conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
+## 1.3 Rutas relativas ----
 ruta_proc <- here::here("data", "processed")
 
-# 1. Carga de Noticias Procesadas ----
-archivo_noticias <- file.path(ruta_proc, "noticias", "noticias_procesadas.parquet")
+# 2. Carga y Preparación del Corpus de Prensa ----
+
+## 2.1 Carga del dataset de noticias procesadas ----
+archivo_noticias <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
 df_noticias <- arrow::read_parquet(archivo_noticias)
 
-# 2. Configuración del Léxico NRC en Español ----
-nrc_es_crudo <- syuzhet::get_sentiment_dictionary("nrc", language = "spanish")
-nrc_polaridad <- nrc_es_crudo |>
-  filter(sentiment %in% c("positive", "negative")) |>
-  mutate(score = ifelse(sentiment == "positive", 1, -1)) |>
-  group_by(word) |>
-  summarise(score = mean(score), .groups = "drop")
-
-lex_df <- as.data.frame(nrc_polaridad[, c("word", "score")])
-lex_sento <- sento_lexicons(list(nrc_val = lex_df))
-
-# 3. Preparación de Corpus para sentometrics ----
+## 2.2 Preparación del formato sento_corpus ----
 df_noticias_sento <- df_noticias |>
   mutate(
     id = paste0("doc_", row_number()),
@@ -47,24 +44,37 @@ df_noticias_sento <- df_noticias |>
   ) |>
   select(id, date, texts)
 
-corpus_sento <- sento_corpus(
+corpus_sento <- sentometrics::sento_corpus(
   corpusdf = as.data.frame(df_noticias_sento),
   do.clean = FALSE
 )
 
-# Cómputo de sentimiento proporcional (por palabra)
-sentimiento_raw <- compute_sentiment(
+# 3. Configuración y Cómputo Léxico con sentometrics ----
+
+## 3.1 Construcción del léxico de valencia NRC en español ----
+nrc_es_crudo <- syuzhet::get_sentiment_dictionary("nrc", language = "spanish")
+nrc_polaridad <- nrc_es_crudo |>
+  filter(sentiment %in% c("positive", "negative")) |>
+  mutate(score = ifelse(sentiment == "positive", 1, -1)) |>
+  group_by(word) |>
+  summarise(score = mean(score), .groups = "drop")
+
+lex_df <- as.data.frame(nrc_polaridad[, c("word", "score")])
+lex_sento <- sentometrics::sento_lexicons(list(nrc_val = lex_df))
+
+## 3.2 Cómputo proporcional de polaridad por documento ----
+sentimiento_raw <- sentometrics::compute_sentiment(
   corpus_sento,
   lex_sento,
   how = "proportional"
 )
 
-# Extraer el puntaje de sentimiento neto por documento
+## 3.3 Clasificación categórica de sentimiento y exportación ----
 df_sent_valores <- as.data.frame(sentimiento_raw)
 df_sent_limpio <- tibble(
-  id = df_sent_valores$id,
-  date = df_sent_valores$date,
-  word_count = df_sent_valores$word_count,
+  id                = df_sent_valores$id,
+  date              = df_sent_valores$date,
+  word_count        = df_sent_valores$word_count,
   sentimiento_score = df_sent_valores[[4]]
 )
 
@@ -79,11 +89,12 @@ df_noticias_enriquecida <- df_noticias |>
     )
   )
 
-archivo_noticias_sent <- file.path(ruta_proc, "noticias", "noticias_con_sentimiento.parquet")
-arrow::write_parquet(df_noticias_enriquecida, archivo_noticias_sent)
-message("✔ Noticias con sentimiento guardadas en: ", archivo_noticias_sent)
+arrow::write_parquet(df_noticias_enriquecida, archivo_noticias)
+message("✔ Corpus de noticias enriquecido con sentimiento en: ", archivo_noticias)
 
-# 4. Agregación de Sentimiento por Localidad y Año (2022-2026) ----
+# 4. Agregación de Métricas por Localidad y Año (2022–2026) ----
+
+## 4.1 Resumen anual de sentimiento y proporciones de polaridad ----
 noticias_agg <- df_noticias_enriquecida |>
   filter(año >= 2022 & año <= 2026) |>
   group_by(localidad, año) |>
@@ -97,8 +108,10 @@ noticias_agg <- df_noticias_enriquecida |>
     .groups = "drop"
   )
 
-# 5. Integración con el Panel Delictivo ----
-panel_delitos <- arrow::read_parquet(file.path(ruta_proc, "hurtos", "panel_delitos_poblacion_localidad.parquet"))
+# 5. Integración con el Panel Delictivo y Exportación ----
+
+## 5.1 Fusión con tasas oficiales de hurto y población ----
+panel_delitos <- arrow::read_parquet(file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_localidad.parquet"))
 
 panel_consolidado <- panel_delitos |>
   left_join(noticias_agg, by = c("localidad", "año")) |>
@@ -110,6 +123,7 @@ panel_consolidado <- panel_delitos |>
     prop_neutras         = replace_na(prop_neutras, 0)
   )
 
-archivo_panel_final <- file.path(ruta_proc, "hurtos", "panel_consolidado_localidad_anual.parquet")
+## 5.2 Almacenamiento del panel consolidado final ----
+archivo_panel_final <- file.path(ruta_proc, "panel_consolidado_localidad_anual.parquet")
 arrow::write_parquet(panel_consolidado, archivo_panel_final)
 message("✔ Panel consolidado (delitos + población + sentometrics) guardado en: ", archivo_panel_final)

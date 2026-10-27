@@ -1,5 +1,5 @@
 # ==============================================================================
-# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2025)
+# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # ROL: Aplicación Interactiva Shiny (Dashboard Territorial y Sentimiento)
 # AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
@@ -30,7 +30,7 @@ ui <- page_sidebar(
     bootswatch = "flatly",
     primary = "#1f77b4"
   ),
-  title = "Hurtos y Sentimiento Mediático en Bogotá (2022–2025)",
+  title = "Hurtos y Sentimiento Mediático en Bogotá (2022–2026)",
   
   sidebar = sidebar(
     title = "Controles y Filtros"

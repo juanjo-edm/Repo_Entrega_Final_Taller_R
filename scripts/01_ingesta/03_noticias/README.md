@@ -1,8 +1,8 @@
 # Ingesta y Scraping de Noticias en Google News
 
-Esta carpeta contiene la documentación técnica y el código procedimental para la captura, depuración, resolución de ambigüedades territoriales y enriquecimiento analítico del corpus de noticias sobre criminalidad en las 19 localidades urbanas de Bogotá D.C.
+Este submódulo contiene el código procedimental y la documentación técnica para la recolección, depuración, resolución de ambigüedades territoriales y consolidación del corpus periodístico sobre criminalidad y seguridad ciudadana en las 19 localidades urbanas de Bogotá D.C.
 
-El pipeline opera mediante el motor oficial de **Google News RSS**, garantizando trazabilidad completa, ausencia de bloqueos por IP y una discriminación geográfica estricta para evitar falsos positivos y homonimias.
+El pipeline opera a través de un **único script activo**: [`scraping_google_news.R`](file:///scripts/01_ingesta/03_noticias/scraping_google_news.R), utilizando el motor estructurado de **Google News RSS**, lo que garantiza estabilidad en la conexión, total reproducibilidad y ausencia de bloqueos por IP.
 
 ---
 
@@ -159,13 +159,13 @@ Siguiendo las definiciones de la **Secretaría Distrital de Seguridad, Convivenc
 
 ## 7. Ejecución y Salidas
 
-Para reproducir la recolección completa desde una sesión limpia:
+Para ejecutar la consolidación de prensa:
 
 ```r
 source(here::here("scripts", "01_ingesta", "03_noticias", "scraping_google_news.R"))
 ```
 
-* **Salida columnar optimizada:** `data/raw/noticias/noticias_google_news_consolidado.parquet`
-* **Salida nativa R:** `data/raw/noticias/noticias_google_news_consolidado.rds`
+* **Salida columnar optimizada:** [`data/raw/noticias/noticias_google_news_consolidado.parquet`](file:///data/raw/noticias/noticias_google_news_consolidado.parquet)
+* **Salida nativa R:** [`data/raw/noticias/noticias_google_news_consolidado.rds`](file:///data/raw/noticias/noticias_google_news_consolidado.rds)
 * **Cobertura temporal:** Enero de 2022 a Septiembre de 2026.
-* **Total observaciones auditadas:** 3.928 registros con 0 valores nulos en variables de control.
+* **Total observaciones:** 3.916 artículos enriquecidos con 0 nulos en campos obligatorios.

@@ -50,7 +50,7 @@ Si necesitas revisar los detalles de alguna parte del proyecto, aquí tienes los
 | **Enunciados y rúbricas del curso** | [**`docs/enunciados/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciados/README.md) | Reglas oficiales y criterios de calificación de la [Primera Entrega (20 de octubre)](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciados/enunciado_primera_entrega.md) y la [Entrega Final (17 de noviembre)](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/enunciados/enunciado_entrega_final_y_presentacion.md). |
 | **Documentación de sentometrics** | [**`docs/sentometrics/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/sentometrics/README.md) | Paper JSS de Ardia et al. (2021), manual oficial de CRAN y resumen metodológico del paquete. |
 | **Reglas de código del grupo** | [**`docs/guias/estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/guias/estandares_programacion.md) | Guía de estilo MECA: Outline `----`, rutas con `{here}`, paquetes y control de errores. |
-| **Pipeline y scripts de R** | [**`scripts/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/README.md) | Orden en que corren los scripts y cómo funciona el orquestador `master.R`. |
+| **Pipeline y scripts de R** | [**`scripts/README.md`**](file:///scripts/README.md) | Flujo secuencial y descripción de módulos de procesamiento. |
 | **Tablas de datos abiertos** | [**`scripts/01_ingesta/01_datos_abiertos/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/01_datos_abiertos/README.md) | **Enlaces directos a las páginas web de los datos oficiales** y consultas con SQL. |
 | **Cómo extraemos las noticias** | [**`scripts/01_ingesta/02_scraping_noticias/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/01_ingesta/02_scraping_noticias/README.md) | **Explicación paso a paso del scraping**: conservación de 19 subtablas, consolidación y scraping incremental. |
 | **Estructura de las bases de datos** | [**`data/README.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/data/README.md) | Qué hay en `data/raw/` y en `data/processed/`, y por qué usamos formato Parquet. |
@@ -91,10 +91,15 @@ Repo_Entrega_Final_Taller_R/
 │   │   ├── delitos/                          # Capa SDSCJ (localidades_bogota_raw.geojson)
 │   │   ├── poblacion/                        # Proyecciones SDS (poblacion_localidades_raw.parquet)
 │   │   └── noticias/                         # Noticias consolidadas (noticias_google_news_consolidado.parquet)
-│   └── processed/                            # Bases limpias listas para analizar (.parquet / .rds)
+│   └── processed/                            # Bases limpias listas para analizar (1 archivo por script)
 │       ├── README.md                         # Diccionario de datos y esquemas de variables
-│       ├── hurtos/                           # Paneles oficiales de tasas delictivas y demografía
-│       └── noticias/                         # Corpus periodístico depurado y clasificado DAI
+│       ├── 01_delitos/                       # Conteo anual de delitos (delitos_localidad_anual.parquet)
+│       ├── 02_poblacion/                     # Tasas por 100k hab (panel_delitos_poblacion_localidad.parquet)
+│       ├── 03_noticias/                      # Corpus depurado con 11 DAI (noticias_procesadas.parquet)
+│       ├── panel_consolidado_localidad_anual.parquet # Fusión de tasas delictivas y sentimiento
+│       ├── clusters_localidades_kmeans.parquet       # Asignaciones de clústeres K-means
+│       └── datos_consolidados_shiny.rds              # Insumo consolidado para la aplicación Shiny
+
 │
 ├── output/                                   # Resultados generados
 │   ├── tables/                               # Tablas resumen (.csv, .tex)
@@ -102,21 +107,17 @@ Repo_Entrega_Final_Taller_R/
 │
 ├── scripts/                                  # Código en R
 │   ├── README.md                             # Explicación del pipeline
-│   ├── master.R                              # Script que corre todo el proyecto en orden
 │   ├── 01_ingesta/                           # Exclusivo para descarga de datos crudos
 │   │   ├── 01_delitos/                       # Ingesta de delitos oficiales (SDSCJ)
 │   │   ├── 02_poblacion/                     # Ingesta de proyecciones demográficas (SDS)
 │   │   └── 03_noticias/                      # Ingesta y scraping de prensa (Google News RSS)
-│   ├── 02_limpieza_indicadores.R             # Cálculo de tasas de hurto oficiales (sin descargas)
-│   ├── 02_limpieza_texto_noticias.R          # Limpieza de texto y normalización
-│   ├── 02b_depuracion_noticias_dai.R         # Clasificación temática bajo 11 DAI
+│   ├── 02_procesamiento/                     # Transformación de datos raw a processed
+│   │   ├── 01_delitos/                       # Procesamiento de delitos SDSCJ
+│   │   ├── 02_poblacion/                     # Procesamiento demográfico y cálculo de tasas
+│   │   └── 03_noticias/                      # Limpieza de texto y depuración DAI
 │   ├── 03_analisis_sentometrics.R            # Medición de sentimiento textual
 │   ├── 04_clustering_kmeans.R                # Agrupamiento no supervisado K-means
 │   └── 05_export_insumos_shiny.R             # Empaquetado de artefactos para Shiny
-│   ├── 02_limpieza_indicadores.R             # Cálculo de tasas de hurto por habitante
-│   ├── 03_analisis_sentometrics.R            # Análisis de tono de las noticias
-│   ├── 04_clustering_kmeans.R                # Agrupamiento de localidades por nivel de hurto
-│   └── 05_export_insumos_shiny.R             # Prepara los datos que consume la app Shiny
 │
 ├── notebook/                                 # Documentos Quarto
 │   ├── README.md                             # Instrucciones para compilar
@@ -163,7 +164,6 @@ install.packages(setdiff(paquetes, rownames(installed.packages())))
 
 ### Paso 3: Correr el pipeline de datos
 ```r
-source(here::here("scripts", "master.R"))
 ```
 
 ### Paso 4: Compilar el informe en PDF (Entrega 1)

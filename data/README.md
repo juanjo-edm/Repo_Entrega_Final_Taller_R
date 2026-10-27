@@ -16,15 +16,16 @@ data/
 │   └── noticias/                                  # Ingesta consolidada de prensa (Google News RSS)
 │       ├── noticias_google_news_consolidado.parquet # Base consolidada y enriquecida (3.916 noticias)
 │       └── noticias_google_news_consolidado.rds     # Respaldo en formato binario RDS
-└── processed/                                     # Datos listos y normalizados para modelado
-    ├── hurtos/                                    # Paneles armonizados de tasas y delitos
-    │   ├── panel_delitos_poblacion_localidad.parquet
-    │   └── panel_consolidado_localidad_anual.parquet
-    └── noticias/                                  # Corpus clasificado y con métricas de sentimiento
-        ├── noticias_procesadas.parquet
-        ├── noticias_con_sentimiento.parquet
-        ├── noticias_dai.parquet                   # 3.122 artículos estrictamente reclasificados a 11 DAI
-        └── noticias_excluidas_no_dai.parquet      # 547 artículos descartados por ruido temático
+└── processed/                                     # Datos listos y normalizados (1 archivo por script)
+    ├── 01_delitos/
+    │   └── delitos_localidad_anual.parquet        # Conteo anual oficial de denuncias
+    ├── 02_poblacion/
+    │   └── panel_delitos_poblacion_localidad.parquet # Tasas por 100k hab (19 locs x 5 años)
+    ├── 03_noticias/
+    │   └── noticias_procesadas.parquet            # Corpus depurado con 11 DAI y métricas NLP
+    ├── panel_consolidado_localidad_anual.parquet  # Fusión de tasas oficiales y sentimiento mediático
+    ├── clusters_localidades_kmeans.parquet        # Perfiles de agrupamiento espacial K-means
+    └── datos_consolidados_shiny.rds               # Insumo empaquetado para app/
 ```
 
 ---
@@ -40,7 +41,4 @@ data/
 ---
 
 ## 3. Reproducibilidad
-Para reconstruir o actualizar los datos procesados a partir de los insumos crudos, ejecute desde la raíz del proyecto:
-```r
-source(here::here("scripts", "master.R"))
-```
+Para reconstruir o actualizar los datos procesados a partir de los insumos crudos, ejecute los módulos de `scripts/` de forma secuencial (ver detalle en [`scripts/README.md`](file:///scripts/README.md)).

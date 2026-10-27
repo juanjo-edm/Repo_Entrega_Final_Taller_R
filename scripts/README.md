@@ -4,15 +4,9 @@ En esta carpeta se encuentra el código en R estructurado para la ejecución té
 
 ---
 
-## 1. Flujo Secuencial del Pipeline
+## 1. Flujo Secuencial de Ejecución
 
-Para ejecutar todo el flujo de principio a fin de manera reproducible:
-
-```r
-source(here::here("scripts", "master.R"))
-```
-
-### Arquitectura de Scripts:
+Cada módulo está diseñado para ejecutarse de manera autónoma y secuencial según la etapa del flujo analítico:
 
 ```mermaid
 flowchart TD
@@ -21,30 +15,44 @@ flowchart TD
         I2["02_poblacion/descarga_poblacion_sds.R"] --> D2["data/raw/poblacion/"]
         I3["03_noticias/scraping_google_news.R"] --> D3["data/raw/noticias/"]
     end
-    D1 --> B["02_limpieza_indicadores.R"]
-    D2 --> B
-    D3 --> N1["02_limpieza_texto_noticias.R"]
-    N1 --> N2["02b_depuracion_noticias_dai.R"]
-    N2 --> C["03_analisis_sentometrics.R"]
-    B --> C
-    B --> K["04_clustering_kmeans.R"]
-    C --> E["05_export_insumos_shiny.R"]
-    K --> E
-    E --> F["app/ (Aplicación Shiny)"]
+    
+    subgraph Procesamiento ["scripts/02_procesamiento/"]
+        D1 --> P1["01_delitos/procesamiento_delitos.R"]
+        D2 --> P2["02_poblacion/procesamiento_poblacion.R"]
+        P1 --> P2
+        D3 --> P3["03_noticias/procesamiento_noticias.R"]
+    end
+
+    subgraph Analisis ["scripts/ / app/"]
+        P2 --> C["03_analisis_sentometrics.R"]
+        P3 --> C
+        P2 --> K["04_clustering_kmeans.R"]
+        C --> E["05_export_insumos_shiny.R"]
+        K --> E
+        E --> F["app/ (Aplicación Shiny)"]
+    end
 ```
 
-### Detalle de Módulos:
+### Orden de Ejecución:
 
-1. **[`master.R`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/master.R):** Script orquestador general del repositorio. Inicializa dependencias, resuelve conflictos de funciones con `{conflicted}`, fija la semilla pseudoaleatoria y corre los módulos secuencialmente auditando la existencia de los artefactos.
-2. **[`scripts/01_ingesta/`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/01_ingesta):** Contiene de forma exclusiva todos los scripts de descarga de información externa, organizados en subcarpetas temáticas:
-   * **`01_delitos/`:** Ingesta de la capa cartográfica y delictiva oficial SDSCJ (`localidades_bogota_raw.geojson`).
-   * **`02_poblacion/`:** Ingesta de proyecciones demográficas de la Secretaría Distrital de Salud (`poblacion_localidades_raw.parquet`).
-   * **`03_noticias/`:** Scraping y consolidación de prensa digital vía Google News RSS (`noticias_google_news_consolidado.parquet`).
-3. **[`02_limpieza_indicadores.R`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/02_limpieza_indicadores.R):** Lee los datos crudos locales de `data/raw/delitos/` y `data/raw/poblacion/` (sin descargas directas), unifica las 19 localidades urbanas y computa las tasas delictivas anuales por 100.000 habitantes (2022–2026).
-4. **[`02_limpieza_texto_noticias.R`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/02_limpieza_texto_noticias.R) y [`02b_depuracion_noticias_dai.R`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/02b_depuracion_noticias_dai.R):** Limpieza, normalización y depuración temático-espacial del corpus periodístico según los 11 Delitos de Alto Impacto.
-5. **[`03_analisis_sentometrics.R`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/03_analisis_sentometrics.R):** Construye el corpus de noticias, aplica el diccionario léxico de valencia NRC en español y calcula el sentimiento promedio anual por localidad.
-6. **[`04_clustering_kmeans.R`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/04_clustering_kmeans.R):** Estandariza tasas, evalúa métricas de silueta y agrupa localidades con perfiles similares de inseguridad ($K^* = 3$).
-7. **[`05_export_insumos_shiny.R`](file:///g:/My%20Drive/Github/Repo_Entrega_Final_Taller_R/scripts/05_export_insumos_shiny.R):** Empaqueta indicadores, clusters, sentimiento y geometrías poligonales simplificadas en un archivo binario consolidado para la aplicación interactiva.
+1. **Ingesta de Fuentes Externas ([`scripts/01_ingesta/`](file:///scripts/01_ingesta/)):**
+   * [`01_delitos/descarga_delitos_sdscj.R`](file:///scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R): Ingesta de la capa cartográfica y delictiva oficial SDSCJ (`data/raw/delitos/localidades_bogota_raw.geojson`).
+   * [`02_poblacion/descarga_poblacion_sds.R`](file:///scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R): Ingesta de proyecciones demográficas de la Secretaría Distrital de Salud (`data/raw/poblacion/poblacion_localidades_raw.parquet`).
+   * [`03_noticias/scraping_google_news.R`](file:///scripts/01_ingesta/03_noticias/scraping_google_news.R): Ingesta y consolidación de prensa digital vía Google News RSS (`data/raw/noticias/noticias_google_news_consolidado.parquet`).
+
+2. **Procesamiento y Transformación ([`scripts/02_procesamiento/`](file:///scripts/02_procesamiento/)):**
+   * [`01_delitos/procesamiento_delitos.R`](file:///scripts/02_procesamiento/01_delitos/procesamiento_delitos.R): Estructuración del panel de delitos 2022–2026 (`data/processed/01_delitos/delitos_localidad_anual.parquet`).
+   * [`02_poblacion/procesamiento_poblacion.R`](file:///scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R): Agregación demográfica y cálculo de tasas por 100k hab (`data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet`).
+   * [`03_noticias/procesamiento_noticias.R`](file:///scripts/02_procesamiento/03_noticias/procesamiento_noticias.R): Limpieza NLP del cuerpo editorial y clasificación en 11 DAI oficiales SDSCJ (`data/processed/03_noticias/noticias_procesadas.parquet`).
+
+3. **Análisis Cuantitativo de Sentimiento:**
+   * [`03_analisis_sentometrics.R`](file:///scripts/03_analisis_sentometrics.R): Aplica el diccionario léxico de valencia NRC en español, calcula la polaridad neta proporcional por documento y fusiona las métricas con el panel delictivo oficial.
+
+4. **Clustering Territorial ($K$-Means):**
+   * [`04_clustering_kmeans.R`](file:///scripts/04_clustering_kmeans.R): Estandariza tasas, evalúa métricas de silueta y agrupa localidades con perfiles similares de inseguridad ($K^* = 3$).
+
+5. **Exportación de Insumos para Shiny:**
+   * [`05_export_insumos_shiny.R`](file:///scripts/05_export_insumos_shiny.R): Empaqueta indicadores, clusters, sentimiento y geometrías poligonales simplificadas en un archivo binario consolidado (`data/processed/datos_consolidados_shiny.rds`) para la aplicación interactiva.
 
 ---
 
