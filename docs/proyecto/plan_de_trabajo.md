@@ -106,5 +106,5 @@ Para mantener el repositorio limpio y evitar conflictos al fusionar cambios, seg
 El repositorio cuenta con un protocolo específico para la información extraída de Google Noticias:
 
 1. **Conservación de subtablas brutas:** Cada una de las 19 localidades cuenta con su archivo individual en `data/raw/noticias/historico_por_localidad/` (formato Parquet y RDS), garantizando que no se pierda el rastro de ninguna búsqueda original.
-2. **Consolidación metodológica:** El script `scripts/01_ingesta/02_scraping_noticias/00_consolidar_subtablas_historicas.R` unifica las tablas aplicando los filtros de presencia de ciudad, deduplicación de enlaces y validación territorial, produciendo la base de 2.487 noticias con cero valores nulos.
+2. **Consolidación metodológica:** El script `scripts/01_ingesta/03_noticias/00_consolidar_subtablas_historicas.R` unifica las tablas aplicando los filtros de presencia de ciudad, deduplicación de enlaces y validación territorial, produciendo la base de 2.487 noticias con cero valores nulos.
 3. **Expansión incremental:** El archivo `data/raw/noticias/cobertura_historica.json` registra con exactitud qué meses ya fueron procesados. Si en el futuro se desea expandir la ventana temporal (por ejemplo, últimos meses de 2025 o año 2026), el scraper omite de manera automática los meses ya existentes y descarga únicamente los nuevos registros.

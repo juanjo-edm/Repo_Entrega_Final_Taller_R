@@ -1,6 +1,6 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
-# ARCHIVO: scripts/01_ingesta/02_scraping_noticias/scraping_google_news_incremental.R
+# ARCHIVO: scripts/01_ingesta/03_noticias/scraping_google_news_incremental.R
 # ROL: Ampliación focalizada del corpus en las celdas localidad-mes con menos
 #      cobertura, por familias de Delitos de Alto Impacto (DAI) de la SDSCJ.
 # AUTOR: Gabriel Arturo Echeverry Castaño (Sub-equipo Datos y Modelado, Grupo 10)

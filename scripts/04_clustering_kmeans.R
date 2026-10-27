@@ -8,7 +8,7 @@
 # 1. Configuración y Dependencias ----
 
 ## 1.1 Opciones globales y semilla ----
-rm(list = ls())
+# rm(list = ls())
 options(scipen = 999)
 set.seed(20261014)
 

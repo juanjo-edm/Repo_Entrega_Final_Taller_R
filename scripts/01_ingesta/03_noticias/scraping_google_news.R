@@ -1,6 +1,6 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediatico en Bogota (2022-2026)
-# ARCHIVO: scripts/01_ingesta/02_scraping_noticias/scraping_google_news.R
+# ARCHIVO: scripts/01_ingesta/03_noticias/scraping_google_news.R
 # ROL: Ingesta, depuracion, enriquecimiento y consolidacion de prensa digital
 # AUTORES: Juan Jose Echeverry, Miguelangel Palma, Sergio Lopez (Grupo 10)
 # PROGRAMA: Maestria en Economia Aplicada (MECA) — Universidad de los Andes

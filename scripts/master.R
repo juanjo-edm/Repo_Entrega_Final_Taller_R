@@ -50,9 +50,15 @@ message(">>> Rutas del proyecto inicializadas correctamente.")
 
 # 2. Ejecución Secuencial del Pipeline ----
 
-## 2.1 Módulo 1: Descarga de datos abiertos y noticias ----
-message("\n>>> [1/5] Ejecutando: 01_descarga_datos.R...")
-source(file.path(ruta_scripts, "01_descarga_datos.R"), echo = FALSE)
+## 2.1 Módulo 1: Ingesta de datos crudos por fuente ----
+message("\n>>> [1a/5] Ingesta de Delitos SDSCJ...")
+source(file.path(ruta_scripts, "01_ingesta", "01_delitos", "descarga_delitos_sdscj.R"), echo = FALSE)
+
+message("\n>>> [1b/5] Ingesta de Población SDS...")
+source(file.path(ruta_scripts, "01_ingesta", "02_poblacion", "descarga_poblacion_sds.R"), echo = FALSE)
+
+message("\n>>> [1c/5] Ingesta de Prensa Google News...")
+source(file.path(ruta_scripts, "01_ingesta", "03_noticias", "scraping_google_news.R"), echo = FALSE)
 
 ## 2.2 Módulo 2: Limpieza, homologación territorial y tasas ----
 message("\n>>> [2/5] Ejecutando: 02_limpieza_indicadores.R...")

@@ -20,40 +20,26 @@ conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
-ruta_raw     <- here::here("data", "raw")
-ruta_proc    <- here::here("data", "processed")
-if (!dir.exists(ruta_raw)) dir.create(ruta_raw, recursive = TRUE)
+ruta_raw_delitos   <- here::here("data", "raw", "delitos")
+ruta_raw_poblacion <- here::here("data", "raw", "poblacion")
+ruta_proc          <- here::here("data", "processed")
+
 if (!dir.exists(ruta_proc)) dir.create(ruta_proc, recursive = TRUE)
 
-# 1. Ingesta / Carga de Delitos de Alto Impacto Oficiales (SDSCJ) ----
-archivo_geojson <- file.path(ruta_raw, "localidades_bogota_raw.geojson")
+# 1. Carga de Delitos de Alto Impacto Oficiales (SDSCJ) ----
+archivo_geojson <- file.path(ruta_raw_delitos, "localidades_bogota_raw.geojson")
 if (!file.exists(archivo_geojson)) {
-  message(">>> Descargando capa de delitos y cartografía oficial SDSCJ...")
-  url_zip <- "https://datosabiertos.bogota.gov.co/dataset/7b270013-42ca-436b-9c1e-3bcb7d280c6b/resource/aba0e25d-d407-45f4-9a98-327493b538bd/download/dai_geojson.zip"
-  tmp_zip <- tempfile(fileext = ".zip")
-  download.file(url_zip, destfile = tmp_zip, mode = "wb", quiet = TRUE)
-  tmp_dir <- tempfile()
-  dir.create(tmp_dir)
-  unzip(tmp_zip, exdir = tmp_dir)
-  f_geo <- list.files(tmp_dir, pattern = "\\.geojson$", full.names = TRUE)[1]
-  delitos_sf <- sf::st_read(f_geo, quiet = TRUE)
-  sf::st_write(delitos_sf, archivo_geojson, delete_dsn = TRUE, quiet = TRUE)
-} else {
-  delitos_sf <- sf::st_read(archivo_geojson, quiet = TRUE)
+  stop("No se encontró '", archivo_geojson, "'. Ejecute primero: source('scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R')")
 }
-
+delitos_sf <- sf::st_read(archivo_geojson, quiet = TRUE)
 df_delitos_raw <- sf::st_drop_geometry(delitos_sf)
 
-# 2. Ingesta / Carga de Población Proyectada (SDS) ----
-archivo_pob_raw <- file.path(ruta_raw, "poblacion_localidades_raw.parquet")
+# 2. Carga de Población Proyectada (SDS) ----
+archivo_pob_raw <- file.path(ruta_raw_poblacion, "poblacion_localidades_raw.parquet")
 if (!file.exists(archivo_pob_raw)) {
-  message(">>> Descargando proyección poblacional oficial SDS...")
-  url_pob <- "https://datosabiertos.bogota.gov.co/dataset/85bf790d-84d1-4eda-bd6f-40af62e71d95/resource/37e58cb3-c870-4608-8c37-ce45db0eb7c1/download/osb_demografia-poblacion-localidad.csv"
-  df_pob_raw <- readr::read_delim(url_pob, delim = ";", show_col_types = FALSE)
-  arrow::write_parquet(as.data.frame(df_pob_raw), archivo_pob_raw)
-} else {
-  df_pob_raw <- arrow::read_parquet(archivo_pob_raw)
+  stop("No se encontró '", archivo_pob_raw, "'. Ejecute primero: source('scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R')")
 }
+df_pob_raw <- arrow::read_parquet(archivo_pob_raw)
 
 # 3. Procesamiento y Limpieza de Población por Localidad y Año ----
 poblacion_anual <- df_pob_raw |>

@@ -162,7 +162,7 @@ Siguiendo las definiciones de la **Secretaría Distrital de Seguridad, Convivenc
 Para reproducir la recolección completa desde una sesión limpia:
 
 ```r
-source(here::here("scripts", "01_ingesta", "02_scraping_noticias", "scraping_google_news.R"))
+source(here::here("scripts", "01_ingesta", "03_noticias", "scraping_google_news.R"))
 ```
 
 * **Salida columnar optimizada:** `data/raw/noticias/noticias_google_news_consolidado.parquet`

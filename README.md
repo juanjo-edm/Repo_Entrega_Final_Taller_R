@@ -87,20 +87,14 @@ Repo_Entrega_Final_Taller_R/
 │
 ├── data/                                     # Bases de datos
 │   ├── README.md                             # Explicación de los datos y formatos
-│   ├── raw/                                  # Datos tal como bajan de las fuentes oficiales
-│   │   ├── noticias_google_news_consolidado.parquet # Base de noticias validadas (2.487 noticias)
-│   │   ├── noticias_google_news_consolidado.rds     # Respaldo nativo de R
-│   │   ├── noticias/                         # Ingesta y trazabilidad de noticias
-│   │   │   ├── historico_por_localidad/      # 19 subtablas brutas individuales (Parquet/RDS)
-│   │   │   ├── cobertura_historica.json      # Metadatos de meses cubiertos para scraping incremental
-│   │   │   └── chunk_*.parquet               # Lotes mensuales adicionales de scraping
-│   │   ├── delitos_alto_impacto_raw.parquet  # Denuncias de hurtos (SDSCJ)
-│   │   ├── poblacion_localidades_raw.parquet # Habitantes por localidad (SDS)
-│   │   └── localidades_bogota_raw.geojson    # Mapas de las localidades (SDP)
+│   ├── raw/                                  # Insumos crudos organizados por fuente
+│   │   ├── delitos/                          # Capa SDSCJ (localidades_bogota_raw.geojson)
+│   │   ├── poblacion/                        # Proyecciones SDS (poblacion_localidades_raw.parquet)
+│   │   └── noticias/                         # Noticias consolidadas (noticias_google_news_consolidado.parquet)
 │   └── processed/                            # Bases limpias listas para analizar (.parquet / .rds)
 │       ├── README.md                         # Diccionario de datos y esquemas de variables
 │       ├── hurtos/                           # Paneles oficiales de tasas delictivas y demografía
-│       └── noticias/                         # Corpus periodístico depurado y calificado
+│       └── noticias/                         # Corpus periodístico depurado y clasificado DAI
 │
 ├── output/                                   # Resultados generados
 │   ├── tables/                               # Tablas resumen (.csv, .tex)
@@ -109,15 +103,16 @@ Repo_Entrega_Final_Taller_R/
 ├── scripts/                                  # Código en R
 │   ├── README.md                             # Explicación del pipeline
 │   ├── master.R                              # Script que corre todo el proyecto en orden
-│   ├── 01_descarga_datos.R                   # Orquestador de descargas
-│   ├── 01_ingesta/                           # Módulos de descarga
-│   │   ├── 01_datos_abiertos/                # Consultas a la API de la Alcaldía
-│   │   │   ├── README.md                     # Enlaces web a las tablas y explicación
-│   │   │   └── datos_abiertos_bogota.R       # Descarga de delitos, población y mapas
-│   │   └── 02_scraping_noticias/             # Extracción de noticias
-│   │       ├── README.md                     # Metodología detallada de scraping y trazabilidad
-│   │       ├── 00_consolidar_subtablas_historicas.R # Migración de subtablas y consolidación
-│   │       └── scraping_google_news.R        # Scraping incremental con Selenium y checkpoints
+│   ├── 01_ingesta/                           # Exclusivo para descarga de datos crudos
+│   │   ├── 01_delitos/                       # Ingesta de delitos oficiales (SDSCJ)
+│   │   ├── 02_poblacion/                     # Ingesta de proyecciones demográficas (SDS)
+│   │   └── 03_noticias/                      # Ingesta y scraping de prensa (Google News RSS)
+│   ├── 02_limpieza_indicadores.R             # Cálculo de tasas de hurto oficiales (sin descargas)
+│   ├── 02_limpieza_texto_noticias.R          # Limpieza de texto y normalización
+│   ├── 02b_depuracion_noticias_dai.R         # Clasificación temática bajo 11 DAI
+│   ├── 03_analisis_sentometrics.R            # Medición de sentimiento textual
+│   ├── 04_clustering_kmeans.R                # Agrupamiento no supervisado K-means
+│   └── 05_export_insumos_shiny.R             # Empaquetado de artefactos para Shiny
 │   ├── 02_limpieza_indicadores.R             # Cálculo de tasas de hurto por habitante
 │   ├── 03_analisis_sentometrics.R            # Análisis de tono de las noticias
 │   ├── 04_clustering_kmeans.R                # Agrupamiento de localidades por nivel de hurto

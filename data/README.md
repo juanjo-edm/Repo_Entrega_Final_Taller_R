@@ -1,41 +1,46 @@
-# Organización de los datos
+# Organización de los Datos
 
-En esta carpeta guardamos los datos del proyecto, separando claramente lo que bajamos de internet de lo que nosotros mismos procesamos y limpiamos.
+En esta carpeta se almacena la información estructurada del proyecto, separando rigurosamente los insumos crudos (`raw/`) provenientes de fuentes oficiales y de web scraping, de las bases depuradas y paneles analíticos (`processed/`).
 
 ---
 
-## 1. Estructura de las carpetas de datos
+## 1. Estructura de Carpetas
 
 ```text
 data/
-├── raw/                              # Datos tal como bajan de las fuentes oficiales (sin tocar)
-│   └── noticias/                                # Carpeta exclusiva de ingesta de noticias (Google News)
-│       ├── noticias_google_news_consolidado.parquet # Base final consolidada y enriquecida (3.928 noticias)
-│       └── noticias_google_news_consolidado.rds     # Respaldo en formato nativo de R
-└── processed/                        # Datos listos y normalizados (ver processed/README.md)
-    ├── hurtos/                       # Paneles de delitos oficiales y tasas por 100k hab
+├── raw/                                           # Datos crudos tal como se descargan de las fuentes
+│   ├── delitos/                                   # Capa oficial y conteos SDSCJ / SIEDCO
+│   │   └── localidades_bogota_raw.geojson         # 21 polígonos y 12 modalidades DAI (2018–2026 corte Sep)
+│   ├── poblacion/                                 # Proyecciones demográficas de la Secretaría de Salud
+│   │   └── poblacion_localidades_raw.parquet      # 131.502 registros desagregados (2005–2035)
+│   └── noticias/                                  # Ingesta consolidada de prensa (Google News RSS)
+│       ├── noticias_google_news_consolidado.parquet # Base consolidada y enriquecida (3.916 noticias)
+│       └── noticias_google_news_consolidado.rds     # Respaldo en formato binario RDS
+└── processed/                                     # Datos listos y normalizados para modelado
+    ├── hurtos/                                    # Paneles armonizados de tasas y delitos
     │   ├── panel_delitos_poblacion_localidad.parquet
     │   └── panel_consolidado_localidad_anual.parquet
-    └── noticias/                     # Corpus periodístico depurado y calificado con NLP
+    └── noticias/                                  # Corpus clasificado y con métricas de sentimiento
         ├── noticias_procesadas.parquet
-        ├── noticias_procesadas.rds
-        └── noticias_con_sentimiento.parquet
+        ├── noticias_con_sentimiento.parquet
+        ├── noticias_dai.parquet                   # 3.122 artículos estrictamente reclasificados a 11 DAI
+        └── noticias_excluidas_no_dai.parquet      # 547 artículos descartados por ruido temático
 ```
 
 ---
 
-## 2. Fuentes oficiales que usamos
+## 2. Fuentes Oficiales
 
-| Conjunto de datos | Entidad que lo publica | Cómo lo obtenemos | Formato en que lo guardamos |
+| Dominio | Entidad | Insumo Crudo | Formato |
 | :--- | :--- | :--- | :--- |
-| **Delitos de Alto Impacto** | Secretaría de Seguridad (SDSCJ / SIEDCO) | API de Socrata con filtros SQL | `.parquet` |
-| **Proyecciones de Población** | Secretaría de Salud (SDS) | Portal de Datos Abiertos de Bogotá | `.parquet` |
-| **Mapas de las Localidades** | Secretaría de Planeación (SDP) | Portal de Datos Abiertos de Bogotá | `.geojson` y `.parquet` |
-| **Noticias de Prensa** | Google Noticias | Web Scraping con Selenium | `.parquet` |
+| **Delitos de Alto Impacto** | Secretaría de Seguridad (SDSCJ / SIEDCO) | `data/raw/delitos/localidades_bogota_raw.geojson` | GeoJSON vectorial |
+| **Proyecciones de Población** | Secretaría de Salud (SDS) | `data/raw/poblacion/poblacion_localidades_raw.parquet` | Apache Parquet |
+| **Prensa Digital** | Google News RSS | `data/raw/noticias/noticias_google_news_consolidado.parquet` | Apache Parquet / RDS |
 
 ---
 
-## 3. Manejo de archivos en Git
-* Los archivos muy pesados (mayores a 50MB) o temporales no se suben a Git para no saturar el repositorio. Están excluidos en `.gitignore`.
-* Mantenemos las carpetas visibles en Git usando archivos `.gitkeep`.
-* Si clonas el repositorio y quieres recrear todas las bases de `data/processed/`, solo tienes que correr `scripts/master.R`.
+## 3. Reproducibilidad
+Para reconstruir o actualizar los datos procesados a partir de los insumos crudos, ejecute desde la raíz del proyecto:
+```r
+source(here::here("scripts", "master.R"))
+```
