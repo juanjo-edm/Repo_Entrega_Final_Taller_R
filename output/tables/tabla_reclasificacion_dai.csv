@@ -1,0 +1,136 @@
+delito_alto_impacto,delito_sdscj,n
+Delitos sexuales y violencia intrafamiliar,Delitos sexuales,13
+Delitos sexuales y violencia intrafamiliar,Homicidio,11
+Delitos sexuales y violencia intrafamiliar,Violencia intrafamiliar,6
+Delitos sexuales y violencia intrafamiliar,Hurto a personas,1
+Delitos sexuales y violencia intrafamiliar,No DAI,1
+Extorsion,Extorsión,55
+Extorsion,No DAI,14
+Extorsion,Homicidio,5
+Extorsion,Hurto (modalidad no identificada),1
+Extorsion,Hurto a personas,1
+Hechos no asociados a delitos de alto impacto,No DAI,222
+Hechos no asociados a delitos de alto impacto,Homicidio,29
+Hechos no asociados a delitos de alto impacto,Hurto (modalidad no identificada),27
+Hechos no asociados a delitos de alto impacto,Hurto de automotores,27
+Hechos no asociados a delitos de alto impacto,Hurto a personas,20
+Hechos no asociados a delitos de alto impacto,Lesiones personales,11
+Hechos no asociados a delitos de alto impacto,Delitos sexuales,8
+Hechos no asociados a delitos de alto impacto,Hurto a comercio,6
+Hechos no asociados a delitos de alto impacto,Hurto de motocicletas,3
+Hechos no asociados a delitos de alto impacto,Extorsión,1
+Hechos no asociados a delitos de alto impacto,Hurto a residencias,1
+Homicidio,Homicidio,302
+Homicidio,Hurto a comercio,4
+Homicidio,Hurto a personas,3
+Homicidio,Extorsión,2
+Homicidio,No DAI,2
+Homicidio,Hurto de automotores,1
+Homicidio,Violencia intrafamiliar,1
+Hurto / Delincuencia comun no diferenciada,Hurto (modalidad no identificada),178
+Hurto / Delincuencia comun no diferenciada,Hurto a personas,68
+Hurto / Delincuencia comun no diferenciada,Hurto de automotores,34
+Hurto / Delincuencia comun no diferenciada,No DAI,34
+Hurto / Delincuencia comun no diferenciada,Hurto a comercio,23
+Hurto / Delincuencia comun no diferenciada,Homicidio,19
+Hurto / Delincuencia comun no diferenciada,Lesiones personales,9
+Hurto / Delincuencia comun no diferenciada,Hurto de motocicletas,4
+Hurto / Delincuencia comun no diferenciada,Hurto a residencias,2
+Hurto a comercio,No DAI,276
+Hurto a comercio,Hurto a comercio,249
+Hurto a comercio,Hurto (modalidad no identificada),158
+Hurto a comercio,Hurto a personas,112
+Hurto a comercio,Hurto de automotores,61
+Hurto a comercio,Hurto a residencias,60
+Hurto a comercio,Homicidio,57
+Hurto a comercio,Lesiones personales,24
+Hurto a comercio,Hurto a entidades financieras,10
+Hurto a comercio,Delitos sexuales,8
+Hurto a comercio,Extorsión,7
+Hurto a comercio,Violencia intrafamiliar,7
+Hurto a comercio,Hurto de motocicletas,5
+Hurto a personas,Hurto a personas,248
+Hurto a personas,Hurto a comercio,41
+Hurto a personas,No DAI,32
+Hurto a personas,Hurto (modalidad no identificada),5
+Hurto a personas,Hurto a residencias,5
+Hurto a personas,Homicidio,4
+Hurto a personas,Hurto de automotores,4
+Hurto a personas,Hurto a entidades financieras,3
+Hurto a personas,Lesiones personales,3
+Hurto a residencias,Hurto a residencias,65
+Hurto a residencias,No DAI,18
+Hurto a residencias,Hurto (modalidad no identificada),9
+Hurto a residencias,Hurto a personas,5
+Hurto a residencias,Hurto a comercio,1
+Hurto a residencias,Hurto de automotores,1
+Hurto de automotores y autopartes,Hurto de automotores,342
+Hurto de automotores y autopartes,Hurto (modalidad no identificada),17
+Hurto de automotores y autopartes,No DAI,13
+Hurto de automotores y autopartes,Hurto a personas,9
+Hurto de automotores y autopartes,Homicidio,5
+Hurto de automotores y autopartes,Extorsión,2
+Hurto de automotores y autopartes,Hurto a residencias,1
+Hurto de automotores y autopartes,Hurto de motocicletas,1
+Hurto de automotores y autopartes,Lesiones personales,1
+Hurto de bicicletas,Hurto a personas,70
+Hurto de bicicletas,No DAI,20
+Hurto de bicicletas,Hurto (modalidad no identificada),11
+Hurto de bicicletas,Hurto de motocicletas,4
+Hurto de bicicletas,Hurto de automotores,3
+Hurto de bicicletas,Homicidio,2
+Hurto de bicicletas,Hurto a comercio,2
+Hurto de bicicletas,Lesiones personales,2
+Hurto de bicicletas,Hurto a residencias,1
+Hurto de bicicletas,Violencia intrafamiliar,1
+Hurto de celulares,Hurto a personas,141
+Hurto de celulares,No DAI,8
+Hurto de celulares,Hurto (modalidad no identificada),5
+Hurto de celulares,Hurto de automotores,4
+Hurto de celulares,Hurto de motocicletas,3
+Hurto de celulares,Lesiones personales,3
+Hurto de celulares,Homicidio,2
+Hurto de celulares,Hurto a comercio,1
+Hurto de celulares,Hurto a residencias,1
+Hurto de motocicletas,Hurto de motocicletas,96
+Hurto de motocicletas,Hurto de automotores,57
+Hurto de motocicletas,Hurto a personas,26
+Hurto de motocicletas,Hurto (modalidad no identificada),22
+Hurto de motocicletas,No DAI,16
+Hurto de motocicletas,Hurto a comercio,10
+Hurto de motocicletas,Homicidio,2
+Hurto de motocicletas,Hurto a entidades financieras,2
+Hurto de motocicletas,Hurto a residencias,2
+Hurto de motocicletas,Lesiones personales,1
+Lesiones personales,Lesiones personales,24
+Lesiones personales,Hurto (modalidad no identificada),7
+Lesiones personales,Hurto a personas,5
+Lesiones personales,No DAI,4
+Lesiones personales,Homicidio,2
+Operatividad y capturas policiales,Hurto (modalidad no identificada),74
+Operatividad y capturas policiales,No DAI,63
+Operatividad y capturas policiales,Hurto de automotores,35
+Operatividad y capturas policiales,Hurto a personas,21
+Operatividad y capturas policiales,Hurto a comercio,9
+Operatividad y capturas policiales,Homicidio,6
+Operatividad y capturas policiales,Delitos sexuales,2
+Operatividad y capturas policiales,Lesiones personales,2
+Operatividad y capturas policiales,Violencia intrafamiliar,2
+Operatividad y capturas policiales,Extorsión,1
+Operatividad y capturas policiales,Hurto a residencias,1
+Politica de seguridad y prevencion,No DAI,17
+Politica de seguridad y prevencion,Hurto (modalidad no identificada),6
+Politica de seguridad y prevencion,Homicidio,5
+Politica de seguridad y prevencion,Hurto de automotores,5
+Politica de seguridad y prevencion,Hurto a personas,4
+Politica de seguridad y prevencion,Hurto a comercio,1
+Politica de seguridad y prevencion,Hurto a entidades financieras,1
+Politica de seguridad y prevencion,Hurto a residencias,1
+Trafico local de estupefacientes,No DAI,54
+Trafico local de estupefacientes,Hurto (modalidad no identificada),20
+Trafico local de estupefacientes,Hurto a comercio,2
+Trafico local de estupefacientes,Hurto a personas,2
+Trafico local de estupefacientes,Delitos sexuales,1
+Trafico local de estupefacientes,Extorsión,1
+Trafico local de estupefacientes,Homicidio,1
+Trafico local de estupefacientes,Hurto de automotores,1
