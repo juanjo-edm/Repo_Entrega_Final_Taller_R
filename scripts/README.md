@@ -60,3 +60,5 @@ flowchart TD
 * Secciones organizadas con encabezados comentados de nivel `# 1. ----` legibles por el Document Outline de RStudio.
 * Uso estricto de rutas relativas con `here::here()`: prohibido el uso de `setwd()`.
 * Sintaxis idiomática tidyverse (`dplyr`, `tidyr`, `stringr`) y operador nativo de tubería (`|>`).
+
+- **06_descriptivos_corpus.R** – Genera estadísticas descriptivas y visualizaciones del corpus de noticias (gráficos por año, localidad, mapa de calor, distribución de longitud, tono por año) y tabla resumen; incluye gráficos de `sentometrics::corpus_summarize`.
