@@ -1,0 +1,83 @@
+/* ==========================================================================
+   Estilos personalizados — Tablero Hurtos y Sentometrics en Bogotá (MECA)
+   Compatible con Bootstrap 5 (bslib)
+   ========================================================================== */
+
+:root {
+  --meca-navy: #1b365d;
+  --meca-blue: #2980b9;
+  --meca-red: #c0392b;
+  --meca-orange: #e67e22;
+  --meca-green: #27ae60;
+}
+
+.navbar {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  font-weight: 500;
+}
+
+.navbar-brand {
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+
+.bslib-value-box {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.15s ease-in-out;
+}
+
+.bslib-value-box:hover {
+  transform: translateY(-2px);
+}
+
+.card {
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.card-header {
+  font-weight: 600;
+  background-color: #f8fafc;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.badge-negativo {
+  background-color: #fdecea;
+  color: #b71c1c;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.badge-positivo {
+  background-color: #e8f5e9;
+  color: #1b5e20;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.badge-neutro {
+  background-color: #f1f5f9;
+  color: #475569;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.metodologia-box {
+  background-color: #f8fafc;
+  border-left: 4px solid #1b365d;
+  padding: 1rem 1.25rem;
+  border-radius: 0 8px 8px 0;
+  margin-bottom: 1rem;
+}
+
+.dataTables_wrapper {
+  font-size: 0.9rem;
+}

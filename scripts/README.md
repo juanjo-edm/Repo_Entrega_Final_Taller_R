@@ -45,14 +45,18 @@ flowchart TD
    * [`02_poblacion/procesamiento_poblacion.R`](file:///scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R): Agregación demográfica y cálculo de tasas por 100k hab (`data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet`).
    * [`03_noticias/procesamiento_noticias.R`](file:///scripts/02_procesamiento/03_noticias/procesamiento_noticias.R): Limpieza NLP del cuerpo editorial y clasificación en 11 DAI oficiales SDSCJ (`data/processed/03_noticias/noticias_procesadas.parquet`).
 
-3. **Análisis Cuantitativo de Sentimiento:**
-   * [`03_analisis_sentometrics.R`](file:///scripts/03_analisis_sentometrics.R): Aplica el diccionario léxico de valencia NRC en español, calcula la polaridad neta proporcional por documento y fusiona las métricas con el panel delictivo oficial.
+3. **Agrupamiento Territorial ($K$-Means):**
+   * [`04_clustering_kmeans.R`](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/04_clustering_kmeans.R): Estandariza tasas ($Z$-scores), evalúa métricas de silueta e inercia ($K = 2 \dots 5$) y clasifica las 19 localidades urbanas en $K^* = 3$ perfiles (*Céntrico e Institucional*, *Comercial y Automotor*, *Residencial y Periférico*).
 
-4. **Clustering Territorial ($K$-Means):**
-   * [`04_clustering_kmeans.R`](file:///scripts/04_clustering_kmeans.R): Estandariza tasas, evalúa métricas de silueta y agrupa localidades con perfiles similares de inseguridad ($K^* = 3$).
+4. **Pipeline Completo de Sentimiento (`sentometrics` — Tareas `T-01` a `T-17`):**
+   * [`03_analisis_sentometrics.R`](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/03_analisis_sentometrics.R): Construye el objeto `sento_corpus` con 26 features sin guiones (`01_sento_corpus.rds`), integra los léxicos `nrc_es` y `crimen_es` con modificadores de valencia (`02_lexicons_es.rds`), calcula puntajes con `how = "proportionalPol"` (`03_sentiment_scores.rds`), extrae noticias extremas con `peakdocs()` (`04_peak_docs.rds`), construye las 364 series mensuales con `sento_measures()` (`05_sento_measures.rds` y `06_measures_long.rds`), calcula el índice global y `peakdates()` (`07_global_index.rds`), estima el modelo regularizado Elastic Net y sus atribuciones (`08_attributions.rds`) y actualiza `panel_consolidado_localidad_anual.parquet`.
 
-5. **Exportación de Insumos para Shiny:**
-   * [`05_export_insumos_shiny.R`](file:///scripts/05_export_insumos_shiny.R): Empaqueta indicadores, clusters, sentimiento y geometrías poligonales simplificadas en un archivo binario consolidado (`data/processed/datos_consolidados_shiny.rds`) para la aplicación interactiva.
+5. **Estadísticos Descriptivos del Corpus (`T-08`):**
+   * [`06_descriptivos_corpus.R`](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/06_descriptivos_corpus.R): Genera las visualizaciones descriptivas de cobertura periodística (`figura3` a `figura9` en `output/figures/`), incluyendo los diagnósticos S3 de `sentometrics::corpus_summarize()`.
+
+6. **Exportación de Insumos para Shiny y Orquestación:**
+   * [`05_export_insumos_shiny.R`](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/05_export_insumos_shiny.R): Empaqueta indicadores, clústeres, los objetos `sentometrics` y las geometrías poligonales (`EPSG:4326`) en `data/processed/datos_consolidados_shiny.rds`.
+   * [`master.R`](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/scripts/master.R): Script maestro que ejecuta en orden secuencial todos los módulos anteriores desde una sesión limpia.
 
 ---
 

@@ -91,15 +91,15 @@ Repo_Entrega_Final_Taller_R/
 │   │   ├── delitos/                          # Capa SDSCJ (localidades_bogota_raw.geojson)
 │   │   ├── poblacion/                        # Proyecciones SDS (poblacion_localidades_raw.parquet)
 │   │   └── noticias/                         # Noticias consolidadas (noticias_google_news_consolidado.parquet)
-│   └── processed/                            # Bases limpias listas para analizar (1 archivo por script)
-│       ├── README.md                         # Diccionario de datos y esquemas de variables
+│   └── processed/                            # Bases limpias listas para analizar
+│       ├── README.md                         # Diccionario de datos y objetos S3 (.rds)
 │       ├── 01_delitos/                       # Conteo anual de delitos (delitos_localidad_anual.parquet)
 │       ├── 02_poblacion/                     # Tasas por 100k hab (panel_delitos_poblacion_localidad.parquet)
 │       ├── 03_noticias/                      # Corpus depurado con 11 DAI (noticias_procesadas.parquet)
-│       ├── panel_consolidado_localidad_anual.parquet # Fusión de tasas delictivas y sentimiento
-│       ├── clusters_localidades_kmeans.parquet       # Asignaciones de clústeres K-means
-│       └── datos_consolidados_shiny.rds              # Insumo consolidado para la aplicación Shiny
-
+│       ├── 01_sento_corpus.rds .. 08_attributions.rds # Los 8 artefactos S3 del contrato sentometrics
+│       ├── panel_consolidado_localidad_anual.parquet  # Fusión de tasas delictivas y sentimiento
+│       ├── clusters_localidades_kmeans.parquet        # Asignaciones de clústeres K-means (K* = 3)
+│       └── datos_consolidados_shiny.rds               # Insumo consolidado para la aplicación Shiny
 │
 ├── output/                                   # Resultados generados
 │   ├── tables/                               # Tablas resumen (.csv, .tex)
@@ -107,6 +107,7 @@ Repo_Entrega_Final_Taller_R/
 │
 ├── scripts/                                  # Código en R
 │   ├── README.md                             # Explicación del pipeline
+│   ├── master.R                              # Orquestador reproducible de punta a punta
 │   ├── 01_ingesta/                           # Exclusivo para descarga de datos crudos
 │   │   ├── 01_delitos/                       # Ingesta de delitos oficiales (SDSCJ)
 │   │   ├── 02_poblacion/                     # Ingesta de proyecciones demográficas (SDS)
@@ -115,9 +116,10 @@ Repo_Entrega_Final_Taller_R/
 │   │   ├── 01_delitos/                       # Procesamiento de delitos SDSCJ
 │   │   ├── 02_poblacion/                     # Procesamiento demográfico y cálculo de tasas
 │   │   └── 03_noticias/                      # Limpieza de texto y depuración DAI
-│   ├── 03_analisis_sentometrics.R            # Medición de sentimiento textual
-│   ├── 04_clustering_kmeans.R                # Agrupamiento no supervisado K-means
-│   └── 05_export_insumos_shiny.R             # Empaquetado de artefactos para Shiny
+│   ├── 03_analisis_sentometrics.R            # Pipeline completo sentometrics (Fases 1 a 4: 01 a 08 .rds)
+│   ├── 04_clustering_kmeans.R                # Agrupamiento no supervisado K-means (K* = 3)
+│   ├── 05_export_insumos_shiny.R             # Empaquetado de artefactos para Shiny
+│   └── 06_descriptivos_corpus.R              # Estadísticos descriptivos del corpus (corpus_summarize)
 │
 ├── notebook/                                 # Documentos Quarto
 │   ├── README.md                             # Instrucciones para compilar
@@ -162,8 +164,9 @@ paquetes <- c(
 install.packages(setdiff(paquetes, rownames(installed.packages())))
 ```
 
-### Paso 3: Correr el pipeline de datos
+### Paso 3: Correr el pipeline de datos completo
 ```r
+source(here::here("scripts", "master.R"))
 ```
 
 ### Paso 4: Compilar el informe en PDF (Entrega 1)
