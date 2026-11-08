@@ -1,5 +1,5 @@
 ---
-title: "Modelado Metodológico: Clústeres Territoriales de Criminalidad y Sentometrics en Bogotá (2022–2026)"
+title: "Modelado Metodológico: Clústeres Territoriales de Criminalidad y Sentometrics en Bogotá (2022–septiembre de 2026)"
 subtitle: "Taller de Programación en R — Maestría en Economía Aplicada (MECA)"
 author:
   - "Juan José Echeverry — 202616233"
@@ -9,6 +9,7 @@ author:
   - "Olga Lucía Ramírez Contreras — 202624900"
   - "Juan Esteban Carvajal Cruz — 202614312"
 date: "2026-11-07"
+lang: es
 format:
   html:
     theme: flatly
@@ -22,6 +23,36 @@ format:
     code-tools: true
     fig-width: 9
     fig-height: 5.5
+  pdf:
+    pdf-engine: pdflatex
+    documentclass: article
+    papersize: letter
+    fontsize: 10pt
+    linestretch: 1.15
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    colorlinks: true
+    geometry:
+      - top=25mm
+      - bottom=25mm
+      - left=25mm
+      - right=25mm
+    fig-width: 7.5
+    fig-height: 4.5
+    include-in-header:
+      text: |
+        \usepackage{microtype}
+        \usepackage{charter}
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\},fontsize=\small}
+        \DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}
+        \DeclareUnicodeCharacter{03BB}{\ensuremath{\lambda}}
+        \DeclareUnicodeCharacter{03BC}{\ensuremath{\mu}}
+        \DeclareUnicodeCharacter{0177}{\ensuremath{\hat{y}}}
+        \DeclareUnicodeCharacter{00B2}{\ensuremath{^2}}
+        \DeclareUnicodeCharacter{2714}{\ensuremath{\checkmark}}
+        \DeclareUnicodeCharacter{2605}{\ensuremath{\star}}
 execute:
   echo: true
   warning: false
@@ -47,7 +78,7 @@ Este documento consume directamente los insumos procesados en `data/processed/`,
 
 ```{r}
 #| label: setup-opciones
-# 1.1 Opciones globales y semilla ----
+# Limpieza del entorno de trabajo, desactivación de notación científica y fijación de semilla
 rm(list = ls())
 options(scipen = 999)
 set.seed(20261014)
@@ -57,7 +88,7 @@ set.seed(20261014)
 
 ```{r}
 #| label: setup-librerias
-# 1.2 Librerías del ecosistema R ----
+# Carga de paquetes para manipulación de datos, clustering, visualización y análisis textual
 library(here)
 library(conflicted)
 library(arrow)
@@ -68,6 +99,8 @@ library(stringr)
 library(stringi)
 library(data.table)
 library(ggplot2)
+library(ggrepel)
+library(plotly)
 library(scales)
 library(knitr)
 library(cluster)
@@ -76,30 +109,36 @@ library(syuzhet)
 library(glmnet)
 library(sf)
 
-# 1.3 Resolución explícita de conflictos ({conflicted}) ----
+# Preferencia explícita de funciones en caso de colisión de nombres entre paquetes
 conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 conflict_prefer("first",  "dplyr", quiet = TRUE)
+conflict_prefer("layout", "plotly", quiet = TRUE)
 ```
 
 ## Definición de rutas relativas con `{here}`
 
 ```{r}
 #| label: setup-rutas
-# 1.4 Definición de rutas relativas ({here}) ----
-ruta_proc          <- here::here("data", "processed")
-archivo_delitos_p  <- file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_localidad.parquet")
-archivo_noticias_p <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
-archivo_panel_c    <- file.path(ruta_proc, "panel_consolidado_localidad_anual.parquet")
-archivo_clusters_p <- file.path(ruta_proc, "clusters_localidades_kmeans.parquet")
-archivo_geo_raw    <- here::here("data", "raw", "delitos", "localidades_bogota_raw.geojson")
+# Construcción de rutas relativas a partir de la raíz del proyecto
+ruta_proc <- here("data", "processed")
 
-stopifnot(file.exists(archivo_delitos_p))
-stopifnot(file.exists(archivo_noticias_p))
-stopifnot(file.exists(archivo_panel_c))
-stopifnot(file.exists(archivo_clusters_p))
-stopifnot(file.exists(archivo_geo_raw))
+archivo_delitos_p <- file.path(
+  ruta_proc, "02_poblacion", "panel_delitos_poblacion_localidad.parquet"
+)
+archivo_noticias_p <- file.path(
+  ruta_proc, "03_noticias", "noticias_procesadas.parquet"
+)
+archivo_panel_c <- file.path(
+  ruta_proc, "panel_consolidado_localidad_anual.parquet"
+)
+archivo_clusters_p <- file.path(
+  ruta_proc, "clusters_localidades_kmeans.parquet"
+)
+archivo_geo_raw <- here(
+  "data", "raw", "delitos", "localidades_bogota_raw.geojson"
+)
 ```
 
 ---
@@ -120,17 +159,16 @@ donde $m \in \{\text{personas}, \text{residencias}, \text{motocicletas}, \text{t
 
 ## Carga y estadísticas descriptivas del panel delictivo
 
+A continuación, importamos el panel anual de delitos y población de las 19 localidades urbanas para el periodo 2022–septiembre de 2026 ($N = 95$ observaciones localidad-año, con corte a septiembre para el año 2026) y resumimos los momentos centrales y de dispersión de las cuatro tasas delictivas.
+
 ```{r}
 #| label: tbl-descriptivas-tasas
-#| tbl-cap: "Estadísticas descriptivas de tasas anuales de hurto por 100.000 habitantes en Bogotá (2022–2026)"
-# 2.1 Carga del panel delictivo y tabla descriptiva ----
-panel_delitos <- arrow::read_parquet(archivo_delitos_p)
-noticias_df   <- arrow::read_parquet(archivo_noticias_p)
+#| tbl-cap: "Estadísticas descriptivas de tasas anuales de hurto por 100.000 habitantes en Bogotá (2022–septiembre de 2026)"
+# Lectura de los archivos Parquet del panel delictivo y del corpus de noticias
+panel_delitos <- read_parquet(archivo_delitos_p)
+noticias_df   <- read_parquet(archivo_noticias_p)
 
-stopifnot(nrow(panel_delitos) == 95)
-stopifnot(length(unique(panel_delitos$codigo_localidad)) == 19)
-stopifnot(nrow(noticias_df) == 3916)
-
+# Construcción de tabla resumen con media, desviación estándar, mediana y valores extremos
 resumen_tasas <- tibble(
   modalidad = c(
     "Hurto a personas",
@@ -170,7 +208,8 @@ resumen_tasas <- tibble(
   )
 )
 
-knitr::kable(
+# Formateo de la tabla descriptiva para salida HTML
+kable(
   resumen_tasas,
   digits    = 1,
   col.names = c("Modalidad Delictiva", "Media", "Desv. Est.", "Mediana", "Mínimo", "Máximo")
@@ -179,10 +218,12 @@ knitr::kable(
 
 ## Ranking territorial de criminalidad promedio
 
+Al promediar las tasas anuales durante el periodo 2022–septiembre de 2026 para cada localidad, se observa la fuerte concentración de denuncias por habitante residente en el corredor central y comercial de la ciudad (Los Mártires, La Candelaria, Chapinero, Santa Fe y Teusaquillo).
+
 ```{r}
 #| label: fig-ranking-localidades
-#| fig-cap: "Tasa promedio anual de hurto total por cada 100.000 habitantes por localidad (2022–2026)"
-# 2.2 Ranking transversal de localidades ----
+#| fig-cap: "Tasa promedio anual de hurto total por cada 100.000 habitantes por localidad (2022–septiembre de 2026)"
+# Agrupación por localidad y cálculo de promedios multianuales ordenados de mayor a menor
 ranking_localidades <- panel_delitos |>
   group_by(localidad) |>
   summarise(
@@ -193,19 +234,20 @@ ranking_localidades <- panel_delitos |>
   ) |>
   arrange(desc(tasa_media_total))
 
+# Gráfico de barras horizontales con etiquetas numéricas formateadas
 ggplot(ranking_localidades, aes(x = reorder(localidad, tasa_media_total), y = tasa_media_total)) +
   geom_col(fill = "#1b365d", width = 0.72) +
   geom_text(
-    aes(label = scales::comma(round(tasa_media_total))),
+    aes(label = comma(round(tasa_media_total))),
     hjust = -0.15,
     size  = 3.2,
     color = "#333333"
   ) +
   coord_flip() +
-  scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.15))) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
   labs(
     title    = "Incidencia Relativa de Hurto por Localidad en Bogotá",
-    subtitle = "Promedio anual de denuncias por cada 100.000 habitantes (2022–2026)",
+    subtitle = "Promedio anual de denuncias por cada 100.000 habitantes (2022–septiembre de 2026)",
     x        = NULL,
     y        = "Tasa anual combinada por 100.000 habitantes",
     caption  = "Fuente: Cálculos propios con base en SIEDCO (SDSCJ) y proyecciones poblacionales (SDS)."
@@ -222,53 +264,126 @@ ggplot(ranking_localidades, aes(x = reorder(localidad, tasa_media_total), y = ta
 
 # Agrupamiento Territorial de Criminalidad con $K$-Means {#sec-kmeans}
 
-## Estandarización multivariada ($Z$-scores) y criterio de silueta
+## Fundamentos del algoritmo $K$-Means
 
-Para clasificar las localidades según su estructura delictiva multivariada sin que la magnitud absoluta del hurto a personas domine a las demás modalidades, estandarizamos cada indicador con media cero y varianza unitaria ($z_{ij} = (x_{ij} - \bar{x}_j) / s_j$) y evaluamos particiones candidatas $K \in \{2, 3, 4, 5\}$ mediante el **coeficiente de silueta promedio**:
+El algoritmo **$K$-Means** (o *$K$-Medias*) es un método de aprendizaje automático **no supervisado** cuyo propósito es clasificar un conjunto de observaciones (en nuestro caso, las $N = 19$ localidades urbanas de Bogotá) en un número predeterminado $K$ de grupos o **clústeres** ($C_1, C_2, \dots, C_K$), sin partir de etiquetas previas.
+
+La intuición del algoritmo responde a dos objetivos simultáneos:
+
+1. **Máxima cohesión interna:** Que las localidades asignadas a un mismo clúster exhiban perfiles delictivos lo más parecidos posible entre sí.
+2. **Máxima separación externa:** Que los distintos clústeres sean claramente diferenciables unos de otros.
+
+En nuestra aplicación, cada localidad $i \in \{1, \dots, 19\}$ está caracterizada por un vector tridimensional de tasas promedio anuales de hurto por cada 100.000 habitantes:
 
 $$
-s(i) = \frac{b(i) - a(i)}{\max\{a(i), b(i)\}}
+\mathbf{x}_i = \left( \text{Tasa Hurto Personas}_i, \; \text{Tasa Hurto Residencias}_i, \; \text{Tasa Hurto Motocicletas}_i \right) \in \mathbb{R}^3
+$$
+
+### Necesidad de estandarizar las variables ($Z$-score)
+
+Antes de ejecutar $K$-Means es indispensable estandarizar cada variable. Como se observó en la @tbl-descriptivas-tasas, la tasa media de hurto a personas ($2.910,7$ por $100.000$ hab.) es más de **26 veces mayor** que la de hurto a residencias ($108,4$) y más de **42 veces mayor** que la de hurto a motocicletas ($68,2$).
+
+Dado que $K$-Means mide la similitud entre localidades mediante la **distancia euclidiana**, si introdujéramos las tasas en sus unidades originales, las diferencias de miles de puntos en el hurto a personas dominarían por completo la fórmula de distancia, volviendo irrelevante la información de hurto a residencias y a motocicletas. Para otorgar el mismo peso relativo a las tres modalidades delictivas, aplicamos la **estandarización $Z$-score** a cada variable $j \in \{1, 2, 3\}$:
+
+$$
+Z_{ij} = \frac{X_{ij} - \bar{X}_j}{s_j}
+$$ {#eq-zscore}
+
+donde $\bar{X}_j$ es el promedio y $s_j$ la desviación estándar de la modalidad $j$ entre las 19 localidades. Tras esta transformación, las tres variables quedan expresadas en **desviaciones estándar respecto a la media de Bogotá** (con media $0$ y varianza $1$). Un valor $Z_{ij} = +2,0$ indica que la localidad $i$ supera en dos desviaciones estándar el promedio distrital en la modalidad $j$.
+
+### Las cuatro etapas iterativas del algoritmo
+
+Una vez proyectadas las 19 localidades en el espacio estandarizado $\mathbf{z}_i = (Z_{i,\text{pers}}, Z_{i,\text{resid}}, Z_{i,\text{motos}})$, el algoritmo de Hartigan-Wong busca minimizar la **Suma de Cuadrados Intra-Clúster** (*Within-Cluster Sum of Squares*, $WSS$), también denominada **inercia interna**:
+
+$$
+\min_{C_1, \dots, C_K} \; WSS(K) = \sum_{k=1}^{K} \sum_{i \in C_k} \|\mathbf{z}_i - \boldsymbol{\mu}_k\|_2^2 = \sum_{k=1}^{K} \sum_{i \in C_k} \sum_{j=1}^{3} \left( Z_{ij} - \mu_{kj} \right)^2
+$$ {#eq-wss}
+
+donde $\boldsymbol{\mu}_k = (\mu_{k,1}, \mu_{k,2}, \mu_{k,3})$ es el **centroide** (el punto promedio o "centro de gravedad") del clúster $k$. Para encontrar esta partición óptima, el algoritmo ejecuta cuatro pasos de forma iterativa:
+
+1. **Inicialización de centroides:** Se eligen $K$ puntos iniciales en el espacio tridimensional como centroides provisionales $\boldsymbol{\mu}_1^{(0)}, \dots, \boldsymbol{\mu}_K^{(0)}$. Como una mala elección aleatoria inicial podría estancar el algoritmo en un óptimo local, configuramos `nstart = 50`: el computador repite todo el proceso desde **50 configuraciones iniciales aleatorias distintas** y conserva automáticamente la solución que logra la menor inercia interna ($WSS$).
+2. **Paso de asignación:** Para cada una de las 19 localidades, se calcula su distancia euclidiana a cada uno de los $K$ centroides:
+   $$
+   d(\mathbf{z}_i, \boldsymbol{\mu}_k) = \sqrt{(Z_{i,\text{pers}} - \mu_{k,\text{pers}})^2 + (Z_{i,\text{resid}} - \mu_{k,\text{resid}})^2 + (Z_{i,\text{motos}} - \mu_{k,\text{motos}})^2}
+   $$
+   Cada localidad se asigna al clúster cuyo centroide se encuentre más cerca.
+3. **Paso de actualización (recálculo de centroides):** Una vez formados los grupos provisionales, se recalcula la posición de cada centroide $\boldsymbol{\mu}_k$ como el promedio aritmético exacto de las coordenadas de todas las localidades que quedaron dentro de ese grupo:
+   $$
+   \boldsymbol{\mu}_k = \frac{1}{|C_k|} \sum_{i \in C_k} \mathbf{z}_i
+   $$
+4. **Criterio de convergencia:** Los pasos 2 y 3 se repiten sucesivamente. Si al actualizar los centroides alguna localidad cambia de grupo, los centros de gravedad vuelven a moverse ligeramente. El algoritmo se detiene cuando ninguna localidad cambia de clúster entre una iteración y la siguiente, garantizando que la partición ha convergido.
+
+## Selección del número óptimo de clústeres ($K^*$)
+
+Como el investigador debe especificar de antemano el número de grupos $K$, necesitamos un criterio objetivo para decidir si Bogotá se segmenta mejor en $K = 2, 3, 4 \text{ o } 5$ perfiles territoriales. Para ello combinamos dos indicadores complementarios:
+
+- **Proporción de varianza explicada ($BSS / TSS$):** La variabilidad total de los datos ($TSS$) se descompone en la dispersión interna dentro de los grupos ($WSS$) más la dispersión entre grupos distintos ($BSS$, *Between-Cluster Sum of Squares*). El cociente $BSS / TSS = 1 - (WSS / TSS)$ mide qué porcentaje de la heterogeneidad delictiva de Bogotá logra ser capturada por los $K$ perfiles.
+- **Coeficiente de Ancho de Silueta (*Silhouette Width*):** Para cada localidad $i$, compara dos distancias:
+  - $a(i)$: la distancia promedio entre la localidad $i$ y todas las demás localidades **de su mismo clúster** (mide **cohesión interna**; valores pequeños son deseables).
+  - $b(i)$: la distancia promedio entre la localidad $i$ y todas las localidades del **clúster vecino más cercano** al que $i$ no pertenece (mide **separación externa**; valores grandes son deseables).
+
+  Con estas dos magnitudes, el coeficiente de silueta de la localidad $i$ se define como:
+
+$$
+S(i) = \frac{b(i) - a(i)}{\max\{a(i), b(i)\}} \in [-1, 1]
 $$ {#eq-silueta}
+
+Un valor $S(i)$ cercano a $+1$ indica que la localidad está muy bien clasificada (muy cerca de su grupo y lejos de los demás); un valor cercano a $0$ indica que se ubica en la frontera entre dos grupos; y un valor negativo indica una posible clasificación errónea. El **número óptimo de clústeres $K^*$** es aquel que maximiza la **silueta promedio** $\bar{S}(K) = \frac{1}{19}\sum_{i=1}^{19} S(i)$.
 
 ```{r}
 #| label: tbl-diagnostico-kmeans
 #| tbl-cap: "Diagnóstico del número óptimo de agrupamientos K mediante coeficiente de silueta e inercia intra-clúster"
-# 3.1 Matriz estandarizada y diagnóstico de K óptimo ----
-df_clustering <- arrow::read_parquet(archivo_clusters_p)
+# Carga de la tabla de clústeres generada por el pipeline de agrupamiento
+df_clustering <- read_parquet(archivo_clusters_p)
 
+# Extracción de las 3 tasas de hurto en una matriz numérica indexada por localidad
 mat_clustering <- df_clustering |>
   select(tasa_personas_prom, tasa_resid_prom, tasa_motos_prom) |>
   as.matrix()
 rownames(mat_clustering) <- df_clustering$localidad
-mat_escalada <- scale(mat_clustering)
 
+# Normalización por columnas (media 0 y desviación estándar 1) y matriz de distancias
+mat_escalada  <- scale(mat_clustering)
 dist_euclidea <- dist(mat_escalada)
+
+# Inicialización de la tabla donde se almacenarán las métricas para K = 2, 3, 4 y 5
 diagnostico_k <- tibble(
   k             = 2:5,
   silueta_media = numeric(4),
-  wss           = numeric(4)
+  wss           = numeric(4),
+  bss_tss_pct   = numeric(4)
 )
 
+# Bucle de evaluación de kmeans() con 50 arranques aleatorios para cada valor candidato de K
 for (i in seq_along(2:5)) {
   k_val <- (2:5)[i]
   set.seed(20261014)
   km_temp  <- kmeans(mat_escalada, centers = k_val, nstart = 50)
-  sil_temp <- cluster::silhouette(km_temp$cluster, dist_euclidea)
+  sil_temp <- silhouette(km_temp$cluster, dist_euclidea)
   diagnostico_k$silueta_media[i] <- mean(sil_temp[, 3])
   diagnostico_k$wss[i]           <- km_temp$tot.withinss
+  diagnostico_k$bss_tss_pct[i]   <- (km_temp$betweenss / km_temp$totss) * 100
 }
 
-knitr::kable(
+# Impresión de la tabla comparativa de métricas de validación interna
+kable(
   diagnostico_k,
-  digits    = 4,
-  col.names = c("Número de Clústeres (K)", "Silueta Promedio", "WSS (Inercia Interna)")
+  digits    = c(0, 4, 2, 2),
+  col.names = c(
+    "Número de Clústeres (K)",
+    "Silueta Promedio",
+    "WSS (Inercia Interna)",
+    "Varianza Explicada (BSS/TSS %)"
+  )
 )
 ```
+
+Como reporta la @tbl-diagnostico-kmeans y se visualiza en la @fig-diagnostico-silueta, el coeficiente de silueta promedio alcanza su **máximo global en $K^* = 3$ ($\bar{S} = 0,5416$)**, reduciendo la inercia interna ($WSS$) de $54,00$ a $13,58$ y explicando el **$74,85\%$ de la varianza tridimensional** del hurto en Bogotá.
 
 ```{r}
 #| label: fig-diagnostico-silueta
 #| fig-cap: "Coeficiente de silueta promedio para K entre 2 y 5 (óptimo global en K* = 3)"
-# 3.2 Visualización del criterio de silueta ----
+# Gráfico de línea del coeficiente de silueta con línea vertical de referencia en K* = 3
 ggplot(diagnostico_k, aes(x = k, y = silueta_media)) +
   geom_line(color = "#2980b9", linewidth = 1) +
   geom_point(color = "#2980b9", size = 3.5) +
@@ -290,10 +405,16 @@ ggplot(diagnostico_k, aes(x = k, y = silueta_media)) +
 
 ## Caracterización de perfiles delictivos ($K^* = 3$)
 
+Dado que el algoritmo $K$-Means asigna números enteros arbitrarios ($1, 2, 3$) a cada grupo según el azar de los puntos iniciales, en el script de modelado identificamos cada perfil de forma determinística evaluando la posición económica de sus **centroides**:
+
+- **Clúster 1 — Céntrico e Institucional ($n = 5$ localidades):** Agrupa a **La Candelaria, Chapinero, Santa Fe, Teusaquillo y Barrios Unidos**. Su centroide presenta las mayores tasas medias de hurto a personas ($5.834,7$ por $100.000$ hab.) y de hurto a residencias ($175,9$ por $100.000$ hab.). Corresponde al corredor central, financiero, universitario e institucional de Bogotá, donde una población residente reducida convive con millones de visitantes y trabajadores diarios (población flotante).
+- **Clúster 2 — Comercial y Automotor ($n = 2$ localidades):** Compuesto por **Los Mártires y Antonio Nariño**. Su centroide registra el valor extremo en **hurto a motocicletas** ($153,0$ por $100.000$ hab., más del doble que cualquier otro grupo), acompañado de una alta tasa de hurto a personas ($5.727,9$) y residencias ($150,9$). Captura la dinámica de zonas de comercio mayorista, talleres mecánicos y venta de autopartes.
+- **Clúster 3 — Residencial y Periférico ($n = 12$ localidades):** Reúne a **Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa y Usme**. Su centroide exhibe tasas per cápita moderadas en las tres modalidades ($1.222,8$ en personas; $73,3$ en residencias; $57,1$ en motocicletas) debido a sus elevados denominadores demográficos de población residente.
+
 ```{r}
 #| label: tbl-perfiles-cluster
 #| tbl-cap: "Perfiles delictivos promedio por clúster territorial (Tasas anuales por 100.000 habitantes)"
-# 3.3 Resumen de centroides por clúster ----
+# Cálculo de promedios de las tasas delictivas y listado de localidades por clúster
 perfiles_resumen <- df_clustering |>
   group_by(cluster_id, cluster_nombre) |>
   summarise(
@@ -307,7 +428,8 @@ perfiles_resumen <- df_clustering |>
   ) |>
   arrange(cluster_id)
 
-knitr::kable(
+# Renderizado de la tabla resumen de centroides en unidades originales
+kable(
   perfiles_resumen |> select(-cluster_id),
   digits    = 1,
   col.names = c(
@@ -317,30 +439,282 @@ knitr::kable(
 )
 ```
 
+## Visualización tridimensional y bidimensional de los clústeres
+
+Dado que el modelo $K$-Means opera en el espacio de **tres dimensiones** $(\text{Hurto Personas}, \text{Hurto Residencias}, \text{Hurto Motocicletas})$, la forma más fiel de inspeccionar la partición geométrica es mediante un **cubo interactivo tridimensional** (@fig-3d-clusters), donde los círculos representan las 19 localidades y los diamantes representan el centro de gravedad (centroide $\boldsymbol{\mu}_k$) de cada clúster. Adicionalmente, la @fig-biplot-clusters presenta la proyección bidimensional estática codificando la tercera dimensión mediante el tamaño de cada punto.
+
+```{r}
+#| label: fig-3d-clusters
+#| fig-height: 6.8
+#| fig-cap: "Representación tridimensional interactiva de las 19 localidades, sus radios de pertenencia y los 3 centroides de K-Means"
+# Cálculo de las coordenadas promedio (centroides) de cada clúster en las 3 dimensiones
+centroides_3d <- df_clustering |>
+  group_by(cluster_nombre) |>
+  summarise(
+    centro_pers  = mean(tasa_personas_prom),
+    centro_resid = mean(tasa_resid_prom),
+    centro_motos = mean(tasa_motos_prom),
+    .groups = "drop"
+  )
+
+# Unión de cada localidad con las coordenadas del centroide de su respectivo clúster
+df_plot_3d <- df_clustering |>
+  left_join(centroides_3d, by = "cluster_nombre") |>
+  mutate(
+    tooltip_localidad = paste0(
+      "<b>", localidad, "</b><br>",
+      "Clúster: ", cluster_nombre, "<br>",
+      "Hurto Personas: ", comma(round(tasa_personas_prom, 1)), " por 100k hab.<br>",
+      "Hurto Residencias: ", comma(round(tasa_resid_prom, 1)), " por 100k hab.<br>",
+      "Hurto Motos: ", comma(round(tasa_motos_prom, 1)), " por 100k hab.<br>",
+      "Silueta S(i): ", round(silueta_localidad, 3)
+    )
+  )
+
+# Construcción de segmentos 3D (radios) que conectan cada localidad con su centroide
+segmentos_3d <- bind_rows(
+  lapply(seq_len(nrow(df_plot_3d)), function(i) {
+    fila <- df_plot_3d[i, ]
+    tibble(
+      x = c(fila$tasa_personas_prom, fila$centro_pers, NA_real_),
+      y = c(fila$tasa_resid_prom,    fila$centro_resid, NA_real_),
+      z = c(fila$tasa_motos_prom,    fila$centro_motos, NA_real_),
+      cluster_nombre = fila$cluster_nombre
+    )
+  })
+)
+
+# Paleta de colores institucional asignada a cada perfil territorial
+colores_clusters <- c(
+  "Céntrico e Institucional" = "#c0392b",
+  "Comercial y Automotor"    = "#e67e22",
+  "Residencial y Periférico" = "#27ae60"
+)
+
+# Construcción del cubo 3D: interactivo en HTML (plotly) y proyección perspectiva en PDF
+if (is_html_output()) {
+  plot_ly() |>
+    add_trace(
+      data       = df_plot_3d,
+      x          = ~tasa_personas_prom,
+      y          = ~tasa_resid_prom,
+      z          = ~tasa_motos_prom,
+      color      = ~cluster_nombre,
+      colors     = colores_clusters,
+      text       = ~localidad,
+      hovertext  = ~tooltip_localidad,
+      hoverinfo  = "text",
+      type       = "scatter3d",
+      mode       = "markers",
+      textposition = "top center",
+      textfont   = list(size = 9, color = "#2c3e50"),
+      marker     = list(
+        size    = 7,
+        opacity = 0.92,
+        line    = list(color = "white", width = 1.2)
+      )
+    ) |>
+    add_trace(
+      data       = segmentos_3d,
+      x          = ~x,
+      y          = ~y,
+      z          = ~z,
+      color      = ~cluster_nombre,
+      colors     = colores_clusters,
+      type       = "scatter3d",
+      mode       = "lines",
+      line       = list(width = 2, dash = "solid"),
+      opacity    = 0.35,
+      hoverinfo  = "none",
+      showlegend = FALSE
+    ) |>
+    add_trace(
+      data      = centroides_3d,
+      x         = ~centro_pers,
+      y         = ~centro_resid,
+      z         = ~centro_motos,
+      color     = ~cluster_nombre,
+      colors    = colores_clusters,
+      hovertext = ~paste0(
+        "<b>★ Centroide: ", cluster_nombre, "</b><br>",
+        "Media Personas: ", comma(round(centro_pers, 1)), " por 100k hab.<br>",
+        "Media Residencias: ", comma(round(centro_resid, 1)), " por 100k hab.<br>",
+        "Media Motos: ", comma(round(centro_motos, 1)), " por 100k hab."
+      ),
+      hoverinfo  = "text",
+      type       = "scatter3d",
+      mode       = "markers",
+      showlegend = FALSE,
+      marker     = list(
+        size   = 11,
+        symbol = "diamond",
+        line   = list(color = "#1a1a1a", width = 2)
+      )
+    ) |>
+    layout(
+      title = list(
+        text = "<b>Espacio Tridimensional de Clústeres K-Means (K* = 3)</b><br><sup>Esferas: 19 localidades | Diamantes: Centroides μ_k | Líneas: Distancia al centroide (pase el cursor para ver detalles)</sup>",
+        font = list(size = 14)
+      ),
+      margin = list(l = 0, r = 0, b = 15, t = 55),
+      scene = list(
+        aspectmode = "cube",
+        xaxis = list(
+          title          = list(text = "Hurto Personas (tasa/100k)", font = list(size = 11)),
+          tickfont       = list(size = 9),
+          showbackground = TRUE,
+          backgroundcolor = "#f4f6f9",
+          gridcolor      = "#ffffff",
+          zerolinecolor  = "#dcdde1"
+        ),
+        yaxis = list(
+          title          = list(text = "Hurto Residencias (tasa/100k)", font = list(size = 11)),
+          tickfont       = list(size = 9),
+          showbackground = TRUE,
+          backgroundcolor = "#f4f6f9",
+          gridcolor      = "#ffffff",
+          zerolinecolor  = "#dcdde1"
+        ),
+        zaxis = list(
+          title          = list(text = "Hurto Motos (tasa/100k)", font = list(size = 11)),
+          tickfont       = list(size = 9),
+          showbackground = TRUE,
+          backgroundcolor = "#f4f6f9",
+          gridcolor      = "#ffffff",
+          zerolinecolor  = "#dcdde1"
+        ),
+        camera = list(eye = list(x = 1.45, y = -1.45, z = 0.75))
+      ),
+      updatemenus = list(
+        list(
+          type      = "buttons",
+          direction = "right",
+          x         = 0.02,
+          y         = 0.96,
+          bgcolor   = "#ffffff",
+          bordercolor = "#cccccc",
+          font      = list(size = 11),
+          buttons   = list(
+            list(
+              method = "restyle",
+              args   = list("mode", list("markers", "markers", "markers", "lines", "lines", "lines", "markers", "markers", "markers")),
+              label  = "Ocultar nombres"
+            ),
+            list(
+              method = "restyle",
+              args   = list("mode", list("markers+text", "markers+text", "markers+text", "lines", "lines", "lines", "markers", "markers", "markers")),
+              label  = "Mostrar nombres"
+            )
+          )
+        )
+      ),
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.02)
+    )
+} else {
+  # Proyección tridimensional estática para compilación en PDF
+  par(mar = c(3.2, 2, 2.5, 2), xpd = TRUE)
+  rango_x <- range(df_plot_3d$tasa_personas_prom) * c(0.9, 1.08)
+  rango_y <- range(df_plot_3d$tasa_resid_prom)    * c(0.9, 1.08)
+  rango_z <- range(df_plot_3d$tasa_motos_prom)    * c(0.9, 1.08)
+
+  matriz_3d <- persp(
+    x        = rango_x,
+    y        = rango_y,
+    z        = matrix(rango_z[1], nrow = 2, ncol = 2),
+    zlim     = rango_z,
+    theta    = -38,
+    phi      = 22,
+    expand   = 0.75,
+    col      = "#f4f6f9",
+    border   = "#bdc3c7",
+    ticktype = "detailed",
+    nticks   = 4,
+    xlab     = "Hurto Personas (tasa/100k)",
+    ylab     = "Hurto Residencias (tasa/100k)",
+    zlab     = "Hurto Motos (tasa/100k)",
+    main     = "Espacio Tridimensional de Clústeres K-Means (K* = 3)"
+  )
+
+  # Dibujo de radios hacia los centroides
+  for (i in seq_len(nrow(df_plot_3d))) {
+    seg_proj <- trans3d(
+      x = c(df_plot_3d$tasa_personas_prom[i], df_plot_3d$centro_pers[i]),
+      y = c(df_plot_3d$tasa_resid_prom[i],    df_plot_3d$centro_resid[i]),
+      z = c(df_plot_3d$tasa_motos_prom[i],    df_plot_3d$centro_motos[i]),
+      pmat = matriz_3d
+    )
+    lines(seg_proj, col = colores_clusters[df_plot_3d$cluster_nombre[i]], lwd = 1.1)
+  }
+
+  # Dibujo de las 19 localidades y los 3 centroides
+  pts_loc <- trans3d(
+    df_plot_3d$tasa_personas_prom,
+    df_plot_3d$tasa_resid_prom,
+    df_plot_3d$tasa_motos_prom,
+    pmat = matriz_3d
+  )
+  points(
+    pts_loc,
+    pch = 21,
+    bg  = colores_clusters[df_plot_3d$cluster_nombre],
+    col = "white",
+    cex = 1.5
+  )
+
+  pts_cen <- trans3d(
+    centroides_3d$centro_pers,
+    centroides_3d$centro_resid,
+    centroides_3d$centro_motos,
+    pmat = matriz_3d
+  )
+  points(
+    pts_cen,
+    pch = 23,
+    bg  = colores_clusters[centroides_3d$cluster_nombre],
+    col = "black",
+    cex = 2.2,
+    lwd = 1.5
+  )
+  legend(
+    "bottom",
+    inset  = -0.10,
+    legend = names(colores_clusters),
+    pt.bg  = colores_clusters,
+    pch    = 21,
+    horiz  = TRUE,
+    bty    = "n",
+    cex    = 0.85
+  )
+}
+```
+
 ```{r}
 #| label: fig-biplot-clusters
-#| fig-cap: "Dispersión de las 19 localidades en el espacio de tasas de hurto a personas y motocicletas"
-# 3.4 Biplot de clústeres territoriales ----
+#| fig-cap: "Proyección bidimensional de las 19 localidades en el espacio de tasas de hurto (el tamaño del punto representa el hurto a residencias)"
+# Gráfico de dispersión 2D con tamaño proporcional a la tasa de hurto a residencias
 ggplot(
   df_clustering,
-  aes(x = tasa_personas_prom, y = tasa_motos_prom, color = cluster_nombre)
+  aes(
+    x     = tasa_personas_prom,
+    y     = tasa_motos_prom,
+    color = cluster_nombre,
+    size  = tasa_resid_prom
+  )
 ) +
-  geom_point(size = 4, alpha = 0.88) +
-  geom_text(
+  geom_point(alpha = 0.88) +
+  geom_text_repel(
     aes(label = localidad),
-    vjust = -0.8,
-    size  = 3.2,
-    show.legend = FALSE
+    size          = 3.2,
+    fontface      = "bold",
+    box.padding   = 0.4,
+    point.padding = 0.3,
+    max.overlaps  = 20,
+    show.legend   = FALSE
   ) +
-  scale_color_manual(
-    values = c(
-      "Céntrico e Institucional" = "#c0392b",
-      "Comercial y Automotor"    = "#e67e22",
-      "Residencial y Periférico" = "#27ae60"
-    )
-  ) +
-  scale_x_continuous(labels = scales::comma) +
-  scale_y_continuous(labels = scales::comma) +
+  scale_color_manual(values = colores_clusters) +
+  scale_size_continuous(range = c(3, 8.5), name = "Hurto Residencias\n(por 100.000 hab.)") +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(labels = comma) +
   labs(
     title    = "Tipología Territorial del Hurto en Bogotá",
     subtitle = "Agrupamiento no supervisado con K-Means (K* = 3)",
