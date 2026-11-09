@@ -474,6 +474,8 @@ objeto_06_measures_long <- list(
 
 archivo_06_long <- file.path(ruta_proc, "06_measures_long.rds")
 saveRDS(objeto_06_measures_long, archivo_06_long)
+archivo_06_wide <- file.path(ruta_proc, "06_measures_wide.rds")
+saveRDS(dt_measures_wide, archivo_06_wide)
 message("✔ [T-14] 06_measures_long.rds guardado (", nrow(df_measures_long), " filas en formato long).")
 
 ## 4.3 Índice global ponderado y fechas pico con peakdates() (T-15) ----

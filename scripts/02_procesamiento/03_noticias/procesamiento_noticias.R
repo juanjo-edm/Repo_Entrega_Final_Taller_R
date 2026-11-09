@@ -1,9 +1,10 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/02_procesamiento/03_noticias/procesamiento_noticias.R
-# ROL: Limpieza de texto NLP, extracción de métricas y reclasificación
+# ROL: Consolidación rectangular y slugs sin guiones (T-05), limpieza de texto NLP
+#      y remoción de HTML sin NAs (T-06), extracción de métricas y reclasificación
 #      oficial de Delitos de Alto Impacto (DAI) de la SDSCJ
-# AUTORES: Gabriel Arturo Echeverry, Juan José Echeverry, Miguelangel Palma
+# AUTORES: Sergio López, Gabriel Arturo Echeverry, Juan José Echeverry, Miguelangel Palma
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # ENTRA: data/raw/noticias/noticias_google_news_consolidado.parquet
 # PRODUCE: data/processed/03_noticias/noticias_procesadas.parquet
@@ -22,6 +23,7 @@ set.seed(20261014)
 library(here)
 library(conflicted)
 library(arrow)
+library(data.table)
 library(readr)
 library(dplyr)
 library(tidyr)
@@ -30,10 +32,15 @@ library(stringi)
 library(lubridate)
 
 ## 1.3 Resolución explícita de conflictos ----
-conflict_prefer("filter", "dplyr", quiet = TRUE)
-conflict_prefer("lag",    "dplyr", quiet = TRUE)
-conflict_prefer("select", "dplyr", quiet = TRUE)
+conflict_prefer("filter",   "dplyr", quiet = TRUE)
+conflict_prefer("lag",      "dplyr", quiet = TRUE)
+conflict_prefer("select",   "dplyr", quiet = TRUE)
+conflict_prefer("between",  "dplyr", quiet = TRUE)
+conflict_prefer("first",    "dplyr", quiet = TRUE)
 conflict_prefer("duration", "lubridate", quiet = TRUE)
+conflict_prefer("year",     "lubridate", quiet = TRUE)
+conflict_prefer("month",    "lubridate", quiet = TRUE)
+conflict_prefer("quarter",  "lubridate", quiet = TRUE)
 
 ## 1.4 Rutas de entrada, procesamiento y reportes ----
 ruta_entrada_raw     <- here::here("data", "raw", "noticias", "noticias_google_news_consolidado.parquet")
@@ -43,12 +50,42 @@ ruta_salida_tablas   <- here::here("output", "tables")
 if (!dir.exists(ruta_salida_proc_dir)) dir.create(ruta_salida_proc_dir, recursive = TRUE, showWarnings = FALSE)
 if (!dir.exists(ruta_salida_tablas))   dir.create(ruta_salida_tablas, recursive = TRUE, showWarnings = FALSE)
 
-# 2. Carga y Normalización Inicial ----
+# 2. Carga, Estructuración con data.table y Normalización Inicial (T-05) ----
 
-## 2.1 Lectura de datos consolidados de prensa ----
-df_crudo <- arrow::read_parquet(ruta_entrada_raw)
+## 2.1 Lectura de datos consolidados de prensa y validación con data.table ----
+dt_crudo <- data.table::as.data.table(arrow::read_parquet(ruta_entrada_raw))
+df_crudo <- as_tibble(dt_crudo)
 
-## 2.2 Unificación de fechas canónicas ----
+## 2.2 Diccionario canónico de las 19 localidades urbanas sin guiones '-' (T-01 y T-05) ----
+localidades_canonicas <- tibble::tribble(
+  ~localidad,            ~localidad_slug,
+  "Antonio Nariño",      "antonio_narino",
+  "Barrios Unidos",      "barrios_unidos",
+  "Bosa",                "bosa",
+  "La Candelaria",       "candelaria",
+  "Candelaria",          "candelaria",
+  "Chapinero",           "chapinero",
+  "Ciudad Bolívar",      "ciudad_bolivar",
+  "Engativá",            "engativa",
+  "Fontibón",            "fontibon",
+  "Kennedy",             "kennedy",
+  "Los Mártires",        "los_martires",
+  "Puente Aranda",       "puente_aranda",
+  "Rafael Uribe Uribe",  "rafael_uribe_uribe",
+  "San Cristóbal",       "san_cristobal",
+  "Santa Fe",            "santa_fe",
+  "Suba",                "suba",
+  "Teusaquillo",         "teusaquillo",
+  "Tunjuelito",          "tunjuelito",
+  "Usaquén",             "usaquen",
+  "Usme",                "usme"
+)
+
+df_crudo <- df_crudo |>
+  select(-any_of("localidad_slug")) |>
+  left_join(localidades_canonicas, by = "localidad")
+
+## 2.3 Unificación de fechas canónicas (formato Date yyyy-mm-dd) ----
 if (!"fecha" %in% colnames(df_crudo)) {
   df_crudo <- df_crudo |>
     mutate(
@@ -71,9 +108,9 @@ df_crudo <- df_crudo |>
     semana_año = coalesce(semana_año, as.integer(format(fecha, "%V")))
   )
 
-# 3. Limpieza de Texto y Métricas NLP ----
+# 3. Limpieza de Texto, Remoción de HTML y Métricas NLP (T-06) ----
 
-## 3.1 Depuración de cuerpo editorial (remoción de ruido web) ----
+## 3.1 Depuración de cuerpo editorial (remoción de ruido web y etiquetas HTML) ----
 cuerpo_original <- df_crudo$cuerpo
 resumen_base    <- df_crudo$resumen
 
@@ -89,6 +126,10 @@ cuerpo_depurado <- if_else(
   cuerpo_depurado
 )
 
+# Remoción de etiquetas HTML residuales y entidades web (T-06)
+cuerpo_depurado <- gsub("<[^>]+>", " ", cuerpo_depurado)
+cuerpo_depurado <- gsub("&nbsp;|&#160;|&quot;|&amp;|&lt;|&gt;|&#[0-9]+;", " ", cuerpo_depurado, ignore.case = TRUE)
+
 cuerpo_depurado <- gsub("(?i)[^\n.]*\\bcookies\\b[^\n.]*\\.?", "", cuerpo_depurado, perl = TRUE)
 cuerpo_depurado <- gsub("¿Cómo podemos ayudarte\\?.*", "", cuerpo_depurado)
 cuerpo_depurado <- gsub("Audio generado con IA de Google [0-9]+:[0-9]+ / [0-9]+:[0-9]+", "", cuerpo_depurado)
@@ -101,11 +142,13 @@ cuerpo_depurado <- gsub("https?://\\S+|www\\.\\S+", "", cuerpo_depurado)
 cuerpo_depurado <- gsub("[\r\n\t\u00a0]+", " ", cuerpo_depurado)
 cuerpo_depurado <- str_squish(cuerpo_depurado)
 cuerpo_depurado <- if_else(nchar(cuerpo_depurado) < 40 | is.na(cuerpo_depurado), resumen_base, cuerpo_depurado)
+cuerpo_depurado <- gsub("<[^>]+>", " ", cuerpo_depurado)
 cuerpo_depurado <- str_squish(cuerpo_depurado)
 
 ## 3.2 Métricas de volumen léxico y unificación ----
 df_limpio <- df_crudo |>
   mutate(
+    titulo             = str_squish(gsub("<[^>]+>", " ", titulo)),
     cuerpo             = cuerpo_depurado,
     caracteres_cuerpo  = nchar(cuerpo),
     palabras_cuerpo    = str_count(cuerpo, "\\S+"),
@@ -339,7 +382,15 @@ columnas_auxiliares <- c("txt_titulo", "txt_resumen", "txt_cuerpo",
 ## 5.1 Corpus general procesado (insumo para sentometrics y downstream) ----
 df_procesado_final <- df_clasificado |>
   select(-all_of(columnas_auxiliares)) |>
-  arrange(localidad, fecha)
+  arrange(localidad, fecha) |>
+  mutate(id = paste0("doc_", row_number()))
+
+# Controles de auditoría S3 para sentometrics (T-01, T-05 y T-06)
+stopifnot(all(!is.na(df_procesado_final$id)))
+stopifnot(all(!is.na(df_procesado_final$fecha)))
+stopifnot(all(!is.na(df_procesado_final$localidad_slug)))
+stopifnot(all(!is.na(df_procesado_final$texto_completo_nlp)))
+stopifnot(!any(grepl("-", df_procesado_final$localidad_slug)))
 
 archivo_proc_p <- file.path(ruta_salida_proc_dir, "noticias_procesadas.parquet")
 arrow::write_parquet(df_procesado_final, archivo_proc_p)
@@ -391,11 +442,13 @@ metricas_longitud <- data.frame(
   palabras_limpio     = as.numeric(summary(df_procesado_final$palabras_cuerpo))
 )
 
-## 6.2 Comprobación de valores faltantes ----
+## 6.2 Comprobación de valores faltantes y reglas S3 (T-05 y T-06) ----
 valores_faltantes <- data.frame(
-  variable = c("fecha", "titulo", "resumen", "cuerpo", "texto_completo_nlp", "delito_sdscj", "año_mes"),
+  variable = c("id", "fecha", "localidad_slug", "titulo", "resumen", "cuerpo", "texto_completo_nlp", "delito_sdscj", "año_mes"),
   nulos    = c(
+    sum(is.na(df_procesado_final$id)),
     sum(is.na(df_procesado_final$fecha)),
+    sum(is.na(df_procesado_final$localidad_slug)),
     sum(is.na(df_procesado_final$titulo)),
     sum(is.na(df_procesado_final$resumen)),
     sum(is.na(df_procesado_final$cuerpo)),

@@ -45,7 +45,7 @@ flowchart LR
 | **2. Puntuaciones** | `compute_sentiment()`, `as.sentiment()` | `sentiment`, `data.table` | `data/processed/03_sentiment_scores.rds` | Juan José (T-10) |
 | **2. Noticias Pico** | `peakdocs()` | `data.table` | `data/processed/04_peak_docs.rds` | Sergio (T-11) |
 | **3. Medidas** | `ctr_agg()`, `sento_measures()` | `sento_measures`, `list` | `data/processed/05_sento_measures.rds` | Juan José (T-13) |
-| **3. Series Long** | `measures_fill()`, `as.data.table()` | `data.table` | `data/processed/06_measures_long.rds` | Sergio (T-14) |
+| **3. Series Long / Wide** | `measures_fill()`, `as.data.table()` | `list (long/wide)` / `data.table` | `data/processed/06_measures_long.rds`<br/>`data/processed/06_measures_wide.rds` | Sergio (T-14) |
 | **3. Índice Global** | `aggregate(..., do.global=TRUE)`, `peakdates()` | `data.table`, `list` | `data/processed/07_global_index.rds` | Juan José (T-15) |
 | **4. Modelo / Atribución** | `ctr_model()`, `sento_model()`, `attributions()` | `sento_model`, `attributions` | `data/processed/08_attributions.rds` | Juan José (T-17) |
 
