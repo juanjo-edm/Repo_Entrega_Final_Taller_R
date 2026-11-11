@@ -108,6 +108,7 @@ library(sentometrics)
 library(syuzhet)
 library(glmnet)
 library(sf)
+library(cowplot)
 
 # Preferencia explícita de funciones en caso de colisión de nombres entre paquetes
 conflict_prefer("filter", "dplyr", quiet = TRUE)
@@ -247,7 +248,7 @@ ggplot(ranking_localidades, aes(x = reorder(localidad, tasa_media_total), y = ta
   scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.15))) +
   labs(
     title    = "Incidencia Relativa de Hurto por Localidad en Bogotá",
-    subtitle = "Promedio anual de denuncias por cada 100.000 habitantes (2022–septiembre de 2026)",
+    subtitle = "Promedio anual de denuncias por cada 100.000 habitantes (2022-septiembre de 2026)",
     x        = NULL,
     y        = "Tasa anual combinada por 100.000 habitantes",
     caption  = "Fuente: Cálculos propios con base en SIEDCO (SDSCJ) y proyecciones poblacionales (SDS)."
@@ -256,7 +257,8 @@ ggplot(ranking_localidades, aes(x = reorder(localidad, tasa_media_total), y = ta
   theme(
     panel.grid.minor   = element_blank(),
     panel.grid.major.y = element_blank(),
-    plot.title         = element_text(face = "bold", size = 13)
+    plot.title         = element_text(face = "bold", size = 13, margin = margin(b = 4)),
+    plot.subtitle      = element_text(size = 10, color = "grey30", margin = margin(b = 10))
   )
 ```
 
@@ -553,10 +555,13 @@ if (is_html_output()) {
     ) |>
     layout(
       title = list(
-        text = "<b>Espacio Tridimensional de Clústeres K-Means (K* = 3)</b><br><sup>Esferas: 19 localidades | Diamantes: Centroides μ_k | Líneas: Distancia al centroide (pase el cursor para ver detalles)</sup>",
-        font = list(size = 14)
+        text    = "<b>Espacio Tridimensional de Clústeres K-Means (K* = 3)</b><br><sup>Esferas: 19 localidades | Diamantes: Centroides μ_k (pase el cursor para detalles)</sup>",
+        x       = 0.5,
+        xanchor = "center",
+        y       = 0.98,
+        font    = list(size = 13)
       ),
-      margin = list(l = 0, r = 0, b = 15, t = 55),
+      margin = list(l = 10, r = 10, b = 25, t = 75),
       scene = list(
         aspectmode = "cube",
         xaxis = list(
@@ -587,14 +592,15 @@ if (is_html_output()) {
       ),
       updatemenus = list(
         list(
-          type      = "buttons",
-          direction = "right",
-          x         = 0.02,
-          y         = 0.96,
-          bgcolor   = "#ffffff",
+          type        = "buttons",
+          direction   = "right",
+          x           = 0.5,
+          xanchor     = "center",
+          y           = -0.06,
+          bgcolor     = "#ffffff",
           bordercolor = "#cccccc",
-          font      = list(size = 11),
-          buttons   = list(
+          font        = list(size = 10),
+          buttons     = list(
             list(
               method = "restyle",
               args   = list("mode", list("markers", "markers", "markers", "lines", "lines", "lines", "markers", "markers", "markers")),
@@ -608,7 +614,7 @@ if (is_html_output()) {
           )
         )
       ),
-      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.02)
+      legend = list(orientation = "h", x = 0.5, xanchor = "center", y = -0.16)
     )
 } else {
   # Proyección tridimensional estática para compilación en PDF
@@ -840,7 +846,11 @@ ggplot(df_series_cluster, aes(x = date, y = valor, color = cluster_limpio)) +
     color    = "Clúster Territorial"
   ) +
   theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom", plot.title = element_text(face = "bold", size = 13))
+  theme(
+    legend.position = "bottom",
+    plot.title      = element_text(face = "bold", size = 13, margin = margin(b = 4)),
+    plot.subtitle   = element_text(size = 10, color = "grey30", margin = margin(b = 8))
+  )
 ```
 
 ---
@@ -887,9 +897,9 @@ ggplot(df_aj, aes(x = date, y = valor, color = serie, linetype = serie)) +
   labs(
     title    = "Ajuste Predictivo del Modelo de Sentimiento Mediático (sento_model)",
     subtitle = paste0(
-      "Regresión Elastic Net (α = ", metricas_mod$alpha_optimo,
-      ", λ = ", round(metricas_mod$lambda_optimo, 2),
-      ", R² = ", scales::percent(metricas_mod$r2_in_sample, accuracy = 0.1), ")"
+      "Regresión Elastic Net (alpha = ", metricas_mod$alpha_optimo,
+      ", lambda = ", round(metricas_mod$lambda_optimo, 2),
+      ", R^2 = ", scales::percent(metricas_mod$r2_in_sample, accuracy = 0.1), ")"
     ),
     x        = "Mes de pronóstico (h = 1)",
     y        = "Tasa mensualizada por 100.000 hab.",
@@ -897,7 +907,11 @@ ggplot(df_aj, aes(x = date, y = valor, color = serie, linetype = serie)) +
     linetype = NULL
   ) +
   theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom")
+  theme(
+    legend.position = "bottom",
+    plot.title      = element_text(face = "bold", size = 13, margin = margin(b = 4)),
+    plot.subtitle   = element_text(size = 10, color = "grey30", margin = margin(b = 8))
+  )
 ```
 
 ## Descomposición de atribuciones marginales (`attributions`)
@@ -914,77 +928,329 @@ plot(attributions_obj$attributions_raw, group = "lexicons") +
     y        = "Aporte marginal al pronóstico"
   ) +
   theme_minimal(base_size = 11) +
-  theme(legend.position = "bottom")
+  theme(
+    legend.position = "bottom",
+    plot.title      = element_text(face = "bold", size = 13, margin = margin(b = 4)),
+    plot.subtitle   = element_text(size = 10, color = "grey30", margin = margin(b = 8))
+  )
 ```
 
 ---
 
 # Cartografía Espacial e Integración para R Shiny {#sec-mapa}
 
+La clasificación territorial obtenida mediante $K$-Means ofrece una síntesis de los perfiles de seguridad, pero clasificar las localidades en tres grupos discretos oculta la intensidad y la ubicación geográfica de los hechos delictivos. Para entender el patrón territorial de Bogotá, esta sección analiza la distribución espacial continua de cada modalidad de hurto y examina su correspondencia con la cobertura de los medios digitales de comunicación.
+
+## Geografía especializada del delito por modalidad
+
+El cruce de la geometría vectorial oficial con el panel consolidado permite mapear las tasas anuales promedio de las tres modalidades de hurto estandarizadas por población.
+
 ```{r}
-#| label: fig-mapa-territorial
-#| fig-cap: "Distribución espacial de los tres clústeres delictivos en las 19 localidades urbanas de Bogotá"
-# 6.1 Cruce con geometrías vectoriales oficiales (sf) ----
+#| label: fig-mapa-facetas-delitos
+#| fig-cap: "Distribución espacial de las tasas de hurto por 100.000 habitantes en las 19 localidades urbanas de Bogotá (2022-2026)"
+#| fig-width: 9.5
+#| fig-height: 8.5
+# 6.1 Preparación de geometrías vectoriales (sf) y panel delictivo ----
 geo_bogota <- sf::st_read(archivo_geo_raw, quiet = TRUE) |>
   mutate(codigo_localidad = sprintf("%02d", as.integer(CMIULOCAL))) |>
   filter(!codigo_localidad %in% c("20", "99")) |>
-  left_join(
-    df_clustering |> select(codigo_localidad, cluster_nombre, tasa_total_prom),
-    by = "codigo_localidad"
+  left_join(df_clustering, by = "codigo_localidad")
+
+# Función auxiliar para mapas temáticos con escala continua independiente y tooltips
+generar_mapa_delito <- function(df, var_col, titulo, etiqueta_leyenda, paleta = "magma") {
+  df$tooltip <- paste0(
+    "<b>", df$localidad, "</b><br>",
+    titulo, ": <b>", scales::comma(round(df[[var_col]], 1)), "</b> por 100k hab.<br>",
+    "Clúster: ", df$cluster_nombre
   )
 
-ggplot(geo_bogota) +
-  geom_sf(aes(fill = cluster_nombre), color = "white", linewidth = 0.35) +
-  scale_fill_manual(
-    values = c(
-      "Céntrico e Institucional" = "#c0392b",
-      "Comercial y Automotor"    = "#e67e22",
-      "Residencial y Periférico" = "#27ae60"
+  ggplot(df) +
+    geom_sf(aes(fill = .data[[var_col]], text = tooltip), color = "white", linewidth = 0.25) +
+    scale_fill_viridis_c(
+      option    = paleta,
+      direction = -1,
+      name      = etiqueta_leyenda,
+      labels    = scales::comma
+    ) +
+    labs(title = titulo) +
+    theme_void(base_size = 11) +
+    theme(
+      plot.title      = element_text(face = "bold", size = 11, hjust = 0.5, margin = margin(b = 6)),
+      legend.position = "right",
+      legend.title    = element_text(size = 8.5, face = "bold"),
+      legend.text     = element_text(size = 8),
+      plot.margin     = margin(6, 6, 6, 6)
     )
+}
+
+# Función auxiliar para fijar posición y dimensiones del colorbar en subplots de Plotly
+fijar_colorbar <- function(ply, x_pos, y_pos = 0.5, len_val = 0.65, thick = 14, titulo = NULL) {
+  for (i in seq_along(ply$x$data)) {
+    if (!is.null(ply$x$data[[i]]$marker$colorbar)) {
+      ply$x$data[[i]]$marker$colorbar$x <- x_pos
+      ply$x$data[[i]]$marker$colorbar$y <- y_pos
+      ply$x$data[[i]]$marker$colorbar$len <- len_val
+      ply$x$data[[i]]$marker$colorbar$thickness <- thick
+      ply$x$data[[i]]$marker$colorbar$xanchor <- "left"
+      ply$x$data[[i]]$marker$colorbar$yanchor <- "middle"
+      if (!is.null(titulo)) {
+        ply$x$data[[i]]$marker$colorbar$title <- titulo
+      }
+    }
+  }
+  ply
+}
+
+# Construcción de mapas individuales para garantizar contraste visual en cada escala
+p_pers  <- generar_mapa_delito(geo_bogota, "tasa_personas_prom", "Hurto a Personas", "Tasa por\n100k hab.")
+p_resid <- generar_mapa_delito(geo_bogota, "tasa_resid_prom", "Hurto a Residencias", "Tasa por\n100k hab.")
+p_motos <- generar_mapa_delito(geo_bogota, "tasa_motos_prom", "Hurto de Motocicletas", "Tasa por\n100k hab.")
+p_total <- generar_mapa_delito(geo_bogota, "tasa_total_prom", "Tasa Total de Hurtos", "Tasa por\n100k hab.")
+
+if (is_html_output()) {
+  ply1 <- ggplotly(p_pers,  tooltip = "text")
+  ply2 <- ggplotly(p_resid, tooltip = "text")
+  ply3 <- ggplotly(p_motos, tooltip = "text")
+  ply4 <- ggplotly(p_total, tooltip = "text")
+
+  ply1 <- fijar_colorbar(ply1, x_pos = 0.44, y_pos = 0.77, len_val = 0.35, thick = 11, titulo = "Tasa / 100k")
+  ply2 <- fijar_colorbar(ply2, x_pos = 1.00, y_pos = 0.77, len_val = 0.35, thick = 11, titulo = "Tasa / 100k")
+  ply3 <- fijar_colorbar(ply3, x_pos = 0.44, y_pos = 0.22, len_val = 0.35, thick = 11, titulo = "Tasa / 100k")
+  ply4 <- fijar_colorbar(ply4, x_pos = 1.00, y_pos = 0.22, len_val = 0.35, thick = 11, titulo = "Tasa / 100k")
+
+  anotaciones_4 <- list(
+    list(x = 0.20, y = 1.02, text = "<b>Hurto a Personas</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11)),
+    list(x = 0.74, y = 1.02, text = "<b>Hurto a Residencias</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11)),
+    list(x = 0.20, y = 0.48, text = "<b>Hurto de Motocicletas</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11)),
+    list(x = 0.74, y = 0.48, text = "<b>Tasa Total de Hurtos</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11))
+  )
+
+  subplot(ply1, ply2, ply3, ply4, nrows = 2, margin = c(0.06, 0.06, 0.08, 0.08)) |>
+    layout(
+      annotations = anotaciones_4,
+      margin = list(l = 10, r = 50, t = 40, b = 10)
+    )
+} else {
+  grid_delitos <- cowplot::plot_grid(p_pers, p_resid, p_motos, p_total, ncol = 2, align = "hv")
+
+  titulo_facetas <- cowplot::ggdraw() +
+    cowplot::draw_label(
+      "Distribución Espacial de las Tasas de Hurto por Modalidad",
+      fontface = "bold", size = 13, hjust = 0.5, x = 0.5, y = 0.65
+    ) +
+    cowplot::draw_label(
+      "Tasas anuales promedio por 100.000 habitantes en las 19 localidades urbanas de Bogotá (2022-2026)",
+      size = 10, color = "grey35", hjust = 0.5, x = 0.5, y = 0.25
+    )
+
+  cowplot::plot_grid(titulo_facetas, grid_delitos, ncol = 1, rel_heights = c(0.08, 1))
+}
+```
+
+Los mapas confirman que la actividad delictiva no es uniforme en el territorio. El hurto a personas alcanza sus niveles más altos en el corredor oriental y central: La Candelaria registra 7.615 casos por cada 100.000 habitantes, Chapinero 6.640 y Santa Fe 6.176. Esta concentración responde al flujo de población flotante que transita diariamente por motivos laborales, educativos y comerciales, lo que eleva el número de víctimas potenciales sobre una base de residentes pequeña.
+
+En contraste, el hurto de motocicletas se concentra en Los Mártires (178 por 100.000 habitantes) y Antonio Nariño (128 por 100.000 habitantes), zonas con alta actividad comercial vinculada al comercio de repuestos y talleres automotrices. El hurto a residencias presenta una dispersión mayor en sectores consolidados como Teusaquillo (217 por 100.000 habitantes), Chapinero (192) y Barrios Unidos (168). La tasa consolidada refleja la suma de estas dinámicas y confirma por qué el algoritmo agrupa al centro institucional y al eje automotor en conglomerados independientes de la periferia residencial.
+
+## Desajuste espacial entre delito registrado y cobertura periodística
+
+Para evaluar la asimetría de información planteada en el marco conceptual, comparamos la tasa de criminalidad de los registros policiales con el volumen total de noticias recopiladas para cada localidad.
+
+```{r}
+#| label: fig-mapa-desajuste-espacial
+#| fig-cap: "Comparación entre la tasa delictiva oficial y el volumen de noticias sobre delincuencia por localidad"
+#| fig-width: 9.5
+#| fig-height: 5.8
+# 6.2 Cálculo del volumen noticioso e integración dual ----
+noticias_conteo <- noticias_df |>
+  count(localidad, name = "total_noticias")
+
+geo_bogota_dual <- geo_bogota |>
+  left_join(noticias_conteo, by = "localidad")
+
+geo_bogota_dual$tooltip_delito <- paste0(
+  "<b>", geo_bogota_dual$localidad, "</b><br>",
+  "Tasa Real: <b>", scales::comma(round(geo_bogota_dual$tasa_total_prom, 1)), "</b> por 100k hab.<br>",
+  "Clúster: ", geo_bogota_dual$cluster_nombre
+)
+
+geo_bogota_dual$tooltip_noticias <- paste0(
+  "<b>", geo_bogota_dual$localidad, "</b><br>",
+  "Noticias en el corpus: <b>", scales::comma(geo_bogota_dual$total_noticias), "</b> artículos<br>",
+  "Clúster: ", geo_bogota_dual$cluster_nombre
+)
+
+p_delito_real <- ggplot(geo_bogota_dual) +
+  geom_sf(aes(fill = tasa_total_prom, text = tooltip_delito), color = "white", linewidth = 0.3) +
+  scale_fill_viridis_c(
+    option    = "magma",
+    direction = -1,
+    name      = "Tasa por\n100k hab.",
+    labels    = scales::comma
   ) +
-  labs(
-    title    = "Mapa de Perfiles Delictivos de Bogotá (K-Means, K* = 3)",
-    subtitle = "19 localidades urbanas clasificadas según tasas de hurto por 100.000 habitantes",
-    fill     = "Clúster Territorial",
-    caption  = "Fuente: Geometría oficial SDP / SDSCJ y agrupamiento K-Means."
-  ) +
+  labs(title = "Tasa Delictiva Real (Policía SDSCJ)") +
   theme_void(base_size = 11) +
   theme(
-    legend.position = "bottom",
-    plot.title      = element_text(face = "bold", size = 13, hjust = 0.5),
-    plot.subtitle   = element_text(size = 10, hjust = 0.5)
+    plot.title      = element_text(face = "bold", size = 11, hjust = 0.5, margin = margin(b = 6)),
+    legend.position = "right",
+    legend.title    = element_text(size = 8.5, face = "bold"),
+    legend.text     = element_text(size = 8),
+    plot.margin     = margin(6, 6, 6, 6)
   )
+
+p_prensa_vol <- ggplot(geo_bogota_dual) +
+  geom_sf(aes(fill = total_noticias, text = tooltip_noticias), color = "white", linewidth = 0.3) +
+  scale_fill_viridis_c(
+    option    = "magma", # MISMA PALETA (MAGMA) QUE LA TASA DELICTIVA REAL
+    direction = -1,
+    name      = "Total\nnoticias",
+    labels    = scales::comma
+  ) +
+  labs(title = "Cobertura Noticiosa (Google News)") +
+  theme_void(base_size = 11) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 11, hjust = 0.5, margin = margin(b = 6)),
+    legend.position = "right",
+    legend.title    = element_text(size = 8.5, face = "bold"),
+    legend.text     = element_text(size = 8),
+    plot.margin     = margin(6, 6, 6, 6)
+  )
+
+if (is_html_output()) {
+  ply_delito   <- ggplotly(p_delito_real, tooltip = "text")
+  ply_noticias <- ggplotly(p_prensa_vol,  tooltip = "text")
+
+  ply_delito   <- fijar_colorbar(ply_delito,   x_pos = 0.44, y_pos = 0.5, len_val = 0.65, thick = 13, titulo = "Tasa / 100k")
+  ply_noticias <- fijar_colorbar(ply_noticias, x_pos = 1.00, y_pos = 0.5, len_val = 0.65, thick = 13, titulo = "Noticias")
+
+  anotaciones_dual <- list(
+    list(x = 0.20, y = 1.03, text = "<b>Tasa Delictiva Real (Policía SDSCJ)</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 12)),
+    list(x = 0.74, y = 1.03, text = "<b>Cobertura Noticiosa (Google News)</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 12))
+  )
+
+  subplot(ply_delito, ply_noticias, nrows = 1, margin = 0.08) |>
+    layout(
+      annotations = anotaciones_dual,
+      margin = list(l = 10, r = 50, t = 35, b = 10)
+    )
+} else {
+  grid_dual <- cowplot::plot_grid(p_delito_real, p_prensa_vol, ncol = 2, align = "hv")
+
+  titulo_dual <- cowplot::ggdraw() +
+    cowplot::draw_label(
+      "Contraste Espacial: Criminalidad Registrada frente a Cobertura Noticiosa",
+      fontface = "bold", size = 13, hjust = 0.5, x = 0.5, y = 0.65
+    ) +
+    cowplot::draw_label(
+      "Tasas de denuncia por 100.000 hab. (SIEDCO) vs. número total de noticias en el corpus (2022-2026)",
+      size = 10, color = "grey35", hjust = 0.5, x = 0.5, y = 0.25
+    )
+
+  cowplot::plot_grid(titulo_dual, grid_dual, ncol = 1, rel_heights = c(0.12, 1))
+}
 ```
+
+La comparación evidencia diferencias claras entre la incidencia medida por denuncias y la atención de la prensa digital. Las localidades con mayores tasas per cápita, como La Candelaria y Santa Fe, no concentran el volumen principal de noticias (90 y 136 artículos en el corpus, respectivamente).
+
+Por el contrario, localidades densamente pobladas como Ciudad Bolívar (323 noticias), Bosa (313) y Kennedy (260) reciben una cobertura extensa en términos absolutos, a pesar de registrar tasas por habitante sustancialmente menores que el centro histórico. Esta divergencia apoya la hipótesis de asimetría de información: los medios digitales tienden a reportar hechos de alto impacto o incidentes en áreas con mayor audiencia potencial, generando una señal pública de inseguridad que difiere del riesgo relativo derivado de las denuncias oficiales.
+
+## Integración de la capa espacial en el tablero interactivo (R Shiny)
+
+El análisis espacial desarrollado en este cuaderno se traslada a la aplicación interactiva (`app/app.R`) mediante una arquitectura desacoplada que separa el procesamiento analítico de la visualización en tiempo real:
+
+* Preparación y empaquetamiento: El script `05_export_insumos_shiny.R` toma el objeto vectorial `geo_bogota`, verifica su consistencia y lo consolida junto a las series de tiempo en el archivo `datos_consolidados_shiny.rds`. Al guardar las geometrías en un solo objeto binario, la aplicación Shiny arranca de manera inmediata sin necesidad de leer archivos GeoJSON ni ejecutar cruces espaciales en cada sesión.
+
+* Renderizado cartográfico con Leaflet: Dentro del módulo territorial de la interfaz, la función `renderLeaflet()` carga las geometrías en coordenadas geográficas WGS84. Los controles de selección permiten al usuario alternar entre la clasificación de los tres clústeres y la escala continua de tasas delictivas por modalidad, utilizando paletas continuas adaptadas a mapas digitales.
+
+* Eventos de clic y sincronización reactiva: La aplicación utiliza el observador de eventos `input$mapa_bogota_shape_click`. Cuando el usuario selecciona una localidad sobre el mapa, Shiny captura el identificador territorial y actualiza de inmediato la ficha técnica de la zona, filtrando las curvas históricas de sentometrics y los artículos de prensa representativos (`peakdocs`) asociados a esa jurisdicción.
 
 ---
 
 # Diagnóstico Final de Integridad y Conclusiones {#sec-conclusiones}
 
+El cierre del cuaderno metodológico comprende dos componentes: una auditoría reproducible de los objetos intermedios generados a lo largo del pipeline y un balance analítico de los hallazgos empíricos, sus limitaciones metodológicas y sus implicaciones de política pública.
+
+## Auditoría programática del contrato de datos
+
+Para garantizar la reproducibilidad del proyecto y la estabilidad de la aplicación interactiva, el siguiente bloque verifica la existencia física, la integridad estructural y las dimensiones de cada uno de los artefactos S3 producidos por el pipeline.
+
 ```{r}
-#| label: auditoria-integridad
+#| label: tbl-auditoria-integridad
+#| tbl-cap: "Auditoría programática de artefactos del pipeline, clases S3 y contrato de datos para R Shiny"
 # 7.1 Validación programática de los 8 artefactos S3 y paneles ----
-archivos_rds_contrato <- c(
-  "01_sento_corpus.rds",
-  "02_lexicons_es.rds",
-  "03_sentiment_scores.rds",
-  "04_peak_docs.rds",
-  "05_sento_measures.rds",
-  "06_measures_long.rds",
-  "07_global_index.rds",
-  "08_attributions.rds",
-  "datos_consolidados_shiny.rds"
+archivos_contrato <- data.frame(
+  archivo = c(
+    "01_sento_corpus.rds",
+    "02_lexicons_es.rds",
+    "03_sentiment_scores.rds",
+    "04_peak_docs.rds",
+    "05_sento_measures.rds",
+    "06_measures_long.rds",
+    "07_global_index.rds",
+    "08_attributions.rds",
+    "datos_consolidados_shiny.rds"
+  ),
+  componente = c(
+    "Corpus textual con 26 covariables binarias",
+    "Léxicos combinados (NRC + crimen_es) y modificadores",
+    "Puntuaciones de polaridad documental",
+    "Documentos pico con mayor intensidad de polaridad",
+    "Medidas agregadas temporales y espaciales",
+    "Panel mensual en formato largo para visualización",
+    "Índice global de sentimiento de seguridad urbana",
+    "Descomposición de atribuciones del modelo Elastic Net",
+    "Bundle consolidado de geometrías, series y metadatos Shiny"
+  ),
+  stringsAsFactors = FALSE
 )
 
-for (arch in archivos_rds_contrato) {
+# Validación de existencia física
+for (arch in archivos_contrato$archivo) {
   stopifnot(file.exists(file.path(ruta_proc, arch)))
 }
-
 stopifnot(nrow(geo_bogota) == 19)
-cat("✔ Los 8 artefactos .rds del contrato sentometrics y el bundle Shiny están íntegros.\n")
+
+# Construcción de la tabla de auditoría
+tabla_auditoria <- data.frame(
+  `Archivo` = archivos_contrato$archivo,
+  `Componente` = archivos_contrato$componente,
+  `Clase S3` = sapply(archivos_contrato$archivo, function(f) {
+    paste(class(readRDS(file.path(ruta_proc, f))), collapse = ", ")
+  }),
+  `Tamaño` = sapply(archivos_contrato$archivo, function(f) {
+    paste0(round(file.info(file.path(ruta_proc, f))[["size"]] / 1024, 1), " KB")
+  }),
+  `Estado` = "Verificado (✔)",
+  check.names = FALSE,
+  stringsAsFactors = FALSE
+)
+
+knitr::kable(tabla_auditoria, align = c("l", "l", "l", "r", "c"))
 ```
 
-## Conclusiones Principales
+## Conclusiones metodológicas y empíricas
 
-1. **Asimetría territorial del delito:** La partición óptima $K^* = 3$ (silueta $0.5416$) distingue rigurosamente entre el núcleo **Céntrico e Institucional** (alta densidad de hurto a personas por población flotante), el corredor **Comercial y Automotor** (Los Mártires y Antonio Nariño, epicentro del hurto de motocicletas) y las **12 localidades Residenciales y Periféricas**.
-2. **Aporte del léxico especializado (`crimen_es`) y modificadores de valencia:** La combinación del léxico NRC con el diccionario de criminalidad bogotana y modificadores contextuales captura con precisión la intensidad de noticias sobre atracos, fleteos y operatividad policial.
-3. **Capacidad explicativa y atribuciones:** El modelo Elastic Net explica el $87.5\%$ de la varianza mensualizada ($h = 1$), permitiendo descomponer en la aplicación Shiny el impacto específico de cada localidad, tópico DAI, diccionario y horizonte de memoria temporal.
+El ejercicio analítico articuló registros policiales oficiales, técnicas de data mining y modelado econométrico supervisado. Los resultados principales se resumen en tres dimensiones:
+
+1. Asimetría territorial y especialización delictiva: La partición en tres conglomerados ($K^* = 3$, con coeficiente de silueta de $0.5416$) confirma que la delincuencia en Bogotá responde a dinámicas urbanas diferenciadas. El centro institucional (La Candelaria, Santa Fe y Chapinero) concentra tasas elevadas de hurto a personas, alcanzando hasta 7.615 casos por 100.000 habitantes debido al flujo diario de población flotante. En contraste, el corredor comercial de Los Mártires y Antonio Nariño se especializa en hurto de motocicletas (178 y 128 casos por 100.000 habitantes, respectivamente), mientras que las doce localidades periféricas mantienen tasas per cápita más bajas pero concentran la mayor cantidad de delitos en valores absolutos.
+
+2. Aporte del data mining y sentometrics: La integración del diccionario especializado `crimen_es` con el léxico general NRC y modificadores de valencia contextuales ($t \in \{1, 2, 3, 4\}$) permitió cuantificar la intensidad de la cobertura noticiosa sin distorsiones por frases con negaciones o palabras intensificadoras. La extracción de documentos pico (`peakdocs`) identificó momentos críticos de alarma ciudadana vinculados a homicidios y atracos en transporte masivo.
+
+3. Capacidad predictiva y atribuciones del modelo: La estimación supervisada mediante Elastic Net explicó el $87.5\%$ de la varianza mensual en la serie de intensidad delictiva ($h = 1$). Este ajuste valida la hipótesis de que la señal pública transmitida por la prensa contiene información anticipatoria sobre la dinámica criminal, permitiendo aislar la contribución específica de cada localidad, tópico y horizonte de memoria temporal.
+
+## Limitaciones de la investigación
+
+La interpretación de estos hallazgos debe considerar tres limitaciones metodológicas:
+
+1. Cifra negra y sesgo de denuncia policial: Las estadísticas oficiales de la SDSCJ registran exclusivamente los hechos denunciados formalmente ante las autoridades. En sectores con menor presencia estatal o menor confianza comunitaria, el subregistro tiende a ser más pronunciado, especialmente en hurtos menores. Por tanto, las tasas calculadas representan un piso de la criminalidad real y pueden reflejar diferencias en la propensión a denunciar entre sectores socioeconómicos.
+
+2. Sesgo de selección en medios digitales: El corpus de noticias recopilado a través de Google News proviene de diarios y portales de noticias consolidados. Estas fuentes priorizan sucesos con alto valor noticioso o hechos ocurridos en zonas de alta visibilidad comercial y política, lo que amplifica la cobertura en el norte y centro de la ciudad frente a delitos recurrentes en sectores periféricos.
+
+3. Escala de agregación espacial: El análisis utiliza la localidad como unidad territorial básica por restricciones de comparabilidad en las proyecciones de población. Esta agregación encubre una marcada heterogeneidad interna: localidades con más de un millón de habitantes, como Suba o Kennedy, combinan sectores residenciales tranquilos con corredores comerciales de alta conflictividad.
+
+## Implicaciones de política pública
+
+Los resultados ofrecen pautas concretas para la planeación de la seguridad ciudadana y la distribución de recursos policiales en Bogotá:
+
+1. Focalización preventiva según la modalidad delictiva: Las intervenciones de seguridad deben diseñarse según el tipo de riesgo territorial. El hurto a personas en el centro exige vigilancia en estaciones de transporte público, mejor iluminación y patrullaje peatonal en horas pico. En cambio, el hurto de automotores en Los Mártires requiere inspección constante a talleres mecánicos y control a los mercados informales de autopartes. En las localidades periféricas masivas, la prioridad se orienta al fortalecimiento de los frentes de seguridad barrial.
+
+2. Uso complementario de datos objetivos y señales de prensa: Las autoridades deben evitar responder únicamente a la presión de la agenda noticiosa. Guiar la asignación de cuadrantes policiales por el volumen de noticias puede concentrar recursos en zonas de alta resonancia mediática y desatender localidades que, a pesar de tener menor cobertura en prensa, enfrentan volúmenes absolutos de victimización sustancialmente mayores.
