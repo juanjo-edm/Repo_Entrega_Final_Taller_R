@@ -1,0 +1,185 @@
+---
+title: "Sustentación Metodológica y Respuesta a Evaluaciones"
+subtitle: "Taller de Programación en R | Maestría en Economía Aplicada (MECA)"
+author:
+  - "Gabriel Arturo Echeverry Castaño (201016705)"
+  - "Olga Lucía Ramírez Contreras (202624900)"
+  - "Sergio Alejandro López Valderrama (202111932)"
+  - "Juan Esteban Carvajal Cruz (202614312)"
+  - "Miguelangel Palma (202621481)"
+  - "Juan José Echeverry (202616233)"
+date: "2026-11-07"
+date-format: "D [de] MMMM [de] YYYY"
+lang: es
+documentclass: article
+papersize: letter
+geometry:
+  - top=25mm
+  - bottom=25mm
+  - left=25mm
+  - right=25mm
+fontsize: 10pt
+linestretch: 1.15
+header-includes:
+  - \usepackage{microtype}
+  - \usepackage{titlesec}
+  - \usepackage{fancyhdr}
+  - \usepackage{tcolorbox}
+  - \usepackage{xcolor}
+  - \usepackage{charter}
+  - \definecolor{primary}{HTML}{1A365D}
+  - \definecolor{secondary}{HTML}{2B6CB0}
+  - \definecolor{bgcomment}{HTML}{F7FAFC}
+  - \definecolor{framecomment}{HTML}{CBD5E0}
+  - \definecolor{textdark}{HTML}{2D3748}
+  - \titleformat{\section}{\color{primary}\large\bfseries}{\thesection}{1em}{}[\titlerule]
+  - \titleformat{\subsection}{\color{secondary}\normalsize\bfseries}{\thesubsection}{1em}{}
+  - \titlespacing*{\section}{0pt}{1.8ex plus 0.5ex minus 0.2ex}{1.2ex plus 0.2ex}
+  - \titlespacing*{\subsection}{0pt}{1.4ex plus 0.4ex minus 0.2ex}{0.8ex plus 0.2ex}
+  - \pagestyle{fancy}
+  - \fancyhf{}
+  - \fancyhead[L]{\small\color{gray}MECA | Taller de Programación en R}
+  - \fancyhead[R]{\small\color{gray}Sustentación Primera Entrega}
+  - \fancyfoot[C]{\small\thepage}
+  - \renewcommand{\headrulewidth}{0.4pt}
+  - \tcbset{colback=bgcomment,colframe=framecomment,arc=2mm,boxrule=0.8pt,left=4mm,right=4mm,top=3mm,bottom=3mm}
+format:
+  pdf:
+    pdf-engine: pdflatex
+    keep-tex: false
+    number-sections: false
+    toc: false
+---
+
+\section{Contexto y pautas del enunciado}
+
+Agradecemos sinceramente al equipo docente por la revisión detallada de nuestra primera entrega y por los valiosos comentarios remitidos, los cuales nos permiten precisar el alcance de la investigación y robustecer la estrategia metodológica con miras a la entrega final y a la sustentación del proyecto.
+
+Con el ánimo de responder a cada una de las observaciones de manera constructiva y rigurosa, consideramos conveniente contextualizar las decisiones adoptadas en el documento inicial a la luz de las pautas establecidas en el enunciado de la entrega:
+
+1. El enunciado definió una extensión máxima de tres páginas y límites estrictos de 150 palabras para las secciones de pregunta, motivación, datos y metodología, además de un tope de 700 palabras para el análisis preliminar.
+2. La rúbrica solicitó concentrar esfuerzos en el cálculo de estadísticas descriptivas con datos reales y en la construcción de al menos dos figuras analíticas autocontenidas con su respectiva interpretación, privilegiando la evidencia empírica en un espacio acotado.
+3. Siguiendo estos lineamientos, en la Sección 1 (página 1, líneas 11-13) se definió expresamente el alcance del proyecto:
+
+\begin{quote}
+"El alcance del trabajo es descriptivo y evalúa la correspondencia entre estadísticas oficiales y contenido noticioso, reconociendo que la agenda de los medios no sustituye las encuestas de percepción ciudadana."
+\end{quote}
+
+El estudio analiza descriptivamente el grado de correspondencia entre dos fuentes de información independientes: los registros policiales de denuncia (SIEDCO) y los artículos de prensa digital procesados mediante minería de texto. A continuación, presentamos con el mayor respeto académico nuestras aclaraciones y la sustentación detallada frente a cada uno de los puntos señalados por la evaluación.
+
+\section{Comentario 1: Relevancia económica de la pregunta e hipótesis}
+
+\begin{tcolorbox}
+\textbf{Texto subrayado en el documento (Sección 1 - Título):} "1 Pregunta de Investigación"\\
+\textbf{Comentario del evaluador:} "Más allá de una relación entre 2 variables, ¿cuál es la relevancia económica de la pregunta e hipótesis de investigación?"
+\end{tcolorbox}
+
+En la misma Sección 1 se delimitó el objetivo del análisis:
+
+\begin{quote}
+Sección 1 (página 1, líneas 11-13): "El alcance del trabajo es descriptivo y evalúa la correspondencia entre estadísticas oficiales y contenido noticioso, reconociendo que la agenda de los medios no sustituye las encuestas de percepción ciudadana."
+\end{quote}
+
+El interés económico de la investigación se fundamenta en la asimetría de información en el ámbito urbano. En la práctica cotidiana, los agentes económicos (consumidores, comerciantes, trabajadores y residentes) rara vez consultan los registros policiales para calcular el riesgo delictivo de sus recorridos o transacciones. Sus decisiones dependen de la información accesible en su entorno, en la cual los medios de comunicación constituyen el principal difusor de noticias y alertas sobre seguridad.
+
+Cuando la prensa sobrerrepresenta o subrepresenta la actividad delictiva de ciertos sectores, introduce sesgos en la percepción del riesgo. Estas divergencias inciden sobre las decisiones de localización comercial, modifican la disposición a pagar por vivienda y condicionan la demanda ciudadana por recursos policiales. Evaluar de forma descriptiva si existe correspondencia entre los registros policiales y la cobertura periodística aporta la base empírica necesaria para comprender cómo la información imperfecta afecta la dinámica económica local y la provisión de bienes públicos.
+
+\section{Comentario 2: Evidencia empírica sobre las decisiones económicas}
+
+\begin{tcolorbox}
+\textbf{Texto subrayado en el documento (Sección 2 - Motivación, párrafo 1):} "El hurto condiciona decisiones económicas cotidianas: la localización de comercios, las rutas de transporte y el uso del espacio público."\\
+\textbf{Comentario del evaluador:} "¿Cómo logran ver esto en su trabajo?"
+\end{tcolorbox}
+
+En el mismo párrafo de motivación, inmediatamente después del enunciado subrayado, se explicó el mecanismo analítico adoptado:
+
+\begin{quote}
+Sección 2 (página 1): "Sin embargo, la atención de los medios no siempre sigue el ritmo de las denuncias en las estaciones de policía. Cuando la prensa concentra su cobertura en ciertos sectores, altera la reputación barrial e influye en la demanda ciudadana por recursos de vigilancia. Determinar si las noticias reflejan la criminalidad registrada o si introducen sesgos territoriales permite evaluar el papel de los medios en el debate de seguridad."
+\end{quote}
+
+El trabajo examina este fenómeno comparando la incidencia delictiva objetiva con la señal informativa transmitida por la prensa. La relación con las decisiones económicas se manifiesta en tres canales:
+
+En primer lugar, las decisiones comerciales y los costos privados en seguridad. Cuando la prensa mantiene una cobertura adversa persistente sobre una localidad con tasas delictivas moderadas, desalienta el flujo habitual de clientes y transeúntes. Los comerciantes enfrentan presiones para reducir horarios de atención e incurrir en gastos privados de seguridad (vigilancia particular, enrejado, sistemas de alarma) a fin de compensar el estigma del sector. El cruce empírico del proyecto permite identificar qué localidades experimentan un desacople marcado entre el riesgo registrado y la notoriedad en noticias.
+
+En segundo lugar, el dinamismo inmobiliario y el valor del suelo. En la literatura urbana, la inseguridad percibida actúa como una desamenidad que castiga los cánones de arrendamiento comercial y frena la inversión en áreas estigmatizadas.
+
+En tercer lugar, la presión sobre recursos públicos. La notoriedad en prensa orienta las demandas vecinales de vigilancia. Contrastar espacialmente las denuncias frente a las notas periodísticas permite observar si la presencia institucional responde a la criminalidad registrada o a la presión de la opinión pública mediática.
+
+\section{Comentario 3: Plan general y estrategia empírica para la entrega final}
+
+\begin{tcolorbox}
+\textbf{Texto subrayado en el documento (Sección 4 - Título):} "4 Plan General del Manejo de los Datos y Metodología"\\
+\textbf{Comentario del evaluador:} "Para la exposición y el trabajo final, hace falta exponer de mejor manera la estrategia empírica para relacionar la estadísticas de criminalidad oficiales y el contenido noticioso."
+\end{tcolorbox}
+
+La propuesta radicada estableció las etapas metodológicas para integrar ambas fuentes de datos:
+
+\begin{quote}
+Sección 4 (página 1): "4. Clasificación territorial: cálculo de tasas por 100.000 habitantes residentes y segmentación mediante K-means (seleccionando grupos según el coeficiente de silueta), combinando delincuencia registrada y polaridad mediática."
+
+Sección 5 (página 3): "Para la entrega final, se empleará un algoritmo de K-means que agrupe las localidades según sus tres tasas de hurto y sus indicadores de sentimiento. Este ejercicio permitirá distinguir territorios con alta incidencia y alta cobertura de aquellos con estigmatización mediática no correspondida por sus denuncias, sirviendo de base para la herramienta interactiva en Shiny."
+\end{quote}
+
+Debe tenerse en cuenta que el enunciado limitó la sección de metodología a un máximo estricto de 150 palabras. Este límite de espacio impedía detallar extensamente la implementación analítica sin rebasar el conteo exigido.
+
+La metodología propuesta va más allá de contrastes bivariados simples y articula la estructura multivariada de los datos mediante tres componentes principales:
+
+1. Homologación de escalas y panel territorial balanceado. Los registros policiales provienen de incidentes individuales continuos, mientras que las noticias son textos no estructurados. El procedimiento consolida un panel anual balanceado para las 19 localidades urbanas de Bogotá (2022–septiembre de 2026). Las cifras delictivas se expresan en tasas por 100.000 habitantes para controlar el tamaño de la población residente. En paralelo, mediante procesamiento de lenguaje natural en R (con sentometrics y el diccionario de polaridad NRC adaptado al español), se calculan dos variables mediáticas anuales por localidad: el volumen total de artículos y el balance de sentimiento neto (proporción de palabras positivas menos negativas).
+
+2. Segmentación multivariada no supervisada (K-means). El agrupamiento espacial permite identificar patrones empíricos conjuntos entre criminalidad y cobertura mediática. Al estandarizar las tasas de hurto y las métricas de sentimiento, el algoritmo agrupa las localidades según su perfil de seguridad y visibilidad. La cantidad de grupos se valida a través del coeficiente de silueta, permitiendo clasificar los territorios en categorías concretas: zonas con correspondencia objetiva (alto delito y alta negatividad en noticias), sectores con estigmatización mediática (delincuencia moderada con alta hostilidad periodística) y localidades periféricas invisibilizadas (alta incidencia con baja cobertura en medios).
+
+3. Exploración interactiva y desagregación espacial en Shiny. La aplicación web integra este análisis permitiendo desglosar los indicadores por modalidad delictiva (hurto a personas, residencias y motocicletas) y seguir su evolución anual. La herramienta facilita la comparación directa entre mapas coropléticos de tasas oficiales y de sentimiento periodístico, permitiendo explorar las discrepancias espaciales de forma dinámica.
+
+\section{Comentario 4: Concentración microterritorial y tratamiento del subregistro}
+
+\begin{tcolorbox}
+\textbf{Texto subrayado en el documento (Sección 5 - Storytelling, párrafo 1):}\\
+"Al contrastar las tasas de hurto con el tono de las noticias, la Figure 2 muestra una correspondencia parcial con la hipótesis: 1. Visibilidad del centro y zonas comerciales: Chapinero, Santa Fe y Teusaquillo concentran coberturas frecuentes con proporciones de notas negativas superiores al 50\%, impulsadas por su actividad bancaria, universitaria y nocturna. 2. Persistencia del tono adverso en periferias pobladas: Localidades con tasas per cápita más bajas pero gran tamaño demográfico (como Kennedy, Suba y Bosa) sostienen entre 45\% y 55\% de artículos negativos. Los medios [cubren hechos violentos particulares sin considerar la escala de la población expuesta]."\\
+\textbf{Comentario del evaluador:} "En términos generales del trabajo, hay dos aspectos que valdría la pena analizar: 1) La criminalidad puede estar concentrada en zonas específicas de la localidad. Algunos estudios del CESED y CEDE abordan ello. Entonces, puede que una localidad tenga alta criminalidad concentrada en unas pocas cuadras. ¿Cómo abordan ello? 2) ¿Cómo abordan el tema del subregistro? Es decir, pueden existir tasas per cápita bajas, pero puede estar explicado por la falta de denuncias. Por miedo, dificultad en la denuncia o la naturalización del crimen, pueden explicar ello."
+\end{tcolorbox}
+
+La entrega original abordó tanto la concentración microterritorial del delito como los efectos del subregistro en las denuncias oficiales. A continuación se presentan las citas textuales de la propuesta radicada y la justificación correspondiente para cada punto.
+
+\subsection{1. Concentración microterritorial del delito (hotspots y cuadras)}
+
+Las secciones correspondientes de la entrega radicada expresaron:
+
+\begin{quote}
+Sección 5 (página 2, análisis de Figura 1): "El cuadrante central y comercial compuesto por Los Mártires, La Candelaria, Chapinero y Santa Fe presenta tasas que multiplican por más de ocho las de localidades del sur y occidente... Esta brecha responde en parte a la construcción del indicador: el denominador censal cuenta habitantes residentes, pero el centro recibe a diario trabajadores, compradores y estudiantes de toda la ciudad. Por ello, la tasa per cápita mide la exposición respecto a la población base fija, reflejando la concentración de hechos en zonas de alta concurrencia."
+
+Sección 5 (página 3, párrafo evaluado): "1. Visibilidad del centro y zonas comerciales: Chapinero, Santa Fe y Teusaquillo concentran coberturas frecuentes con proporciones de notas negativas superiores al 50\%, impulsadas por su actividad bancaria, universitaria y nocturna."
+
+Sección 5 (página 3, párrafo de cierre): "La evidencia preliminar sugiere que la atención de la prensa responde tanto a la gravedad del hecho como a la notoriedad del sector, antes que a la tasa matemática de criminalidad."
+\end{quote}
+
+La concentración del delito en puntos urbanos específicos no contradice el enfoque del proyecto; describe con precisión el proceso de amplificación informativa bajo estudio:
+
+La unidad geográfica de análisis se encuentra condicionada por el formato de la prensa digital. Las noticias recolectadas mediante Google News no contienen coordenadas precisas de esquinas ni identificadores de manzana censal. La narrativa periodística clasifica y titula los hechos a nivel de localidad o de grandes zonas urbanas (por ejemplo, reportes titulados genéricamente sobre delitos en Chapinero, Teusaquillo, Kennedy o Usaquén).
+
+Asimismo, la concentración en unas pocas cuadras da origen a un contagio reputacional sobre toda la localidad. Un suceso ocurrido en una esquina comercial o en una estación de transporte se convierte en noticia destacada y se asocia a la totalidad de la demarcación. Quienes viven en zonas residenciales tranquilas de esa localidad terminan compartiendo el estigma proyectado por los medios sobre el territorio completo. El propósito del trabajo no es guiar patrullajes policiales en intersecciones puntuales, sino analizar cómo la cobertura de noticias agrega y proyecta la seguridad local hacia la opinión pública.
+
+\subsection{2. Tratamiento del subregistro en las estadísticas oficiales}
+
+Las especificaciones de datos incluidas en la entrega radicada señalaron:
+
+\begin{quote}
+Sección 1 (página 1, líneas 2-4): "Se analizan hurtos a personas, residencias y motocicletas mediante tasas anuales por 100.000 habitantes y se comparan con índices de sentimiento calculados con sentometrics."
+
+Sección 3 (página 1): "1. Secretaría Distrital de Seguridad (SDSCJ): registros de delitos de alto impacto por localidad (2022–2026)... 3. Google News RSS: 3.916 artículos de prensa regional y nacional sobre delincuencia en Bogotá (2022–2026)."
+
+Sección 5 (página 2, análisis de Figura 1): "En cambio, el hurto a residencias (media de 108,4) y el hurto de motocicletas (media de 68,2) mantienen magnitudes menores y rangos más estrechos en la ciudad."
+\end{quote}
+
+El subregistro en las denuncias es una limitación conocida de las bases policiales. Esta circunstancia constituye precisamente una motivación central para incorporar la minería de texto en prensa:
+
+Los medios actúan como un canal alternativo para captar incidentes que no llegan a denunciarse formalmente. Cuando una persona sufre un hurto y no radica la denuncia debido a la desconfianza institucional, el tiempo que demanda el trámite o la normalización del delito, el suceso no ingresa a las bases oficiales. No obstante, si el fenómeno genera alarma comunitaria o involucra violencia evidente, suele trascender a las noticias locales y a redes sociales. Comparar ambas fuentes permite contrastar el registro administrativo con la visibilidad pública de los incidentes.
+
+Por otra parte, la estrategia empírica utiliza deliberadamente tipologías delictivas con incentivos de denuncia contrastantes:
+
+1. El hurto a personas (CMHP) presenta niveles altos de subregistro ciudadano, ya que en hechos de menor valor económico la víctima suele considerar bajo el beneficio de denunciar.
+
+2. El hurto de motocicletas (CMHM) y de automotores (CMHA) presenta un subregistro mínimo. En Colombia, el dueño de un vehículo hurtado se encuentra obligado a presentar de inmediato la denuncia ante la Fiscalía o la Policía para activar el seguro patrimonial y deslindarse de responsabilidades penales y civiles en caso de que el vehículo sea utilizado en actos delictivos posteriores.
+
+Esta distinción provee un control analítico útil: si las discrepancias territoriales entre notas de prensa y estadísticas oficiales provinieran exclusivamente del subregistro de denuncias, la correlación entre noticias y hurto de automotores debería ser homogénea en toda la ciudad. En cambio, si la prensa sigue sobrerrepresentando a ciertas localidades comerciales aun en delitos donde la denuncia es casi total, se confirma que la brecha territorial obedece a criterios de interés periodístico y visibilidad urbana.
+
+Por último, tal como se indicó en la página 2 de la propuesta, las tasas per cápita del centro (Los Mártires, Santa Fe y La Candelaria) se calculan respecto a la población residente fija. La presencia masiva de población flotante (compradores, trabajadores y estudiantes) eleva la exposición al riesgo respecto a los residentes, aspecto que forma parte de la interpretación de los datos en el documento.

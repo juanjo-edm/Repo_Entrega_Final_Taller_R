@@ -1,5 +1,5 @@
 # ==============================================================================
-# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
+# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022–septiembre de 2026)
 # SCRIPT: scripts/04_clustering_kmeans.R
 # ROL: Agrupamiento Territorial de Criminalidad con K-Means (K* = 3)
 # AUTORES: Grupo 10 — Taller de Programación en R (MECA, Uniandes)
@@ -28,9 +28,9 @@ conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
 ## 1.4 Definición de rutas relativas ({here}) ----
-ruta_datos_clean    <- here::here("data", "processed")
-ruta_salida_tablas  <- here::here("output", "tables")
-ruta_salida_figuras <- here::here("output", "figures")
+ruta_datos_clean    <- here("data", "processed")
+ruta_salida_tablas  <- here("output", "tables")
+ruta_salida_figuras <- here("output", "figures")
 
 if (!dir.exists(ruta_salida_tablas)) {
   dir.create(ruta_salida_tablas, recursive = TRUE, showWarnings = FALSE)
@@ -47,7 +47,7 @@ archivo_panel <- file.path(
   "02_poblacion",
   "panel_delitos_poblacion_localidad.parquet"
 )
-panel_delitos <- arrow::read_parquet(archivo_panel)
+panel_delitos <- read_parquet(archivo_panel)
 
 stopifnot(nrow(panel_delitos) == 95)
 stopifnot(length(unique(panel_delitos$codigo_localidad)) == 19)
@@ -64,6 +64,7 @@ matriz_localidad <- panel_delitos |>
     .groups = "drop"
   )
 
+# Conversión de las 3 tasas delictivas a matriz numérica y normalización Z-score
 mat_num <- matriz_localidad |>
   select(tasa_personas_prom, tasa_resid_prom, tasa_motos_prom) |>
   as.matrix()
@@ -89,7 +90,7 @@ for (i in seq_along(2:5)) {
   k_val <- (2:5)[i]
   set.seed(20261014)
   km_temp <- kmeans(matriz_scale, centers = k_val, nstart = 50)
-  sil_temp <- cluster::silhouette(km_temp$cluster, dist_euclidea)
+  sil_temp <- silhouette(km_temp$cluster, dist_euclidea)
   diagnostico_k$silueta_media[i] <- round(mean(sil_temp[, 3]), 4)
   diagnostico_k$wss[i]           <- round(km_temp$tot.withinss, 4)
 }
@@ -110,7 +111,7 @@ message(
 ## 4.1 Ajuste del modelo final con 50 reinicios ----
 set.seed(20261014)
 km_final <- kmeans(matriz_scale, centers = k_optimo, nstart = 50)
-sil_final <- cluster::silhouette(km_final$cluster, dist_euclidea)
+sil_final <- silhouette(km_final$cluster, dist_euclidea)
 
 ## 4.2 Identificación determinística de etiquetas por centroides ----
 centroides_df <- as_tibble(km_final$centers) |>
@@ -160,14 +161,14 @@ archivo_salida_clusters <- file.path(
   ruta_datos_clean,
   "clusters_localidades_kmeans.parquet"
 )
-arrow::write_parquet(df_clusters, archivo_salida_clusters)
+write_parquet(df_clusters, archivo_salida_clusters)
 
 ## 5.2 Exportación de tabla resumen de clústeres ----
 archivo_tabla_clusters <- file.path(
   ruta_salida_tablas,
   "tabla_clustering_kmeans_perfiles.csv"
 )
-readr::write_csv(df_clusters, archivo_tabla_clusters)
+write_csv(df_clusters, archivo_tabla_clusters)
 
 message("✔ Asignaciones de clustering guardadas en: ", archivo_salida_clusters)
 message("✔ Tabla de perfiles exportada en: ", archivo_tabla_clusters)
