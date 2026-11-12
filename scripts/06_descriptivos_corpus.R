@@ -61,8 +61,13 @@ tema_limpio <- theme_minimal(base_size = 11) +
 archivo_noticias <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
 archivo_corpus   <- file.path(ruta_proc, "01_sento_corpus.rds")
 
+stopifnot(file.exists(archivo_noticias), file.exists(archivo_corpus))
+
 noticias_df  <- arrow::read_parquet(archivo_noticias)
 corpus_sento <- readRDS(archivo_corpus)
+
+# Control de auditoría: verificar cobertura de las 19 localidades urbanas
+stopifnot(nrow(noticias_df) > 0, length(unique(noticias_df$localidad)) == 19)
 
 # 3. Estadísticas Descriptivas y Visualizaciones del Corpus ----
 
@@ -244,6 +249,7 @@ if ("sentimiento_categoria" %in% colnames(noticias_df)) {
 
 # 4. Tabla Descriptiva Resumen del Corpus ----
 
+## 4.1 Construcción y exportación de estadísticos anuales (2022–2026) ----
 tabla_resumen <- noticias_df |>
   group_by(año) |>
   summarise(
@@ -256,6 +262,7 @@ tabla_resumen <- noticias_df |>
     .groups = "drop"
   )
 
+stopifnot(nrow(tabla_resumen) == 5)
 write_csv(tabla_resumen, file.path(ruta_tab, "tabla_descriptivos_corpus.csv"))
 
 # 5. Diagnósticos S3 con sentometrics::corpus_summarize() (T-08) ----

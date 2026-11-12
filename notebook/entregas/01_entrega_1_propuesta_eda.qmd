@@ -65,11 +65,13 @@ execute:
 #| include: false
 
 # 1. Configuración Inicial Obligatoria ----
+
+## 1.1 Opciones globales y semilla ----
 rm(list = ls())
 options(scipen = 999)
 set.seed(20261014)
 
-# 1.1 Carga de librerías ----
+## 1.2 Carga de librerías ----
 library(here)
 library(conflicted)
 library(arrow)
@@ -82,12 +84,12 @@ library(knitr)
 library(kableExtra)
 library(ggrepel)
 
-# 1.2 Resolución explícita de conflictos ----
+## 1.3 Resolución explícita de conflictos ({conflicted}) ----
 conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
-# 1.3 Carga de datos procesados ----
+## 1.4 Carga de datos procesados ----
 ruta_proc <- here::here("data", "processed")
 archivo_panel    <- file.path(ruta_proc, "panel_consolidado_localidad_anual.parquet")
 archivo_noticias <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
@@ -97,6 +99,7 @@ stopifnot(file.exists(archivo_noticias))
 
 panel_df    <- arrow::read_parquet(archivo_panel)
 noticias_df <- arrow::read_parquet(archivo_noticias)
+stopifnot(nrow(panel_df) == 95)
 ```
 
 # Pregunta de Investigación
@@ -151,7 +154,7 @@ kable(tabla_resumen, booktabs = TRUE, linesep = "", align = c("l", rep("r", 5)))
   kable_styling(latex_options = c("HOLD_position", "scale_down"), font_size = 8)
 ```
 
-Las denuncias muestran diferencias marcadas entre modalidades y territorios. El hurto a personas promedia 2.911 casos anuales por 100.000 habitantes, con una desviación estándar de 2.946 que refleja contrastes notorios: mientras Usme registra 620 hechos por 100.000 habitantes, Los Mártires alcanza 8.390 y La Candelaria 7.615. En cambio, el hurto a residencias (media de 108,4) y el hurto de motocicletas (media de 68,2) mantienen magnitudes menores y rangos más estrechos en la ciudad. El sentimiento promedio de las noticias es predominantemente negativo (-0,02), y en el 47,8% de las notas analizadas prevalecen términos de pérdida o agresión sobre expresiones de tranquilidad o acción policial.
+Las denuncias muestran diferencias marcadas entre modalidades y territorios. El hurto a personas promedia 2.911 casos anuales por 100.000 habitantes, con una desviación estándar de 2.946 que refleja contrastes notorios: mientras Usme registra 620 hechos por 100.000 habitantes, Los Mártires alcanza 8.390 y La Candelaria 7.615. En cambio, el hurto a residencias (media de 108,4) y el hurto de motocicletas (media de 68,2) mantienen magnitudes menores y rangos más estrechos en la ciudad. El sentimiento promedio de las noticias es predominantemente negativo (-0,17), y en el 64,2% de las notas analizadas prevalecen términos de pérdida o agresión sobre expresiones de tranquilidad o acción policial.
 
 ```{r}
 #| label: fig-grafico-1
@@ -222,8 +225,8 @@ ggplot(loc_summary, aes(x = tasa_personas_media, y = prop_neg_media)) +
 ```
 
 Al contrastar las tasas de hurto con el tono de las noticias, la @fig-grafico-2 muestra una correspondencia parcial con la hipótesis:
-1. *Visibilidad del centro y zonas comerciales:* Chapinero, Santa Fe y Teusaquillo concentran coberturas frecuentes con proporciones de notas negativas superiores al 50%, impulsadas por su actividad bancaria, universitaria y nocturna.
-2. *Persistencia del tono adverso en periferias pobladas:* Localidades con tasas per cápita más bajas pero gran tamaño demográfico (como Kennedy, Suba y Bosa) sostienen entre 45% y 55% de artículos negativos. Los medios cubren hechos violentos particulares sin considerar la escala de la población expuesta.
+1. *Visibilidad del centro y zonas comerciales:* Chapinero, Santa Fe, Los Mártires y Teusaquillo concentran coberturas frecuentes con proporciones de notas negativas superiores al 60%, impulsadas por su actividad bancaria, universitaria y nocturna.
+2. *Persistencia del tono adverso en periferias pobladas:* Localidades con tasas per cápita más bajas pero gran tamaño demográfico (como Kennedy, Suba y Bosa) sostienen entre 60% y 68% de artículos negativos. Los medios cubren hechos violentos particulares sin considerar la escala de la población expuesta.
 
 La evidencia preliminar sugiere que la atención de la prensa responde tanto a la gravedad del hecho como a la notoriedad del sector, antes que a la tasa matemática de criminalidad. Para la entrega final, se empleará un algoritmo de *K-means* que agrupe las localidades según sus tres tasas de hurto y sus indicadores de sentimiento. Este ejercicio permitirá distinguir territorios con alta incidencia y alta cobertura de aquellos con estigmatización mediática no correspondida por sus denuncias, sirviendo de base para la herramienta interactiva en Shiny.
 

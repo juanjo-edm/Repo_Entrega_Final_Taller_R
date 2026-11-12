@@ -18,6 +18,9 @@ Thumbs.db
 # Shiny deployment artifacts
 rsconnect/
 
+# Local R library directory
+R_libs/
+
 # Large raw datasets (>50MB) or heavy archives
 data/raw/*.zip
 data/raw/*.tar.gz
