@@ -1,37 +1,69 @@
-# Aplicación Interactiva en R Shiny (`app/`)
+# Aplicación Interactiva R Shiny (`app/`) — "Dos lecturas de Bogotá"
 
-En esta carpeta se aloja el tablero interactivo construido con [`bslib`](https://rstudio.github.io/bslib/) (Bootstrap 5), [`plotly`](https://plotly.com/r/), [`leaflet`](https://rstudio.github.io/leaflet/) y [`DT`](https://rstudio.github.io/DT/) que integra los resultados de criminalidad territorial ($K$-Means) y el análisis cuantitativo de sentimiento mediático (`sentometrics`).
-
----
-
-## 1. Arquitectura de las 5 Pestañas (`page_navbar`)
-
-1. **Panorama Territorial y Clústeres ($K$-Means):**
-   * **Tarjetas KPI (`value_box`):** Tasa media distrital según modalidad seleccionada, localidad más crítica, sentimiento mediático promedio y porcentaje de noticias negativas.
-   * **Mapa Coroplético Interactivo (`leaflet`):** Permite colorear las 19 localidades urbanas por **Clúster $K$-Means ($K^* = 3$)**, **Tasa de Hurto (personas, residencias, motos, total)** o **Sentimiento Mediático**, con *popups* detallados por localidad.
-   * **Contraste Realidad vs. Prensa (`plotly` y `DT`):** Dispersión interactiva entre tasas oficiales por 100.000 habitantes e índice de sentimiento, ranking territorial y tabla de perfiles centroides.
-2. **Series de Sentimiento (`T-16` — `sento_measures` y `peakdates`):**
-   * Exploración interactiva de las **364 series mensuales** (`06_measures_long.rds`) agrupadas por **Clústeres Territoriales (3)**, **Tópicos/Modalidades DAI (4)** o **Localidades (19)**, permitiendo alternar entre los diccionarios `crimen_es` y `nrc_es` y los 7 esquemas de suavizamiento temporal (`linear`, `exponential`, `beta` con `lag = 6` meses).
-   * Visualización del **Índice Global Ponderado de Bogotá** (`07_global_index.rds`) y tabla de meses históricos críticos detectados con `peakdates()`.
-3. **Impacto y Atribuciones (`T-18` — `sento_model` Elastic Net y `attributions`):**
-   * Indicadores de desempeño de la regresión penalizada Elastic Net ($\alpha = 0.2$, selección BIC, $R^2 = 87.5\%$, horizonte $h = 1$ mes).
-   * Gráfico de barras apiladas mensuales (`plot.attributions`) que descompone el aporte marginal por **Características (`features`)**, **Léxicos (`lexicons`)** y **Memoria Temporal (`time`)**, en escala bruta o normalizada `[-1, 1]`.
-   * Comparativa entre la serie delictiva observada ($y_t$) y predicha ($\hat{y}_t$) y ranking de los 15 predictores activos con mayor coeficiente $|\hat{\beta}|$.
-4. **Noticias Críticas y Corpus (`T-08` y `T-12` — `peakdocs` y `corpus_summarize`):**
-   * **Explorador de Noticias Críticas (`peakdocs`):** Tabla interactiva `DT` filtrable por tipo de pico (picos globales/locales, más negativas, más positivas, o las 3.916 noticias), localidad, categoría oficial de los 11 Delitos de Alto Impacto (SDSCJ) y rango de años, con enlace directo a cada artículo.
-   * **Evolución del Corpus (`corpus_summarize`):** Gráficos de volumen mensual de documentos y tokens, distribución por modalidad DAI y términos de mayor valencia del léxico `crimen_es`.
-5. **Metodología y Contratos (`T-01` a `T-04`, `T-20`):**
-   * Síntesis matemática en $\LaTeX$ (`MathJax`) de la ponderación tridimensional ($\omega, \theta, b$), modificadores de valencia, modelo Elastic Net y diccionario de los 8 artefactos `.rds`.
+**Proyecto:** Hurtos y sentimiento mediático en Bogotá (2022–2026)  
+**Programa:** Maestría en Economía Aplicada (MECA) — *Taller de Programación en R*  
+**Autores:** Olga Lucía Ramírez, Juan José Echeverry, Sergio López, Miguelangel Palma, Gabriel Echeverry, Juan Esteban Carvajal (Grupo 10)  
 
 ---
 
-## 2. Cómo Ejecutar la Aplicación
+## Propósito y Diseño Visual
 
-Desde la raíz del proyecto en R / RStudio:
+Esta carpeta contiene la aplicación interactiva **R Shiny** (**"Dos lecturas de Bogotá"**), construida con `{bslib}` (Bootstrap 5 en tema oscuro `#0E1116`), `{leaflet}` (OpenStreetMap con filtro oscuro libre de API key), `{plotly}` y `{DT}`.
+
+La interfaz contrasta dos lecturas de la seguridad urbana en las 19 localidades de Bogotá:
+- **Ámbar (`#F0A43A`)**: lo que dicen las **denuncias oficiales** (tasas de hurto por 100.000 habitantes de la SDSCJ / SIEDCO y proyecciones poblacionales SDS).
+- **Azul (`#79AEFF`)**: lo que dice la **prensa digital** (polaridad y cobertura calculadas con `sentometrics`).
+
+---
+
+## Estructura de la Carpeta
+
+```text
+app/
+├── README.md        # Documentación de arquitectura y guía de ejecución
+├── app.R            # Aplicación Shiny completa ("Dos lecturas de Bogotá")
+└── www/             # Recursos estáticos (hoja de estilos custom.css)
+```
+
+---
+
+## Arquitectura de Datos (Desacoplamiento Eficiente)
+
+La aplicación **no ejecuta procesos pesados de scraping ni recalcula matrices léxicas** en tiempo de ejecución. Toda la reactividad lee el paquete pre-computado en una sola llamada `readRDS()` al iniciar:
+
+- `data/processed/datos_consolidados_shiny.rds` (generado por `scripts/05_export_insumos_shiny.R` e integrado en `scripts/master.R`).
+- Los objetos globales (`datos_promedio_global`, `measures_long`, `attr_long_raw`, `attr_long_norm`, `ajuste_temporal`, `coeficientes_df`, `metricas_modelo`) se pre-calculan fuera de `server` y los reactivos de consulta usan `bindCache()` para respuesta instantánea.
+
+---
+
+## Las 6 Pestañas del Tablero (`page_navbar`)
+
+1. **`Panorama`**:
+   - Filtros por modalidad de hurto (*Personas*, *Residencias*, *Motocicletas*), año (*Promedio 2022–2026* o año específico) y capa del mapa (*Denuncias* en ámbar vs. *Prensa* en azul).
+   - 4 tarjetas KPI (`value_box`), mapa coroplético interactivo en `{leaflet}` (con clic directo para saltar a la ficha de la localidad) y ranking de las 5 tasas más altas.
+2. **`Mi localidad`**:
+   - Ficha individual de cualquiera de las 19 localidades urbanas con su puesto en el ranking distrital, evolución anual frente al promedio de Bogotá, composición del tono de prensa por año y tabla interactiva (`{DT}`) con las 5 noticias más negativas y las 5 más positivas con enlaces directos.
+3. **`Hurto vs. prensa`**:
+   - Gráfico de dispersión interactivo (`{plotly}`) que cruza la tasa de hurto denunciado (eje X) contra el porcentaje de noticias negativas (eje Y), dividido en cuatro cuadrantes interpretativos (*¿estigma mediático?*, *alta denuncia y prensa dura*, etc.) con selección por clic (`plotly_click`).
+4. **`Clusters`**:
+   - Cartografía y tarjetas comparativas de los 3 grupos territoriales hallados con K-Means ($K^* = 3$): *Céntrico e Institucional* (`#B08CF0`), *Comercial y Automotor* (`#E86A50`) y *Residencial y Periférico* (`#3FB8A6`).
+5. **`Sentometrics y Elastic Net`**:
+   - Indicadores de desempeño del modelo regularizado Elastic Net ($\text{BIC}$, $h = 1$ mes: $R^2$, $\alpha^*$, $\lambda^*$, series activas y $\text{RMSE}$).
+   - Explorador interactivo de las **364 series mensuales de sentimiento** (`sento_measures`) por grupo de *features* (clústeres, tópicos DAI o localidades), léxico (`crimen_es` vs. `nrc_es`) y esquema de memoria temporal (`lag = 6` meses), incluyendo las fechas críticas detectadas con `peakdates()`.
+   - Descomposición aditiva de **atribuciones** (`attributions()`) por clúster, tópico, léxico y memoria temporal, serie observada vs. predicha ($\hat{y}_t$) y ranking de los 10 coeficientes $|\beta|$ de mayor magnitud.
+6. **`Datos y método`**:
+   - Síntesis de fuentes oficiales, advertencias metodológicas (corte septiembre 2026 y efecto de población flotante en el centro) y tabla interactiva con el contrato de los artefactos `.rds` del pipeline.
+
+---
+
+## Cómo Ejecutar la Aplicación Localmente
+
+Desde la consola de R o RStudio (con el proyecto abierto en la raíz del repositorio):
+
 ```r
-# 1. (Opcional) Si deseas regenerar todos los datos desde cero (~25 segundos):
+# 1. (Opcional) Si aún no existe datos_consolidados_shiny.rds, correr el pipeline maestro:
 source(here::here("scripts", "master.R"))
 
-# 2. Iniciar la aplicación interactiva:
+# 2. Lanzar la aplicación interactiva:
 shiny::runApp(here::here("app"))
 ```

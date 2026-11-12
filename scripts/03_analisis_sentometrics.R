@@ -448,7 +448,7 @@ df_measures_long <- as_tibble(dt_measures_wide) |>
   ) |>
   separate(
     col    = serie_id,
-    into   = c("feature", "lexicon", "time"),
+    into   = c("lexicon", "feature", "time"),
     sep    = "--",
     remove = FALSE
   ) |>
@@ -466,6 +466,9 @@ df_measures_long <- as_tibble(dt_measures_wide) |>
       TRUE                   ~ lexicon
     )
   )
+
+# Control de auditoría: verificar que todas las series tengan grupo_feature válido
+stopifnot(all(df_measures_long$grupo_feature != "Otro"))
 
 objeto_06_measures_long <- list(
   long = as.data.table(df_measures_long),
