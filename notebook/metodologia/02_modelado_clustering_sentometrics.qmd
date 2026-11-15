@@ -1809,22 +1809,70 @@ ggplot(df_series_cluster, aes(x = date, y = valor, color = cluster_limpio)) +
 
 En esta sección replicamos la Fase 4 de `scripts/03_analisis_sentometrics.R`. El reto econométrico consiste en conectar las 364 series mensuales de sentimiento mediático con la evolución real del hurto en la ciudad.
 
-## Especificación del modelo regularizado (`sento_model`)
+## Especificación del modelo regularizado (`sento_model`) y guía intuitiva de Ridge, LASSO y Elastic Net
 
 Como las denuncias oficiales en `panel_delitos` tienen frecuencia anual mientras que nuestras series de sentimiento son mensuales, mensualizamos la tasa distrital de hurto cada año repartiéndola según la participación mensual observada de noticias sobre delitos de alto impacto estrictos (`prop_mensual_dai`), con suavizamiento de Laplace (`+ 1`) para evitar divisiones por cero y preservando la suma anual oficial.
 
 Con esa serie objetivo $y_t$ lista, buscamos predecir el nivel de intensidad delictiva un mes adelante ($y_{t+1}$, horizonte $h = 1$) usando las $M = 364$ series de sentimiento $S_{t,m}$:
 
 $$
-\min_{\beta_0, \beta} \left\{ \frac{1}{2N} \sum_{t=1}^{N} \left( y_{t+1} - \beta_0 - \sum_{m=1}^{M} \beta_m S_{t,m} \right)^2 + \lambda \left[ \frac{1-\alpha}{2} \|\beta\|_2^2 + \alpha \|\beta\|_1 \right] \right\}
+\min_{\beta_0, \beta} \left\{ \underbrace{\frac{1}{2N} \sum_{t=1}^{N} \left( y_{t+1} - \beta_0 - \sum_{m=1}^{M} \beta_m S_{t,m} \right)^2}_{\text{Error de predicción (ajuste a los datos)}} + \lambda \left[ \underbrace{\frac{1-\alpha}{2} \sum_{m=1}^{M} \beta_m^2}_{\text{Penalización Ridge }(L_2)} + \underbrace{\alpha \sum_{m=1}^{M} |\beta_m|}_{\text{Penalización LASSO }(L_1)} \right] \right\}
 $$ {#eq-elasticnet}
 
-::: {.callout-note}
-## Intuición econométrica: por qué Elastic Net cuando hay 364 predictores y 51 meses
-En una regresión lineal tradicional (MCO), tener más variables ($M = 364$) que observaciones ($N = 51$) hace imposible estimar un coeficiente único para cada serie; además, distintas curvas de memoria de una misma localidad están muy correlacionadas entre sí. **Elastic Net** resuelve esto añadiendo un presupuesto de penalización ($\lambda$) que combina dos fuerzas:
-1. El componente **Ridge** ($1 - \alpha$) reparte el peso de forma estable entre series correlacionadas en lugar de disparar coeficientes opuestos.
-2. El componente **LASSO** ($\alpha$) empuja exactamente a cero ($\beta_m = 0$) los coeficientes de las series redundantes, conservando únicamente el subconjunto informativo seleccionado por el Criterio de Información Bayesiano (BIC).
+### ¿Por qué no podemos usar una regresión lineal común y corriente (MCO)?
+
+Para entender qué hacen **Ridge**, **LASSO** y **Elastic Net** sin necesidad de conocimientos previos en econometría avanzada, partamos del problema práctico que tenemos enfrente:
+
+1. **Tenemos más variables explicativas que meses de historia ($M > N$):** Contamos con **$N = 51$ meses** efectivos de datos (descontando los primeros meses que se usan para construir la memoria de 6 meses y el mes de pronóstico $h = 1$), pero tenemos **$M = 364$ series de sentimiento** tratando de explicar esa tasa mensual. En una regresión tradicional de Mínimos Cuadrados Ordinarios (MCO), intentar estimar 364 pesos ($\beta_m$) con solo 51 observaciones es como intentar resolver un acertijo con 364 incógnitas teniendo apenas 51 pistas: existen infinitas soluciones matemáticas que pasan exactamente por los 51 puntos históricos, pero **memorizan el ruido casual** (*sobreajuste* u *overfitting*) y fracasan al predecir un mes nuevo.
+2. **Nuestras series son «hermanas gemelas» (multicolinealidad extrema):** Dentro de las 364 series, muchas miden casi lo mismo. Por ejemplo, el sentimiento de *Chapinero* con memoria lineal (`linear`) y el sentimiento de *Chapinero* con memoria exponencial (`exponential0.2`) suben y bajan casi al unísono. Cuando dos variables son casi idénticas, la regresión tradicional se vuelve loca: puede asignarle un peso absurdo de $+5.000$ a la primera y $-5.000$ a la segunda para que se cancelen entre sí, haciendo imposible interpretar qué está pasando realmente.
+
+### La solución: poner un «presupuesto de pesos» ($\lambda$)
+
+Para evitar que el modelo asigne pesos gigantescos o memorice el ruido, los métodos de **regularización** le cobran al modelo una «multa» o **penalización** cada vez que intenta hacer grande algún coeficiente $\beta_m$.
+
+El parámetro $\lambda \ge 0$ mide **qué tan severa es la multa global**:
+
+* Si $\lambda = 0$, no hay multa (volvemos a la regresión tradicional sin control).
+* Si $\lambda$ es muy grande, usar cualquier variable sale tan caro que el modelo prefiere encoger casi todos los pesos $\beta_m$ hacia cero.
+
+Dependiendo de **cómo se calcule esa multa**, obtenemos tres métodos distintos: **Ridge**, **LASSO** o **Elastic Net**.
+
+::: {.callout-tip}
+## Guía intuitiva para cualquier lector: diferencias entre Ridge, LASSO y Elastic Net
+
+Imagina que eres el director de un equipo de **364 analistas** (nuestras 364 series de sentimiento) y debes decidir cuánto peso ($\beta_m$) darle a la opinión de cada uno para pronosticar el hurto del próximo mes, pero tienes un presupuesto limitado:
+
+#### 1. Regresión Ridge ($\alpha = 0$, penalización cuadrática $L_2$: $\sum \beta_m^2$) — *«El director equitativo que no despide a nadie»*
+* **¿Cómo cobra la multa?** Eleva cada peso al cuadrado ($\beta_m^2$).
+* **Intuición sencilla:** Como eleva al cuadrado, a Ridge le sale carísimo darle mucho peso a un solo analista: darle un peso de $10$ a uno solo cuesta $10^2 = 100$ de multa, mientras que repartir ese mismo peso entre dos analistas dándole $5$ a cada uno cuesta $5^2 + 5^2 = 50$ (¡la mitad!).
+* **¿Qué efecto produce?** Cuando dos o más series se parecen mucho (están correlacionadas), Ridge **las encoge juntas y les reparte el peso de forma solidaria**.
+* **Su desventaja:** Como cuando un número es muy pequeño su cuadrado es casi cero (por ejemplo, $0{,}01^2 = 0{,}0001$), Ridge deja de castigar los pesos diminutos y **nunca vuelve ningún coeficiente exactamente igual a cero ($\beta_m \neq 0$)**. Al final, los 364 analistas siguen hablando al mismo tiempo y el modelo no filtra cuáles sobran.
+
+#### 2. Regresión LASSO ($\alpha = 1$, penalización absoluta $L_1$: $\sum |\beta_m|$) — *«El editor implacable que recorta personal»*
+* **¿Cómo cobra la multa?** Suma el valor absoluto de los pesos ($|\beta_m|$), sin elevarlos al cuadrado.
+* **Intuición sencilla:** Aquí cada unidad de peso cuesta exactamente lo mismo, sea grande o pequeña. Si un analista aporta poco, mantenerlo con un peso pequeño sigue costando presupuesto, así que para el modelo es más rentable **ponerle un peso de exactamente cero ($\beta_m = 0$)** y descartarlo por completo.
+* **¿Qué efecto produce?** Hace **selección automática de variables**: limpia el ruido y apaga en cero la gran mayoría de las 364 series, dejando solo unas pocas activas.
+* **Su desventaja:** Cuando hay un grupo de series muy parecidas entre sí (por ejemplo, las 7 curvas de memoria de una misma localidad), LASSO se comporta de forma caprichosa: **escoge una sola casi al azar y elimina a sus hermanas**, por lo que si los datos cambian ligeramente puede cambiar por completo qué variable sobrevive.
+
+#### 3. Regresión Elastic Net ($0 < \alpha < 1$, combina $L_1$ y $L_2$) — *«Lo mejor de ambos mundos: selección en equipo»*
+* **¿Cómo funciona?** Combina la multa de Ridge y la de LASSO mediante una perilla llamada **$\alpha$** (que va entre $0$ y $1$):
+  * Si $\alpha = 0$, es 100% Ridge.
+  * Si $\alpha = 1$, es 100% LASSO.
+  * Si $\alpha$ está entre $0$ y $1$ (por ejemplo, en nuestro modelo el criterio BIC elige $\alpha = 0{,}2$, es decir, **80% de fuerza Ridge + 20% de fuerza LASSO**), aplica ambas virtudes a la vez.
+* **¿Por qué es ideal para nuestro problema?**
+  1. Gracias a su **20% de fuerza LASSO**, limpia la casa: pone exactamente en cero ($\beta_m = 0$) las series que no aportan información nueva (descarta 318 series y se queda solo con **46 series relevantes**).
+  2. Gracias a su **80% de fuerza Ridge**, tiene **efecto de agrupamiento (*grouping effect*)**: cuando varias series correlacionadas de un mismo clúster o localidad son verdaderamente informativas, no las destruye al azar como LASSO, sino que las conserva juntas repartiéndoles pesos estables.
 :::
+
+| Característica | MCO (Tradicional) | Ridge ($\alpha = 0$) | LASSO ($\alpha = 1$) | Elastic Net ($0 < \alpha < 1$) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Fórmula del castigo** | Ninguno ($\lambda = 0$) | Suma de cuadrados ($\sum \beta_m^2$) | Suma de valores absolutos ($\sum |\beta_m|$) | Combinación de ambos ($(1-\alpha)L_2 + \alpha L_1$) |
+| **¿Funciona cuando hay más variables que meses ($364 > 51$)?** | **No** (se indetermina y sobreajusta) | **Sí** | **Sí** | **Sí** |
+| **¿Elimina variables irrelevantes poniéndoles $\beta_m = 0$?** | **No** (conserva las 364) | **No** (conserva las 364 con pesos pequeños) | **Sí** (deja muy pocas activas) | **Sí** (en nuestro caso conserva 46 de 364) |
+| **¿Cómo maneja series muy parecidas (correlacionadas)?** | Se vuelve inestable (pesos gigantes opuestos) | **Excelente** (reparte el peso entre ellas) | **Inestable** (elige una al azar y borra el resto) | **Excelente** (selecciona grupos completos y los estabiliza) |
+| **Analogía práctica** | Dejar hablar a los 364 analistas sin filtro | Bajarles el volumen a todos por igual | Despedir a casi todos y quedarse con uno por grupo al azar | Despedir a los que no aportan y conservar equipos estables |
+
+: Comparación pedagógica entre regresión tradicional, Ridge, LASSO y Elastic Net {#tbl-comparacion-regularizacion}
 
 ```{r}
 #| label: estimacion-elasticnet
@@ -2050,9 +2098,11 @@ ggplot(df_aj, aes(x = date, y = valor, color = serie, linetype = serie)) +
   )
 ```
 
-## Descomposición de atribuciones marginales (`attributions`)
+## Descomposición de atribuciones marginales (`attributions`) y lectura detallada de la Figura 14
 
-Al tratarse de un modelo lineal sobre las series suavizadas, `attributions()` descompone exactamente cada pronóstico mensual en la contribución marginal que aporta cada diccionario (`nrc_es` frente a `crimen_es`), cada característica o cada esquema de memoria temporal.
+Mientras que la @fig-ajuste-elasticnet (Figura 13) nos muestra **cuánto** predice el modelo cada mes (la línea roja punteada frente a la línea azul observada), por sí sola no nos dice **por qué** subió o bajó ese pronóstico en un mes determinado. La función `sentometrics::attributions()` abre esa «caja negra» y descompone cada predicción mensual en la suma exacta de lo que aporta cada grupo de series.
+
+En particular, la @fig-atribuciones-lexicos (**Figura 14**) responde una pregunta central del proyecto: **en cada mes del periodo 2022–2026, ¿qué parte del pronóstico de hurto proviene del lenguaje emocional general de las noticias (`nrc_es`, barras azules) y qué parte proviene del vocabulario especializado de criminalidad bogotana (`crimen_es`, barras color terracota)?**
 
 ```{r}
 #| label: fig-atribuciones-lexicos
@@ -2085,6 +2135,41 @@ suppressMessages(
     )
 )
 ```
+
+::: {.callout-note}
+## Guía paso a paso para entender la Figura 14 (@fig-atribuciones-lexicos)
+
+#### 1. ¿De dónde salen exactamente las barras de la Figura 14? (La regla de la suma exacta)
+En nuestro modelo Elastic Net, el pronóstico de la tasa de hurto para el próximo mes ($\hat{y}_{t+1}$, la línea roja de la Figura 13) se obtiene partiendo de una **constante o nivel base ($\hat{\beta}_0 = 219{,}42$ hurtos por 100.000 hab.)** y sumándole el aporte de las 46 series seleccionadas ($\sum \hat{\beta}_m S_{t,m}$). Como cada serie usa o bien el diccionario `nrc_es` o bien el diccionario `crimen_es`, podemos separar esa suma en dos bloques exactos:
+
+$$
+\underbrace{\hat{y}_{t+1}}_{\text{Pronóstico en Figura 13}} = \underbrace{219{,}42}_{\text{Base fija }(\hat{\beta}_0)} + \underbrace{\sum_{m \in \texttt{nrc\_es}} \hat{\beta}_m S_{t,m}}_{\text{Barra Azul en Figura 14}} + \underbrace{\sum_{m \in \texttt{crimen\_es}} \hat{\beta}_m S_{t,m}}_{\text{Barra Terracota en Figura 14}}
+$$
+
+Es decir, **las barras de la Figura 14 muestran cuántos puntos por encima o por debajo del nivel base ($219{,}42$) aporta cada diccionario en cada mes**:
+
+* **Ejemplo real de un mes alto (julio de 2022):** La barra azul (`nrc_es`) suma **$+38{,}57$** puntos y la barra terracota (`crimen_es`) suma **$+8{,}16$** puntos. Si los sumamos al nivel base ($219{,}42 + 38{,}57 + 8{,}16$), obtenemos **$266{,}15$**, que es exactamente el pico que marca la línea roja de pronóstico en la Figura 13.
+* **Ejemplo real de un mes bajo (agosto de 2026):** La barra azul (`nrc_es`) aporta **$+55{,}95$** puntos, pero la barra terracota (`crimen_es`) resta **$-140{,}57$** puntos. Al sumarlos al nivel base ($219{,}42 + 55{,}95 - 140{,}57$), el pronóstico cae a **$134{,}80$**, reproduciendo el descenso de 2026 en la Figura 13.
+
+#### 2. ¿Cómo leer los ejes y los colores del gráfico?
+* **Eje horizontal (Fecha):** Muestra cada uno de los 51 meses de pronóstico, desde junio de 2022 hasta agosto de 2026. Cada columna vertical del gráfico representa un mes.
+* **Eje vertical (Aporte marginal al pronóstico) y la línea del $0$:**
+  * **Cuando una barra está por encima de $0$ (positiva):** Significa que ese mes ese diccionario **empuja el pronóstico hacia arriba** (aumenta la tasa predicha respecto a la base de $219{,}42$).
+  * **Cuando una barra está por debajo de $0$ (negativa):** Significa que ese mes ese diccionario **empuja el pronóstico hacia abajo** (reduce la tasa predicha respecto a la base de $219{,}42$).
+* **Los dos colores:**
+  * **Azul (`nrc_es` — NRC en español):** Mide el empuje del vocabulario emocional general (palabras de miedo, tristeza, ira o calma general). Oscila tanto por encima como por debajo de cero (entre $-47{,}6$ y $+56{,}1$ puntos, con promedio de $+4{,}1$).
+  * **Terracota / Naranja (`crimen_es` — Criminalidad Bogotá):** Mide el empuje del vocabulario delictivo y policial local (*fleteo, atraco, sicariato, cosquilleo, capturas, incautación*). Es la fuerza dominante del modelo: sus barras son mucho más largas (llegan hasta $-140{,}6$ puntos, con un promedio de $-86{,}6$).
+
+#### 3. ¿Por qué las barras terracota (`crimen_es`) apuntan casi siempre hacia abajo (valores negativos)?
+A primera vista podría sorprender que `crimen_es` tenga barras negativas casi todo el periodo. La razón es matemática y muy sencilla:
+
+1. El modelo fijó un **punto de partida alto ($\hat{\beta}_0 = 219{,}42$)** que corresponde a los meses de mayor criminalidad (2022–2023).
+2. En el corpus de noticias, el puntaje de sentimiento del diccionario `crimen_es` es **negativo ($S_{t,m} < 0$)** porque predominan palabras de delito. Cuando se multiplica un coeficiente positivo ($\hat{\beta}_m > 0$, como `crimen_es--chapinero--beta11` con $+56{,}65$) por un puntaje negativo ($S_{t,m} < 0$), el resultado tiene **signo negativo ($\hat{\beta}_m \times S_{t,m} < 0$)**.
+3. Por lo tanto, `crimen_es` funciona como el **regulador de nivel** que descuenta puntos desde el techo de $219{,}42$ para ubicar la tasa predicha en el escalón real de cada año: en 2022 y principios de 2023 descuenta muy poco (o incluso suma en julio-agosto de 2022, dejando el pronóstico arriba en $\sim 250$), entre finales de 2023 y 2025 descuenta alrededor de $-80$ a $-110$ puntos (ubicando la serie en su meseta intermedia de $\sim 140$–$170$), y en 2026 descuenta hasta $-140$ puntos para reflejar la caída del último año.
+
+#### 4. ¿Qué pasa cuando en un mismo mes la barra azul va hacia arriba y la terracota hacia abajo?
+En varios meses (por ejemplo, en el segundo semestre de 2022 o en mediados de 2026) se observa una barra azul hacia arriba ($> 0$) y una barra terracota hacia abajo ($< 0$). Esto significa que **ambos diccionarios están haciendo contrapeso**: mientras el vocabulario especializado de delitos (`crimen_es`) ajusta el nivel estructural de la tasa de hurto, el tono emocional general (`nrc_es`) corrige las fluctuaciones de corto plazo de ese mes. Esto demuestra por qué fue indispensable combinar ambos diccionarios en lugar de usar solo uno.
+:::
 
 # Cartografía espacial e integración para R Shiny {#sec-mapa}
 
