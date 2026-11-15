@@ -116,6 +116,12 @@ colores_cluster <- c(
   "Residencial y Periférico" = "#3FB8A6"
 )
 
+colores_cluster_iluminado <- c(
+  "Céntrico e Institucional" = "#E2CCFF",
+  "Comercial y Automotor"    = "#FF9E85",
+  "Residencial y Periférico" = "#75FFF0"
+)
+
 ambar      <- "#F0A43A"
 azul       <- "#79AEFF"
 gris_texto <- "#9AA4B2"
@@ -135,7 +141,7 @@ formato <- function(x, digitos = 0) {
 resumir_panel <- function(anio) {
   if (anio == "todos") {
     panel_localidades |>
-      group_by(codigo_localidad, localidad, cluster_nombre) |>
+      group_by(codigo_localidad, localidad, cluster_nombre, silueta_localidad) |>
       summarise(
         tasa_hurto_personas    = mean(tasa_hurto_personas, na.rm = TRUE),
         tasa_hurto_residencias = mean(tasa_hurto_residencias, na.rm = TRUE),
@@ -322,11 +328,78 @@ ui <- page_navbar(
 
     layout_columns(
       col_widths = c(8, 4),
-      card(
-        card_header("Cada punto es una localidad · clic en un punto"),
-        plotlyOutput("grafico_dispersion", height = "520px"),
-        p("Tamaño del punto = número de noticias. Líneas punteadas = promedios.",
-          style = paste0("color:", gris_texto, "; font-size: 13px"))
+      div(
+        card(
+          card_header("Cada punto es una localidad · clic en un punto"),
+          plotlyOutput("grafico_dispersion", height = "520px"),
+          p("Tamaño del punto = número de noticias. Líneas punteadas = promedios distritales.",
+            style = paste0("color:", gris_texto, "; font-size: 13px"))
+        ),
+        card(
+          card_header("¿Por qué se dividió así el gráfico y cómo se especificaron las líneas de corte?"),
+          uiOutput("explicacion_lineas_corte"),
+          hr(style = paste0("border-color:", borde, "; margin: 10px 0")),
+          p(strong("1. ¿Cómo se especificaron las líneas de corte?"),
+            style = "margin-bottom: 4px"),
+          p(
+            "Las dos líneas punteadas no son umbrales arbitrarios fijos: corresponden exactamente al ",
+            strong("promedio simple distrital de las 19 localidades urbanas"),
+            " en el año y la modalidad seleccionados:",
+            style = paste0("color:", gris_texto, "; font-size: 13.5px; margin-bottom: 6px")
+          ),
+          tags$ul(
+            style = paste0("color:", gris_texto, "; font-size: 13.5px; margin-bottom: 10px"),
+            tags$li(
+              HTML(paste0(
+                "<strong style='color:", ambar, "'>Corte vertical (X̄):</strong> media de la tasa de hurto denunciado por cada 100.000 habitantes entre las 19 localidades. Divide la ciudad entre localidades con presión delictiva per cápita <em>por debajo</em> (izquierda) y <em>por encima</em> (derecha) del promedio de Bogotá."
+              ))
+            ),
+            tags$li(
+              HTML(paste0(
+                "<strong style='color:", azul, "'>Corte horizontal (Ȳ):</strong> media del porcentaje de noticias con tono negativo (puntaje <code>sentometrics &lt; 0</code>) entre las 19 localidades. Separa la cobertura periodística <em>más moderada que el promedio</em> (abajo) de la <em>más severa o alarmante que el promedio</em> (arriba)."
+              ))
+            )
+          ),
+          p(strong("2. ¿Por qué se dividió así y qué significa esta partición?"),
+            style = "margin-bottom: 4px"),
+          p(
+            "El propósito central del estudio es contrastar las «dos lecturas» de la inseguridad: la incidencia estadística oficial (SIEDCO) frente a la amplificación mediática (Google News). Si la prensa reflejara de manera estrictamente proporcional las tasas de denuncia, todas las localidades se alinearían sobre una diagonal entre el cuadrante inferior izquierdo y el superior derecho. Al cruzar ambos promedios (X̄, Ȳ), el plano queda dividido en ",
+            strong("cuatro cuadrantes o historias urbanas"),
+            " que permiten identificar dónde coinciden ambas lecturas y dónde existe desajuste:",
+            style = paste0("color:", gris_texto, "; font-size: 13.5px; margin-bottom: 8px")
+          ),
+          layout_columns(
+            col_widths = c(6, 6),
+            div(
+              style = "background: #232A35; padding: 10px 12px; border-radius: 8px; border-left: 3px solid #79AEFF; margin-bottom: 6px",
+              p(strong("↖ Poco hurto relativo, prensa dura (X < X̄, Y ≥ Ȳ)"),
+                style = paste0("color:", azul, "; margin: 0 0 4px 0; font-size: 13px")),
+              p("Posible sobre-exposición o estigma mediático: la tasa por 100.000 hab. es menor al promedio distrital, pero la prensa concentra titulares de alta negatividad (frecuente en localidades periféricas muy pobladas donde los medios cubren casos violentos por volumen absoluto sin ponderar por población).",
+                style = paste0("color:", gris_texto, "; margin: 0; font-size: 12.5px"))
+            ),
+            div(
+              style = "background: #232A35; padding: 10px 12px; border-radius: 8px; border-left: 3px solid #F0A43A; margin-bottom: 6px",
+              p(strong("↗ Mucho hurto, prensa dura (X ≥ X̄, Y ≥ Ȳ)"),
+                style = paste0("color:", ambar, "; margin: 0 0 4px 0; font-size: 13px")),
+              p("Convergencia de lecturas: localidades céntricas y comerciales con alta tasa de denuncias por habitante donde el tono negativo de la prensa acompaña la magnitud estadística del delito.",
+                style = paste0("color:", gris_texto, "; margin: 0; font-size: 12.5px"))
+            ),
+            div(
+              style = "background: #232A35; padding: 10px 12px; border-radius: 8px; border-left: 3px solid #3FB8A6",
+              p(strong("↙ Poco hurto, prensa tranquila (X < X̄, Y < Ȳ)"),
+                style = "color: #3FB8A6; margin: 0 0 4px 0; font-size: 13px"),
+              p("Baja presión en ambas dimensiones: tanto la tasa de denuncias per cápita como la proporción de noticias negativas se sitúan por debajo del promedio de Bogotá.",
+                style = paste0("color:", gris_texto, "; margin: 0; font-size: 12.5px"))
+            ),
+            div(
+              style = "background: #232A35; padding: 10px 12px; border-radius: 8px; border-left: 3px solid #9AA4B2",
+              p(strong("↘ Mucho hurto, prensa tranquila (X ≥ X̄, Y < Ȳ)"),
+                style = "color: #E9EDF2; margin: 0 0 4px 0; font-size: 13px"),
+              p("Sub-cobertura relativa o normalización del delito: registra tasas de hurto superiores a la media distrital, pero el tono periodístico es menos negativo que el promedio de la ciudad.",
+                style = paste0("color:", gris_texto, "; margin: 0; font-size: 12.5px"))
+            )
+          )
+        )
       ),
       div(
         card(
@@ -343,7 +416,7 @@ ui <- page_navbar(
           tags$ol(
             tags$li("Más a la derecha = más hurto denunciado."),
             tags$li("Más arriba = la prensa habla de esa localidad en tono más negativo."),
-            tags$li("Las líneas punteadas dividen la ciudad en cuatro historias.")
+            tags$li("Las líneas punteadas (X̄, Ȳ) dividen la ciudad en cuatro historias según el promedio distrital.")
           )
         )
       )
@@ -354,14 +427,14 @@ ui <- page_navbar(
   nav_panel(
     title = "Clusters", value = "clusters",
     h2("Tres Bogotás según su hurto"),
-    p("Agrupamos las 19 localidades con K-means según sus tres tasas de hurto.",
+    p("Agrupamos las 19 localidades con K-means según sus tres tasas de hurto. Pasa el cursor sobre el mapa para ver el coeficiente de silueta de cada localidad o haz clic en un grupo para iluminarlo.",
       style = paste0("color:", gris_texto)),
     radioButtons("grupo_resaltado", "Resaltar en el mapa",
                  choices = c("Todos", names(colores_cluster)), inline = TRUE),
     layout_columns(
       col_widths = c(6, 6),
       card(
-        card_header("Mapa de grupos"),
+        card_header("Mapa de grupos · pasa el cursor para ver el coeficiente de silueta o haz clic para iluminar"),
         leafletOutput("mapa_clusters", height = "520px")
       ),
       uiOutput("tarjetas_clusters")
@@ -726,6 +799,32 @@ server <- function(input, output, session) {
       event_register("plotly_click")
   })
 
+  output$explicacion_lineas_corte <- renderUI({
+    df      <- datos_prensa()
+    media_x <- mean(df$eje_x, na.rm = TRUE)
+    media_y <- mean(df$prop_negativas, na.rm = TRUE)
+    etiqueta_mod  <- names(modalidades)[modalidades == input$modalidad_prensa]
+    etiqueta_anio <- names(opciones_anio)[opciones_anio == input$anio_prensa]
+
+    layout_columns(
+      col_widths = c(6, 6),
+      div(
+        style = "background: #232A35; padding: 8px 12px; border-radius: 8px;",
+        span("Umbral vertical X̄ (", etiqueta_mod, " · ", etiqueta_anio, "): ",
+             style = paste0("color:", gris_texto, "; font-size: 13px")),
+        strong(paste0(formato(media_x, 1), " por 100.000 hab."),
+               style = paste0("color:", ambar, "; font-size: 14px"))
+      ),
+      div(
+        style = "background: #232A35; padding: 8px 12px; border-radius: 8px;",
+        span("Umbral horizontal Ȳ (% noticias negativas · ", etiqueta_anio, "): ",
+             style = paste0("color:", gris_texto, "; font-size: 13px")),
+        strong(paste0(formato(media_y, 1), " %"),
+               style = paste0("color:", azul, "; font-size: 14px"))
+      )
+    )
+  })
+
   output$ficha_prensa <- renderUI({
     df   <- datos_prensa()
     fila <- filter(df, localidad == localidad_prensa())
@@ -755,24 +854,133 @@ server <- function(input, output, session) {
 
   ## 6.4 Pestaña 4: Clusters ----
 
+  # Clic en un polígono del mapa de clusters o en una tarjeta: ilumina ese grupo
+  observeEvent(input$mapa_clusters_shape_click, {
+    loc_clic <- input$mapa_clusters_shape_click$id
+    req(loc_clic)
+    grupo_clic <- datos_promedio_global$cluster_nombre[datos_promedio_global$localidad == loc_clic]
+    if (length(grupo_clic) == 1) {
+      nuevo_grupo <- ifelse(input$grupo_resaltado == grupo_clic, "Todos", grupo_clic)
+      updateRadioButtons(session, "grupo_resaltado", selected = nuevo_grupo)
+    }
+  })
+
+  observeEvent(input$clic_tarjeta_cluster, {
+    grupo_clic <- input$clic_tarjeta_cluster
+    req(grupo_clic)
+    nuevo_grupo <- ifelse(input$grupo_resaltado == grupo_clic, "Todos", grupo_clic)
+    updateRadioButtons(session, "grupo_resaltado", selected = nuevo_grupo)
+  })
+
   output$mapa_clusters <- renderLeaflet({
     capa <- geo_localidades |>
       select(codigo_localidad, geometry) |>
       inner_join(datos_promedio_global, by = "codigo_localidad")
 
-    # Si se resalta un grupo, los demás se ven casi transparentes
-    opacidad <- ifelse(input$grupo_resaltado == "Todos" |
-                         capa$cluster_nombre == input$grupo_resaltado, 0.9, 0.15)
+    crear_etiqueta_cluster <- function(df_sub) {
+      lapply(seq_len(nrow(df_sub)), function(i) {
+        s_val <- df_sub$silueta_localidad[i]
+        nivel_s <- case_when(
+          s_val >= 0.50 ~ "Cohesión alta con su grupo",
+          s_val >= 0.25 ~ "Cohesión moderada",
+          s_val >= 0.00 ~ "Zona de transición",
+          TRUE          ~ "Perfil híbrido / frontera entre grupos"
+        )
+        HTML(paste0(
+          "<div style='font-family: Archivo, sans-serif; color: #E9EDF2; line-height: 1.35;'>",
+          "<strong style='font-size: 14px; color: ", colores_cluster_iluminado[df_sub$cluster_nombre[i]], ";'>",
+          df_sub$localidad[i], "</strong><br>",
+          "<span style='color: #9AA4B2; font-size: 12px;'>Clúster: </span>",
+          "<strong>", df_sub$cluster_nombre[i], "</strong><br>",
+          "<span style='color: #9AA4B2; font-size: 12px;'>Coeficiente de silueta (s<sub>i</sub>): </span>",
+          "<strong style='color: ", ambar, "; font-size: 13.5px;'>", formato(s_val, 3), "</strong> ",
+          "<span style='color: #9AA4B2; font-size: 11.5px;'>(", nivel_s, ")</span><br>",
+          "<span style='color: #9AA4B2; font-size: 11.5px;'>Personas: ", formato(df_sub$tasa_hurto_personas[i], 0),
+          " · Residencias: ", formato(df_sub$tasa_hurto_residencias[i], 1),
+          " · Motos: ", formato(df_sub$tasa_hurto_motos[i], 1), "</span>",
+          "</div>"
+        ))
+      })
+    }
 
-    leaflet(capa) |>
-      agregar_mapa_base() |>
-      addPolygons(
-        fillColor   = colores_cluster[capa$cluster_nombre],
-        fillOpacity = opacidad,
-        color       = fondo,
-        weight      = 1.5,
-        label       = paste0(capa$localidad, " — ", capa$cluster_nombre)
-      )
+    opciones_label <- labelOptions(
+      style = list(
+        "background-color" = "#171B22",
+        "border"           = "1px solid #F0A43A",
+        "border-radius"    = "8px",
+        "padding"          = "8px 10px",
+        "box-shadow"       = "0 4px 14px rgba(0,0,0,0.65)"
+      ),
+      direction = "auto",
+      opacity   = 0.96
+    )
+
+    mapa_base <- leaflet(capa) |>
+      agregar_mapa_base()
+
+    if (input$grupo_resaltado == "Todos") {
+      mapa_base |>
+        addPolygons(
+          layerId          = ~localidad,
+          fillColor        = unname(colores_cluster[capa$cluster_nombre]),
+          fillOpacity      = 0.85,
+          color            = "#1F2630",
+          weight           = 1.8,
+          label            = crear_etiqueta_cluster(capa),
+          labelOptions     = opciones_label,
+          highlightOptions = highlightOptions(
+            weight       = 3.5,
+            color        = "#FFFFFF",
+            fillOpacity  = 0.98,
+            bringToFront = TRUE
+          )
+        )
+    } else {
+      capa_otros <- capa |> filter(cluster_nombre != input$grupo_resaltado)
+      capa_sel   <- capa |> filter(cluster_nombre == input$grupo_resaltado)
+      color_ilu  <- unname(colores_cluster_iluminado[input$grupo_resaltado])
+
+      mapa_base |>
+        addPolygons(
+          data             = capa_otros,
+          layerId          = ~localidad,
+          fillColor        = unname(colores_cluster[capa_otros$cluster_nombre]),
+          fillOpacity      = 0.25,
+          color            = "#2A303A",
+          weight           = 1.2,
+          label            = crear_etiqueta_cluster(capa_otros),
+          labelOptions     = opciones_label,
+          highlightOptions = highlightOptions(
+            weight       = 2.5,
+            color        = "#9AA4B2",
+            fillOpacity  = 0.55,
+            bringToFront = FALSE
+          )
+        ) |>
+        addPolylines(
+          data    = capa_sel,
+          color   = color_ilu,
+          weight  = 8,
+          opacity = 0.45
+        ) |>
+        addPolygons(
+          data             = capa_sel,
+          layerId          = ~localidad,
+          fillColor        = color_ilu,
+          fillOpacity      = 0.96,
+          color            = "#FFFFFF",
+          weight           = 2.8,
+          opacity          = 1.0,
+          label            = crear_etiqueta_cluster(capa_sel),
+          labelOptions     = opciones_label,
+          highlightOptions = highlightOptions(
+            weight       = 4.0,
+            color        = ambar,
+            fillOpacity  = 1.0,
+            bringToFront = TRUE
+          )
+        )
+    }
   })
 
   output$tarjetas_clusters <- renderUI({
@@ -783,6 +991,7 @@ server <- function(input, output, session) {
         personas      = mean(tasa_hurto_personas),
         residencias   = mean(tasa_hurto_residencias),
         motos         = mean(tasa_hurto_motos),
+        silueta_media = mean(silueta_localidad, na.rm = TRUE),
         miembros      = paste(sort(localidad), collapse = ", "),
         .groups = "drop"
       ) |>
@@ -791,31 +1000,50 @@ server <- function(input, output, session) {
     tarjetas <- lapply(seq_len(nrow(resumen)), function(i) {
       g <- resumen[i, ]
       resaltada <- input$grupo_resaltado == g$cluster_nombre
-      card(
-        style = paste0("border: 2px solid ",
-                       ifelse(resaltada, colores_cluster[g$cluster_nombre], borde)),
-        card_header(
-          span("●", style = paste0("color:", colores_cluster[g$cluster_nombre])),
-          strong(g$cluster_nombre),
-          span(paste(g$n_localidades, "localidades"),
-               style = paste0("float: right; color:", gris_texto))
-        ),
-        layout_columns(
-          col_widths = c(4, 4, 4),
-          div(p("Personas", style = paste0("color:", gris_texto, "; margin: 0")),
-              h4(formato(g$personas), style = paste0("color:", ambar))),
-          div(p("Residencias", style = paste0("color:", gris_texto, "; margin: 0")),
-              h4(formato(g$residencias, 1), style = paste0("color:", ambar))),
-          div(p("Motos", style = paste0("color:", gris_texto, "; margin: 0")),
-              h4(formato(g$motos, 1), style = paste0("color:", ambar)))
-        ),
-        p(g$miembros, style = paste0("color:", gris_texto, "; font-size: 13px"))
+      color_borde <- ifelse(resaltada, colores_cluster_iluminado[g$cluster_nombre], borde)
+      sombra <- ifelse(
+        resaltada,
+        paste0("0 0 16px ", colores_cluster[g$cluster_nombre], "66"),
+        "none"
+      )
+
+      div(
+        onclick = sprintf("Shiny.setInputValue('clic_tarjeta_cluster', '%s', {priority: 'event'})", g$cluster_nombre),
+        style   = "cursor: pointer;",
+        card(
+          style = paste0(
+            "border: 2px solid ", color_borde, "; ",
+            "box-shadow: ", sombra, "; ",
+            "background: ", ifelse(resaltada, "#1E2530", tarjeta), "; ",
+            "transition: all 0.2s ease;"
+          ),
+          card_header(
+            span("● ", style = paste0("color:", ifelse(resaltada, colores_cluster_iluminado[g$cluster_nombre], colores_cluster[g$cluster_nombre]))),
+            strong(g$cluster_nombre),
+            span(
+              paste0(g$n_localidades, " localidades · Silueta media: ", formato(g$silueta_media, 2)),
+              style = paste0("float: right; color:", ifelse(resaltada, "#E9EDF2", gris_texto), "; font-size: 12.5px")
+            )
+          ),
+          layout_columns(
+            col_widths = c(4, 4, 4),
+            div(p("Personas", style = paste0("color:", gris_texto, "; margin: 0")),
+                h4(formato(g$personas), style = paste0("color:", ambar))),
+            div(p("Residencias", style = paste0("color:", gris_texto, "; margin: 0")),
+                h4(formato(g$residencias, 1), style = paste0("color:", ambar))),
+            div(p("Motos", style = paste0("color:", gris_texto, "; margin: 0")),
+                h4(formato(g$motos, 1), style = paste0("color:", ambar)))
+          ),
+          p(g$miembros, style = paste0("color:", gris_texto, "; font-size: 13px; margin-bottom: 0"))
+        )
       )
     })
 
-    tagList(tarjetas,
-            p("Tasas promedio del grupo, por 100.000 habitantes al año.",
-              style = paste0("color:", gris_texto, "; font-size: 12px")))
+    tagList(
+      tarjetas,
+      p("Tasas promedio del grupo, por 100.000 habitantes al año. Haz clic en una tarjeta o en el mapa para iluminar el clúster.",
+        style = paste0("color:", gris_texto, "; font-size: 12px"))
+    )
   })
 
   ## 6.5 Pestaña 5: Sentometrics y Elastic Net ----
