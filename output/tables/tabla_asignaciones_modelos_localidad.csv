@@ -1,0 +1,20 @@
+codigo_localidad,localidad,kmeans_base,pca2_kmeans,pam_euclidiana,pam_manhattan,agnes_euclidiana,agnes_manhattan,gmm_3,cluster_nombre,silueta_localidad
+01,Usaquén,1,1,1,1,1,1,1,Residencial y Periférico,0.4742
+02,Chapinero,3,3,2,2,2,2,2,Céntrico e Institucional,0.6334
+03,Santa Fe,3,3,2,2,2,2,2,Céntrico e Institucional,0.3843
+04,San Cristóbal,1,1,1,1,1,1,1,Residencial y Periférico,0.7615
+05,Usme,1,1,1,1,1,1,1,Residencial y Periférico,0.7519
+06,Tunjuelito,1,1,1,1,1,1,1,Residencial y Periférico,0.7384
+07,Bosa,1,1,1,1,1,1,1,Residencial y Periférico,0.7365
+08,Kennedy,1,1,1,1,1,1,1,Residencial y Periférico,0.6943
+09,Fontibón,1,1,1,1,1,1,1,Residencial y Periférico,0.6273
+10,Engativá,1,1,1,1,1,1,1,Residencial y Periférico,0.6327
+11,Suba,1,1,1,1,1,1,1,Residencial y Periférico,0.6567
+12,Barrios Unidos,3,3,2,2,2,2,2,Céntrico e Institucional,0.3582
+13,Teusaquillo,3,3,2,2,2,2,2,Céntrico e Institucional,0.5933
+14,Los Mártires,2,2,3,2,3,3,3,Comercial y Automotor,0.1841
+15,Antonio Nariño,2,2,1,3,1,1,3,Comercial y Automotor,-0.2116
+16,Puente Aranda,1,1,1,3,1,1,2,Residencial y Periférico,0.2803
+17,La Candelaria,3,3,2,2,2,2,2,Céntrico e Institucional,0.6056
+18,Rafael Uribe Uribe,1,1,1,1,1,1,1,Residencial y Periférico,0.7186
+19,Ciudad Bolívar,1,1,1,1,1,1,1,Residencial y Periférico,0.6712

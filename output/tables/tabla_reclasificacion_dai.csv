@@ -1,6 +1,6 @@
 delito_alto_impacto,delito_sdscj,n
-Delitos sexuales y violencia intrafamiliar,No DAI,39
-Delitos sexuales y violencia intrafamiliar,Delitos sexuales,25
+Delitos sexuales y violencia intrafamiliar,No DAI,38
+Delitos sexuales y violencia intrafamiliar,Delitos sexuales,26
 Delitos sexuales y violencia intrafamiliar,Hurto a personas,20
 Delitos sexuales y violencia intrafamiliar,Violencia intrafamiliar,12
 Delitos sexuales y violencia intrafamiliar,Hurto (modalidad no identificada),10
@@ -22,12 +22,12 @@ Extorsion,Hurto a residencias,9
 Extorsion,Lesiones personales,4
 Extorsion,Hurto a entidades financieras,3
 Extorsion,Homicidio,1
-Homicidio,Homicidio,429
-Homicidio,No DAI,156
+Homicidio,Homicidio,430
+Homicidio,No DAI,155
 Homicidio,Hurto a personas,110
 Homicidio,Hurto de automotores,61
-Homicidio,Hurto a comercio,45
-Homicidio,Hurto (modalidad no identificada),43
+Homicidio,Hurto a comercio,46
+Homicidio,Hurto (modalidad no identificada),42
 Homicidio,Extorsión,28
 Homicidio,Hurto a residencias,25
 Homicidio,Lesiones personales,22
@@ -89,26 +89,26 @@ Hurto de celulares,Hurto a residencias,8
 Hurto de celulares,Lesiones personales,6
 Hurto de celulares,Homicidio,2
 Hurto de celulares,Hurto a entidades financieras,2
-Hurto de motocicletas,Hurto de automotores,70
+Hurto de motocicletas,Hurto de automotores,71
 Hurto de motocicletas,Hurto de motocicletas,63
 Hurto de motocicletas,Hurto a personas,37
-Hurto de motocicletas,Hurto (modalidad no identificada),26
-Hurto de motocicletas,No DAI,17
+Hurto de motocicletas,Hurto (modalidad no identificada),25
+Hurto de motocicletas,No DAI,16
 Hurto de motocicletas,Hurto a comercio,15
 Hurto de motocicletas,Hurto a residencias,7
 Hurto de motocicletas,Hurto a entidades financieras,4
+Hurto de motocicletas,Lesiones personales,2
 Hurto de motocicletas,Homicidio,1
-Hurto de motocicletas,Lesiones personales,1
 Lesiones personales,Hurto (modalidad no identificada),13
 Lesiones personales,Lesiones personales,10
 Lesiones personales,Hurto a personas,6
 Lesiones personales,Hurto a comercio,5
 Lesiones personales,No DAI,3
 Operatividad y capturas policiales,Hurto (modalidad no identificada),84
-Operatividad y capturas policiales,No DAI,38
+Operatividad y capturas policiales,No DAI,37
 Operatividad y capturas policiales,Hurto a comercio,27
 Operatividad y capturas policiales,Hurto a personas,22
-Operatividad y capturas policiales,Hurto a residencias,5
+Operatividad y capturas policiales,Hurto a residencias,6
 Operatividad y capturas policiales,Hurto de automotores,4
 Operatividad y capturas policiales,Homicidio,2
 Operatividad y capturas policiales,Hurto a entidades financieras,2

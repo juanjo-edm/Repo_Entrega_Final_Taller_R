@@ -1,0 +1,7 @@
+modelo,distancia,silueta_media,n_silueta_neg,tamanios_grupo,ari_vs_kmeans,gap_k3
+K-Means (base),Euclidiana,0.5416,1,12 / 5 / 2,1,0.1545
+PAM (Medoides),Euclidiana,0.5251,0,13 / 5 / 1,0.8484,0.1545
+PAM (Medoides),Manhattan,0.4811,1,11 / 6 / 2,0.7859,0.1545
+AGNES (Ward.D2),Euclidiana,0.5251,0,13 / 5 / 1,0.8484,0.1545
+AGNES (Ward.D2),Manhattan,0.5359,0,13 / 5 / 1,0.8484,0.1545
+GMM (Mezcla Gauss.),Mahalanobis / EM,0.4994,2,11 / 6 / 2,0.8097,0.1545

@@ -15,14 +15,14 @@ set.seed(20261014)
 library(here)
 library(conflicted)
 library(arrow)
-library(readr)
+library(tibble)
 library(dplyr)
 library(tidyr)
+library(purrr)
 library(stringr)
 library(stringi)
 library(lubridate)
 library(xml2)
-library(rvest)
 
 conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
@@ -30,10 +30,9 @@ conflict_prefer("select", "dplyr", quiet = TRUE)
 conflict_prefer("duration", "lubridate", quiet = TRUE)
 
 ## 1.2 Rutas relativas de almacenamiento ----
-ruta_noticias_raw   <- here::here("data", "raw", "noticias")
+ruta_noticias_raw   <- here("data", "raw", "noticias")
 archivo_consolidado <- file.path(ruta_noticias_raw, "noticias_google_news_consolidado.parquet")
 archivo_consol_rds  <- file.path(ruta_noticias_raw, "noticias_google_news_consolidado.rds")
-archivo_bitacora    <- file.path(ruta_noticias_raw, "bitacora_consultas_incrementales.csv")
 
 if (!dir.exists(ruta_noticias_raw)) {
   dir.create(ruta_noticias_raw, recursive = TRUE, showWarnings = FALSE)
@@ -44,13 +43,17 @@ if (!exists("modo_scraping")) {
   modo_scraping <- "consolidar"
 }
 
-fecha_inicio_muestra <- as.Date("2022-01-01")
-fecha_fin_muestra    <- as.Date("2026-09-30")
+fecha_inicio_muestra  <- as.Date("2022-01-01")
+fecha_fin_muestra     <- as.Date("2026-09-30")
+umbral_notas_celda    <- 4L
+max_consultas_corrida <- 250L
+pausa_min_seg         <- 1.0
+pausa_max_seg         <- 2.5
 
-# 2. Catálogo Territorial y Homonimias ----
+# 2. Catálogo Territorial, Homonimias y Familias DAI ----
 
 ## 2.1 Mapeo de localidades y filtros de exclusión ----
-catalogo_localidades <- tibble::tibble(
+catalogo_localidades <- tibble(
   localidad = c(
     "Usaquén", "Chapinero", "Santa Fe", "San Cristóbal", "Usme",
     "Tunjuelito", "Bosa", "Kennedy", "Fontibón", "Engativá",
@@ -73,39 +76,119 @@ catalogo_localidades <- tibble::tibble(
     )
   )
 
-# 3. Carga y Ejecución según Modo ----
+## 2.2 Familias de búsqueda booleana alineadas con los 11 DAI ----
+# Taxonomía oficial de 11 Delitos de Alto Impacto (DAI) de la SDSCJ / SIEDCO:
+# https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c
+familias_dai <- tibble(
+  familia = c(
+    "hurto_personas",
+    "hurto_inmuebles",
+    "hurto_vehiculos",
+    "vida_integridad",
+    "extorsion_sexual_vif"
+  ),
+  terminos = c(
+    "(hurto OR robo OR atraco OR raponazo OR cosquilleo OR fleteo OR celular OR bicicleta)",
+    "(hurto OR robo OR asalto) (residencia OR apartamento OR vivienda OR comercio OR tienda OR local OR banco)",
+    "(hurto OR robo) (carro OR vehiculo OR camioneta OR moto OR motocicleta OR autopartes)",
+    "(homicidio OR asesinato OR sicariato OR feminicidio OR apunalado OR rina OR \"lesiones personales\")",
+    "(extorsion OR \"abuso sexual\" OR \"delito sexual\" OR \"violencia intrafamiliar\")"
+  )
+)
 
-## 3.1 Carga de la base histórica existente ----
-if (file.exists(archivo_consolidado)) {
-  df_base <- arrow::read_parquet(archivo_consolidado)
-} else if (file.exists(archivo_consol_rds)) {
-  df_base <- readRDS(archivo_consol_rds)
-} else {
-  df_base <- tibble::tibble()
+## 2.3 Función de extracción y parseo XML de Google News RSS ----
+parsear_rss <- function(url_rss, localidad, mes_inicio, mes_fin) {
+  Sys.sleep(runif(1, pausa_min_seg, pausa_max_seg))
+  
+  doc_xml <- tryCatch(read_xml(url_rss), error = function(e) NULL)
+  if (is.null(doc_xml)) return(tibble())
+  
+  items <- xml_find_all(doc_xml, "//item")
+  if (length(items) == 0) return(tibble())
+  
+  tibble(
+    localidad   = localidad,
+    titulo      = xml_text(xml_find_first(items, "title")),
+    desc_raw    = xml_text(xml_find_first(items, "description")),
+    fuente      = xml_text(xml_find_first(items, "source")),
+    fecha_texto = xml_text(xml_find_first(items, "pubDate")),
+    enlace_raw  = xml_text(xml_find_first(items, "link"))
+  ) |>
+    mutate(
+      resumen = str_squish(gsub("<[^>]+>", " ", desc_raw)),
+      cuerpo  = resumen,
+      fecha   = as.Date(parse_date_time(
+        fecha_texto,
+        orders = c("a d b Y HMS z", "d b Y HMS", "dmy HMS", "ymd HMS")
+      )),
+      enlace  = sub("\\?(utm_|ref_|fbclid).*", "", enlace_raw)
+    ) |>
+    select(-desc_raw, -enlace_raw, -fecha_texto) |>
+    filter(
+      !is.na(titulo), titulo != "",
+      !is.na(enlace), enlace != "",
+      fecha >= mes_inicio, fecha < mes_fin
+    ) |>
+    distinct(enlace, .keep_all = TRUE)
 }
 
-## 3.2 Modo Incremental: Cobertura y Scraping RSS ----
-if (modo_scraping == "incremental") {
-  message(">>> Modo incremental activo: identificando celdas con baja cobertura...")
+# 3. Carga y Scraping RSS en Google News ----
+
+## 3.1 Carga de la base histórica existente ----
+df_base <- if (file.exists(archivo_consolidado)) {
+  read_parquet(archivo_consolidado)
+} else if (file.exists(archivo_consol_rds)) {
+  readRDS(archivo_consol_rds)
+} else {
+  tibble()
+}
+
+## 3.2 Modo Incremental: descarga de meses con baja cobertura ----
+if (modo_scraping == "incremental" || nrow(df_base) == 0L) {
+  message(">>> Modo incremental activo: buscando noticias faltantes en Google News RSS...")
   
-  bitacora <- if (file.exists(archivo_bitacora)) {
-    readr::read_csv(archivo_bitacora, show_col_types = FALSE)
-  } else {
-    tibble::tibble(localidad = character(), familia = character(), mes_inicio = as.Date(character()), estado = character())
-  }
-  
-  # Diagnóstico por cuadrícula localidad x mes
   meses_muestra <- seq.Date(fecha_inicio_muestra, fecha_fin_muestra, by = "month")
-  malla_deficit <- tidyr::expand_grid(localidad = catalogo_localidades$localidad, mes_inicio = meses_muestra) |>
-    left_join(
-      df_base |> mutate(mes_inicio = floor_date(as.Date(fecha), "month")) |> count(localidad, mes_inicio, name = "n"),
-      by = c("localidad", "mes_inicio")
-    ) |>
-    filter(coalesce(n, 0L) < 4L)
   
-  if (nrow(malla_deficit) > 0) {
-    message("✔ Identificadas ", nrow(malla_deficit), " celdas con cobertura menor a 4 notas.")
+  conteo_actual <- if (nrow(df_base) > 0L) {
+    df_base |>
+      mutate(mes_inicio = floor_date(as.Date(fecha), "month")) |>
+      count(localidad, mes_inicio, name = "n")
+  } else {
+    tibble(localidad = character(), mes_inicio = as.Date(character()), n = integer())
   }
+  
+  df_nuevas_rss <- expand_grid(
+    localidad  = catalogo_localidades$localidad,
+    mes_inicio = meses_muestra
+  ) |>
+    left_join(conteo_actual, by = c("localidad", "mes_inicio")) |>
+    mutate(n = coalesce(n, 0L)) |>
+    filter(n < umbral_notas_celda) |>
+    cross_join(familias_dai) |>
+    left_join(catalogo_localidades, by = "localidad") |>
+    mutate(
+      mes_fin = mes_inicio %m+% months(1),
+      cadena  = str_squish(paste(
+        terminos, "Bogota", paste0('"', localidad, '"'), exclusiones, "-horoscopo -tarot",
+        paste0("after:", format(mes_inicio - days(1), "%Y-%m-%d")),
+        paste0("before:", format(mes_fin, "%Y-%m-%d"))
+      )),
+      url_rss = paste0(
+        "https://news.google.com/rss/search?q=",
+        URLencode(cadena, reserved = TRUE),
+        "&hl=es-419&gl=CO&ceid=CO:es-419"
+      )
+    ) |>
+    arrange(n, mes_inicio, localidad, familia) |>
+    slice_head(n = max_consultas_corrida) |>
+    mutate(
+      articulos = pmap(list(url_rss, localidad, mes_inicio, mes_fin), parsear_rss)
+    ) |>
+    select(articulos) |>
+    unnest(cols = articulos)
+  
+  df_base <- bind_rows(df_base, df_nuevas_rss)
+  message("✔ Descarga RSS finalizada: ", nrow(df_nuevas_rss), " artículos recolectados.")
 } else {
   message(">>> Modo consolidar: sincronizando y auditando base existente...")
 }
@@ -113,9 +196,6 @@ if (modo_scraping == "incremental") {
 # 4. Flujo Tidyverse: Limpieza y Deduplicación Dual ----
 
 ## 4.1 Normalización temporal y deduplicación dual ----
-if (!"fecha" %in% names(df_base) && "fecha_iso" %in% names(df_base)) {
-  df_base <- df_base |> rename(fecha = fecha_iso)
-}
 
 df_limpio <- df_base |>
   mutate(
@@ -215,7 +295,7 @@ df_enriquecido <- df_limpio |>
 # 6. Almacenamiento Centralizado e Idempotente ----
 
 ## 6.1 Exportación a Parquet y RDS nativo ----
-arrow::write_parquet(df_enriquecido, archivo_consolidado)
+write_parquet(df_enriquecido, archivo_consolidado)
 saveRDS(df_enriquecido, archivo_consol_rds)
 
 ## 6.2 Control de calidad de la base procesada ----

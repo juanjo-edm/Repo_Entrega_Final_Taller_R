@@ -2,6 +2,9 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/02_procesamiento/01_delitos/procesamiento_delitos.R
 # ROL: Procesamiento y Estructuración de Delitos Oficiales SDSCJ (2022-2026)
+# FUENTE: Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) /
+#         SIEDCO (Policía Nacional) — Datos Abiertos Bogotá:
+#         https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c
 # ENTRA: data/raw/delitos/localidades_bogota_raw.geojson
 # PRODUCE: data/processed/01_delitos/delitos_localidad_anual.parquet
 # ==============================================================================
@@ -78,6 +81,11 @@ extraer_modalidad <- function(df, prefijo, nombre_var) {
 }
 
 ## 3.2 Extracción de hurtos a personas, residencias y motos ----
+# Elegimos estas 3 modalidades entre los 11 DAI porque son los delitos
+# cotidianos de mayor exposición que más deterioran la percepción de inseguridad
+# en Bogotá, explicando por qué el miedo ciudadano diverge de las cifras de
+# homicidios (Restrepo & Moreno, 2007, "Bogotá: ¿más crimen?, ¿más miedo?",
+# Desarrollo y Sociedad 59, DOI: 10.13043/dys.59.5; CCB EPV; DANE ECSC).
 df_personas    <- extraer_modalidad(df_delitos_raw, "CMHP", "hurto_personas")
 df_residencias <- extraer_modalidad(df_delitos_raw, "CMHR", "hurto_residencias")
 df_motos       <- extraer_modalidad(df_delitos_raw, "CMHM", "hurto_motos")

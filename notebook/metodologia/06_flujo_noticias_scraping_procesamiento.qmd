@@ -1,0 +1,612 @@
+---
+title: "Guía Completa del Flujo de Noticias: Scraping RSS, XML, Limpieza NLP y Clasificador DAI (2022–2026)"
+subtitle: "Explicación exhaustiva paso a paso con todo el código en R citado — Taller de Programación en R (MECA)"
+author:
+  - "Juan José Echeverry — 202616233"
+  - "Miguelangel Palma — 202621481"
+  - "Sergio Alejandro López Valderrama — 202111932"
+  - "Gabriel Arturo Echeverry Castaño — 201016705"
+  - "Olga Lucía Ramírez Contreras — 202624900"
+  - "Juan Esteban Carvajal Cruz — 202614312"
+date: "2026-11-16"
+lang: es
+format:
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    embed-resources: true
+    code-fold: show
+    code-summary: "Mostrar código"
+    code-overflow: wrap
+  pdf:
+    pdf-engine: pdflatex
+    documentclass: article
+    papersize: letter
+    fontsize: 10pt
+    linestretch: 1.15
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    colorlinks: true
+    geometry:
+      - top=20mm
+      - bottom=20mm
+      - left=18mm
+      - right=18mm
+    include-in-header:
+      text: |
+        \usepackage{microtype}
+        \usepackage{charter}
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\},fontsize=\small}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+        \DeclareUnicodeCharacter{2714}{\ensuremath{\checkmark}}
+        \DeclareUnicodeCharacter{2139}{(i)}
+        \DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+execute:
+  eval: false
+  echo: true
+  warning: false
+  message: false
+---
+
+Esta guía explica desde cero, de forma exhaustiva y pensada para cualquier persona nueva en el proyecto, cómo recopilamos miles de noticias locales sobre seguridad en las **19 localidades urbanas de Bogotá** entre **enero de 2022 y septiembre de 2026**, qué son **RSS** y **XML**, cómo evitamos homonimias y duplicados, cómo limpiamos el ruido web/HTML y cómo clasificamos cada noticia en las **11 categorías oficiales de Delitos de Alto Impacto (DAI)** de la Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ).
+
+---
+
+# Conceptos Clave Antes de Empezar
+
+## ¿Qué es Google News RSS y por qué lo usamos?
+
+A veces se le menciona coloquialmente como "SSR", pero su nombre técnico es **RSS** (*Really Simple Syndication*). Es un canal oficial que tienen los portales de noticias (incluido Google Noticias) para entregar titulares, enlaces y resúmenes de forma automática y estructurada a programas lectores.
+
+- **¿Por qué lo usamos en vez de abrir `google.com` con un navegador automático?** Si intentas automatizar búsquedas en `google.com` o `news.google.com` con robots tipo Selenium o Playwright, Google detecta el comportamiento automatizado a las pocas consultas y bloquea la IP con captchas (*"No soy un robot"*). El canal RSS está pensado específicamente para consumo programático: entrega los datos limpios, sin publicidad y sin bloqueos visuales.
+- **¿Cómo funciona la URL de consulta?** Desde R enviamos búsquedas booleanas codificadas como parámetros estándar en una dirección web:
+
+```text
+https://news.google.com/rss/search?q=[Consulta_Codificada]&hl=es-419&gl=CO&ceid=CO:es-419
+```
+
+- `q=...`: la búsqueda booleana armada desde R (términos del delito + `"Bogota"` + localidad + exclusiones + fechas `after:`/`before:`).
+- `hl=es-419`: idioma español latinoamericano.
+- `gl=CO` y `ceid=CO:es-419`: geolocalización y edición de prensa de **Colombia**.
+
+## ¿Qué es XML y cómo se ve lo que responde Google News?
+
+Cuando R consulta esa URL de Google News RSS, el servidor **no responde con una página visual HTML**, sino con un archivo de texto jerárquico llamado **XML** (*eXtensible Markup Language*), que organiza cada noticia dentro de una etiqueta `<item>...</item>`:
+
+```xml
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Atracan a pasajeros de bus en Kennedy - El Tiempo</title>
+      <link>https://news.google.com/rss/articles/CBMi...?oc=5</link>
+      <pubDate>Tue, 14 May 2024 13:20:00 GMT</pubDate>
+      <description>&lt;a href="..."&gt;Atracan a pasajeros...&lt;/a&gt; El Tiempo</description>
+      <source url="https://www.eltiempo.com">El Tiempo</source>
+    </item>
+  </channel>
+</rss>
+```
+
+Por eso en R usamos la librería `xml2` para navegar ese árbol de etiquetas:
+
+- `xml_find_all(doc_xml, "//item")` extrae todas las noticias (`<item>`) de la respuesta.
+- `xml_find_first(items, "title")` extrae el titular.
+- `xml_find_first(items, "link")` extrae la URL del artículo.
+- `xml_find_first(items, "pubDate")` extrae la fecha de publicación en formato RFC-822.
+- `xml_find_first(items, "source")` extrae el nombre del medio (ej. *El Tiempo*, *Citytv*).
+- `xml_find_first(items, "description")` extrae el resumen (que trae etiquetas HTML incrustadas y por eso luego lo limpiamos con `gsub("<[^>]+>", " ", ...)`).
+
+## Diccionario de términos del código
+
+| Término | ¿Qué es? | ¿Por qué y para qué lo usamos? |
+| :--- | :--- | :--- |
+| **`loc_slug` / `localidad_slug`** | Nombre de la localidad en minúsculas, sin tildes, sin `"la "` y con `_` (ej. `"San Cristóbal"` → `"san_cristobal"`). | `sentometrics` usa `--` para separar léxico, feature y esquema temporal; si hubiera un guion medio (`-`), rompería esa separación de columnas. |
+| **Homonimia (`exclusiones`)** | Palabras iguales con significados distintos (ej. *"Santa Fe"* localidad vs. *"Independiente Santa Fe"* fútbol). | Añadimos `-futbol -liga -campin` en la búsqueda para que Google News no descargue noticias deportivas ni de otros países. |
+| **Ventanas `after:` / `before:`** | Operadores de rango temporal dentro de Google News. | Sin fechas, Google solo muestra noticias recientes; con ventanas mensuales obligamos a traer notas históricas desde enero de 2022. |
+| **DAI (11 categorías)** | **Delitos de Alto Impacto** oficiales definidos por la **SDSCJ** a partir de registros **SIEDCO** (Policía Nacional): *Homicidio, Lesiones personales, Hurto a personas, residencias, comercio, entidades financieras, automotores, motocicletas, Extorsión, Delitos sexuales y Violencia intrafamiliar*. Fuente: [Datos Abiertos Bogotá](https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c). | Homologa el texto periodístico con las 11 categorías estadísticas oficiales de la Alcaldía. |
+| **Negative Lookahead `(?!...)`** | Regla de expresión regular que prohíbe ciertas letras después de una raíz. | Evita falsos positivos: captura *robo/robaron*, pero ignora *robot* o *robusto*; captura *casa*, pero ignora *casa de cambio*. |
+| **`purrr::reduce()`** | Aplica una función acumulativamente sobre una lista o vector de patrones. | Permite aplicar los 12 patrones de limpieza web en orden sobre el texto sin repetir 12 líneas iguales de `gsub()`. |
+
+: Glosario de términos técnicos del flujo de noticias {tbl-colwidths="[22,39,39]"}
+
+---
+
+# Mapa General del Flujo de Noticias
+
+El flujo completo de prensa se divide en dos scripts independientes, separando la **descarga y consolidación cruda (`data/raw/`)** de la **limpieza NLP y clasificación (`data/processed/`)**:
+
+```text
+[Google News RSS (XML)]
+        |
+        |  1. scripts/01_ingesta/03_noticias/scraping_google_news.R
+        v
+[data/raw/noticias/noticias_google_news_consolidado.parquet]  (3.916 noticias unicas)
+        |
+        |  2. scripts/02_procesamiento/03_noticias/procesamiento_noticias.R
+        v
+[data/processed/03_noticias/noticias_procesadas.parquet]  (texto limpio + 11 DAI)
+        +-- output/tables/tabla_reclasificacion_dai.csv
+        +-- output/tables/tabla_conteo_localidad_anio_dai.csv
+        +-- output/tables/muestra_validacion_manual_dai.csv
+```
+
+---
+
+# Script 1: Scraping RSS y Consolidación (`scraping_google_news.R`)
+
+::: {.callout-note title="Ficha Rápida del Script 1"}
+- **Ubicación:** `scripts/01_ingesta/03_noticias/scraping_google_news.R` (`307` líneas).
+- **Entrada:** Consultas XML en vivo a `https://news.google.com/rss/search` y/o la base histórica acumulada en Parquet.
+- **Salidas:** `data/raw/noticias/noticias_google_news_consolidado.parquet` y `.rds` (**3.916 noticias únicas** entre enero de 2022 y septiembre de 2026).
+:::
+
+## Paso 1.1: Librerías y los dos modos de ejecución (`modo_scraping`)
+
+Al inicio se cargan `{xml2}` y `{rvest}` (para leer XML y limpiar HTML), `{lubridate}` (para fechas), `{httr}`, `{arrow}` y `{tidyverse}`. Luego el script define dos modos de operación:
+
+- **`modo_scraping = "consolidar"` (por defecto):** cuando el archivo `noticias_google_news_consolidado.parquet` ya existe en disco, salta la descarga remota y ejecuta únicamente la auditoría, deduplicación y enriquecimiento en menos de 1 segundo. Esto garantiza que `master.R` corra de punta a punta sin depender de internet.
+- **`modo_scraping = "incremental"`:** activa el motor de scraping en vivo para detectar qué celdas `(localidad, mes)` tienen menos de `4` noticias (`umbral_notas_celda <- 4L`) y consultar Google News RSS solo para esos meses faltantes, con un tope de `250` consultas por corrida y pausas aleatorias de `1.0` a `2.5` segundos.
+
+```r
+if (!exists("modo_scraping")) {
+  modo_scraping <- "consolidar"
+}
+
+fecha_inicio_muestra  <- as.Date("2022-01-01")
+fecha_fin_muestra     <- as.Date("2026-09-30")
+umbral_notas_celda    <- 4L
+max_consultas_corrida <- 250L
+pausa_min_seg         <- 1.0
+pausa_max_seg         <- 2.5
+```
+
+## Paso 1.2: Catálogo territorial y control de homonimias (`catalogo_localidades`)
+
+**El problema de las homonimias:** varias localidades de Bogotá se llaman igual que equipos de fútbol, universidades o municipios de otros países:
+
+- `"Santa Fe"` devuelve resultados de *Independiente Santa Fe* en El Campín o *Santa Fe de Antioquia*.
+- `"Antonio Nariño"` devuelve noticias de matrículas de la *Universidad Antonio Nariño (UAN)*.
+- `"San Cristóbal"` y `"Ciudad Bolívar"` devuelven noticias de *Venezuela* (Táchira, Estado Bolívar) o *Chiapas (México)*.
+- `"La Candelaria"` devuelve noticias del centro de *Medellín*.
+- `"Bosa"` devuelve noticias de *Bosa en Cerdeña (Italia)*.
+
+Para bloquear ese ruido desde el origen, `catalogo_localidades` agrega exclusiones con el operador `-palabra`:
+
+```r
+catalogo_localidades <- tibble::tibble(
+  localidad = c(
+    "Usaquén", "Chapinero", "Santa Fe", "San Cristóbal", "Usme",
+    "Tunjuelito", "Bosa", "Kennedy", "Fontibón", "Engativá",
+    "Suba", "Barrios Unidos", "Teusaquillo", "Los Mártires",
+    "Antonio Nariño", "Puente Aranda", "La Candelaria",
+    "Rafael Uribe Uribe", "Ciudad Bolívar"
+  )
+) |>
+  mutate(
+    loc_slug = tolower(stri_trans_general(localidad, "Latin-ASCII")),
+    exclusiones = case_when(
+      loc_slug == "santa fe"           ~ "-futbol -liga -campin -dimayor -cardenal -partido -estadio -gol -independiente -antioquia -ralito",
+      loc_slug == "san cristobal"      ~ "-venezuela -tachira -mexico -chiapas -bolivar",
+      loc_slug == "la candelaria"      ~ "-medellin -valle -antioquia -atlantico",
+      loc_slug == "ciudad bolivar"     ~ "-venezuela -antioquia -orinoco",
+      loc_slug == "antonio narino"     ~ "-universidad -uan -pregrado -matricula -facultad",
+      loc_slug == "rafael uribe uribe" ~ "-cali",
+      loc_slug == "bosa"               ~ "-italia -cerdeña",
+      TRUE                             ~ ""
+    )
+  )
+```
+
+## Paso 1.3: Las 5 familias booleanas de búsqueda (`familias_dai`)
+
+Google News recorta búsquedas demasiado largas y devuelve como máximo ~100 noticias por petición RSS. Para cubrir los 11 Delitos de Alto Impacto sin perder resultados, se agrupan en **5 familias booleanas cortas**:
+
+```r
+familias_dai <- tibble::tibble(
+  familia = c(
+    "hurto_personas",
+    "hurto_inmuebles",
+    "hurto_vehiculos",
+    "vida_integridad",
+    "extorsion_sexual_vif"
+  ),
+  terminos = c(
+    "(hurto OR robo OR atraco OR raponazo OR cosquilleo OR fleteo OR celular OR bicicleta)",
+    "(hurto OR robo OR asalto) (residencia OR apartamento OR vivienda OR comercio OR tienda OR local OR banco)",
+    "(hurto OR robo) (carro OR vehiculo OR camioneta OR moto OR motocicleta OR autopartes)",
+    "(homicidio OR asesinato OR sicariato OR feminicidio OR apunalado OR rina OR \"lesiones personales\")",
+    "(extorsion OR \"abuso sexual\" OR \"delito sexual\" OR \"violencia intrafamiliar\")"
+  )
+)
+```
+
+## Paso 1.4: La función `parsear_rss()` — Cómo se lee el XML de Google News (Líneas 100–133)
+
+La función `parsear_rss(url_rss, localidad, mes_inicio, mes_fin)` consulta una URL RSS y convierte la respuesta XML en un `tibble` limpio:
+
+1. Hace una pausa aleatoria (`Sys.sleep(runif(1, pausa_min_seg, pausa_max_seg))`) para evitar saturar el servidor y descarga el XML con `read_xml(url_rss)` dentro de `tryCatch()`.
+2. Busca todos los bloques `<item>` con `xml_find_all(doc_xml, "//item")`. Si no hay resultados, retorna un `tibble()` vacío.
+3. Extrae `title`, `description`, `source`, `pubDate` y `link` con `xml_find_first()`.
+4. Limpia etiquetas HTML de `desc_raw` con `str_squish(gsub("<[^>]+>", " ", desc_raw))`, convierte `pubDate` a `Date` con `parse_date_time()` y elimina parámetros de rastreo (`?utm_...`, `?ref_...`, `?fbclid=...`) del enlace.
+5. Filtra filas válidas que caigan exactamente dentro del mes consultado (`fecha >= mes_inicio, fecha < mes_fin`) y elimina duplicados por `enlace`.
+
+```r
+parsear_rss <- function(url_rss, localidad, mes_inicio, mes_fin) {
+  Sys.sleep(runif(1, pausa_min_seg, pausa_max_seg))
+
+  doc_xml <- tryCatch(read_xml(url_rss), error = function(e) NULL)
+  if (is.null(doc_xml)) return(tibble())
+
+  items <- xml_find_all(doc_xml, "//item")
+  if (length(items) == 0) return(tibble())
+
+  tibble(
+    localidad   = localidad,
+    titulo      = xml_text(xml_find_first(items, "title")),
+    desc_raw    = xml_text(xml_find_first(items, "description")),
+    fuente      = xml_text(xml_find_first(items, "source")),
+    fecha_texto = xml_text(xml_find_first(items, "pubDate")),
+    enlace_raw  = xml_text(xml_find_first(items, "link"))
+  ) |>
+    mutate(
+      resumen = str_squish(gsub("<[^>]+>", " ", desc_raw)),
+      cuerpo  = resumen,
+      fecha   = as.Date(parse_date_time(
+        fecha_texto,
+        orders = c("a d b Y HMS z", "d b Y HMS", "dmy HMS", "ymd HMS")
+      )),
+      enlace  = sub("\\?(utm_|ref_|fbclid).*", "", enlace_raw)
+    ) |>
+    select(-desc_raw, -enlace_raw, -fecha_texto) |>
+    filter(
+      !is.na(titulo), titulo != "",
+      !is.na(enlace), enlace != "",
+      fecha >= mes_inicio, fecha < mes_fin
+    ) |>
+    distinct(enlace, .keep_all = TRUE)
+}
+```
+
+## Paso 1.5: Malla de déficit, ventanas `after:/before:` y flujo funcional con `pmap()` (Líneas 147–194)
+
+Cuando `modo_scraping == "incremental"` (o si aún no existe base histórica), el script evita bucles `for` imperativos y resuelve toda la descarga en un único pipeline funcional:
+
+1. Genera la malla completa de $19 \text{ localidades} \times 57 \text{ meses}$ (`2022-01` a `2026-09`) con `expand_grid()`, la cruza con `conteo_actual` y filtra celdas con menos de `4` noticias (`n < umbral_notas_celda`).
+2. Cruza las celdas faltantes con las 5 `familias_dai` y con `catalogo_localidades`, arma la cadena de búsqueda con `after:` / `before:` y la codifica con `URLencode(cadena, reserved = TRUE)`.
+3. Prioriza las celdas más vacías (`arrange(n, mes_inicio, ...)`), toma hasta `max_consultas_corrida` (`250`) y ejecuta `parsear_rss()` fila por fila mediante `pmap(...)`, desempacando todos los artículos con `unnest(cols = articulos)` y anexándolos con `bind_rows()`.
+
+```r
+  df_nuevas_rss <- expand_grid(
+    localidad  = catalogo_localidades$localidad,
+    mes_inicio = meses_muestra
+  ) |>
+    left_join(conteo_actual, by = c("localidad", "mes_inicio")) |>
+    mutate(n = coalesce(n, 0L)) |>
+    filter(n < umbral_notas_celda) |>
+    cross_join(familias_dai) |>
+    left_join(catalogo_localidades, by = "localidad") |>
+    mutate(
+      mes_fin = mes_inicio %m+% months(1),
+      cadena  = str_squish(paste(
+        terminos, "Bogota", paste0('"', localidad, '"'), exclusiones, "-horoscopo -tarot",
+        paste0("after:", format(mes_inicio - days(1), "%Y-%m-%d")),
+        paste0("before:", format(mes_fin, "%Y-%m-%d"))
+      )),
+      url_rss = paste0(
+        "https://news.google.com/rss/search?q=",
+        URLencode(cadena, reserved = TRUE),
+        "&hl=es-419&gl=CO&ceid=CO:es-419"
+      )
+    ) |>
+    arrange(n, mes_inicio, localidad, familia) |>
+    slice_head(n = max_consultas_corrida) |>
+    mutate(
+      articulos = pmap(list(url_rss, localidad, mes_inicio, mes_fin), parsear_rss)
+    ) |>
+    select(articulos) |>
+    unnest(cols = articulos)
+```
+
+## Paso 1.6: Deduplicación dual, `tipo_medio` y confianza geográfica por barrios
+
+Antes de guardar `noticias_google_news_consolidado.parquet`, el script ejecuta tres pasos de enriquecimiento:
+
+1. **Deduplicación dual:** elimina enlaces repetidos (`distinct(enlace)`) y titulares repetidos tras normalizarlos a minúsculas y sin tildes (`distinct(titulo_norm)`), evitando contar dos veces una misma nota republicada en portales distintos.
+2. **Clasificación del medio (`tipo_medio`):** agrupa `fuente` en *Institucional*, *Prensa Tradicional*, *Televisión y Radio*, *Nativo Digital* o *Prensa Local*.
+3. **Confianza geográfica por barrios (`confianza_geografica`):** comprueba si la nota menciona hitos barriales reales de la localidad (por ejemplo *Cedritos* en Usaquén o *Patio Bonito* en Kennedy) para asignar `"Alta"` o `"Media"`:
+
+```r
+    confianza_geografica = if_else(
+      (localidad == "Usaquén"           & str_detect(texto_nlp, "cedritos|santa barbara|torca|unicentro")) |
+      (localidad == "Chapinero"         & str_detect(texto_nlp, "chico|rosales|el retiro|marly|lago")) |
+      (localidad == "Santa Fe"          & str_detect(texto_nlp, "la macarena|las aguas|las nieves|san victorino|la perseverancia")) |
+      (localidad == "San Cristóbal"     & str_detect(texto_nlp, "20 de julio|la victoria|libertadores|quindio")) |
+      (localidad == "Usme"              & str_detect(texto_nlp, "yomasa|alfonso lopez|danubio|monteblanco")) |
+      (localidad == "Tunjuelito"        & str_detect(texto_nlp, "venecia|san carlos|tunal|el tunal|san benito")) |
+      (localidad == "Bosa"              & str_detect(texto_nlp, "brasil|carbonell|porvenir|san bernardino|la libertad")) |
+      (localidad == "Kennedy"           & str_detect(texto_nlp, "patio bonito|castilla|tintal|el tintal|corabastos|mandalay|timiza")) |
+      (localidad == "Fontibón"          & str_detect(texto_nlp, "modelia|salitre|capellania|zona franca|san pablo")) |
+      (localidad == "Engativá"          & str_detect(texto_nlp, "minuto de dios|boyaca real|alamos|quirigua|garces navas")) |
+      (localidad == "Suba"              & str_detect(texto_nlp, "rincon|niza|colina campestre|tibabuyes|prado veraniego")) |
+      (localidad == "Barrios Unidos"    & str_detect(texto_nlp, "7 de agosto|polo club|12 de octubre|la castellana")) |
+      (localidad == "Teusaquillo"       & str_detect(texto_nlp, "palermo|galerias|parkway|ciudad salitre|la soledad")) |
+      (localidad == "Los Mártires"      & str_detect(texto_nlp, "santa isabel|ricaurte|la sabana|voto nacional")) |
+      (localidad == "Antonio Nariño"    & str_detect(texto_nlp, "restrepo|santander|policarpa|ciudad berna")) |
+      (localidad == "Puente Aranda"     & str_detect(texto_nlp, "ciudad montes|salazar gomez|gorgonzola")) |
+      (localidad == "La Candelaria"     & str_detect(texto_nlp, "centro historico|plaza de bolivar|belen")) |
+      (localidad == "Rafael Uribe Uribe"& str_detect(texto_nlp, "olaya|quiroga|san jose|diana turbay|marruecos")) |
+      (localidad == "Ciudad Bolívar"    & str_detect(texto_nlp, "meissen|sierra morena|arborizadora|lucero|san francisco|jerusalen")),
+      "Alta", "Media"
+    )
+```
+
+---
+
+# Script 2: Limpieza NLP y Clasificador de 11 DAI (`procesamiento_noticias.R`)
+
+::: {.callout-note title="Ficha Rápida del Script 2"}
+- **Ubicación:** `scripts/02_procesamiento/03_noticias/procesamiento_noticias.R` (`467` líneas).
+- **Entrada:** `data/raw/noticias/noticias_google_news_consolidado.parquet` (`3.916` noticias crudas).
+- **Salidas:**
+  - `data/processed/03_noticias/noticias_procesadas.parquet` (`3.916` noticias limpias y clasificadas).
+  - `output/tables/tabla_reclasificacion_dai.csv`
+  - `output/tables/tabla_conteo_localidad_anio_dai.csv`
+  - `output/tables/muestra_validacion_manual_dai.csv`
+:::
+
+## Paso 2.1: Carga, `localidad_slug` sin guiones y fechas canónicas (Líneas 48–87)
+
+¿Por qué generamos `localidad_slug` sin tildes ni guiones medios (`-`)? Porque en la etapa siguiente el paquete `sentometrics` concatena diccionario, feature y esquema temporal usando `--` (por ejemplo `crimen_es--loc_ciudad_bolivar--linear`). Si una localidad tuviera un guion medio, rompería la separación de columnas. Además, unificamos `fecha` como `Date` y derivamos `año`, `mes`, `año_mes`, `trimestre` y `semana_año` para alinear el corpus con las series mensuales y el panel anual:
+
+```r
+# 2. Carga y Normalización Territorial y Temporal ----
+
+## 2.1 Lectura de noticias consolidadas y generación de slugs sin guiones ----
+# sentometrics usa '--' para separar léxico, feature y tiempo; normalizamos
+# cada localidad a snake_case sin tildes ni guiones para evitar rupturas.
+df_crudo <- read_parquet(ruta_entrada_raw) |>
+  as_tibble() |>
+  mutate(
+    localidad_slug = localidad |>
+      stri_trans_general("Latin-ASCII") |>
+      str_to_lower() |>
+      str_remove("^la\\s+") |>
+      str_replace_all("[\\s\\-]+", "_")
+  )
+
+## 2.2 Unificación de fechas canónicas (Date yyyy-mm-dd) ----
+if (!"fecha" %in% colnames(df_crudo)) {
+  df_crudo <- df_crudo |>
+    mutate(
+      fecha = if ("fecha_iso" %in% colnames(df_crudo)) {
+        if_else(!is.na(fecha_iso) & fecha_iso != "", as.Date(fecha_iso), as.Date(fecha_chunk_desde))
+      } else {
+        as.Date(fecha_chunk_desde)
+      }
+    )
+} else {
+  df_crudo <- df_crudo |> mutate(fecha = as.Date(fecha))
+}
+
+df_crudo <- df_crudo |>
+  mutate(
+    año        = as.integer(coalesce(año, as.integer(format(fecha, "%Y")))),
+    mes        = as.integer(coalesce(mes, as.integer(format(fecha, "%m")))),
+    año_mes    = coalesce(año_mes, format(fecha, "%Y-%m")),
+    trimestre  = coalesce(trimestre, paste0(año, "-T", quarter(fecha))),
+    semana_año = coalesce(semana_año, as.integer(format(fecha, "%V")))
+  )
+```
+
+## Paso 2.2: Depuración quirúrgica del cuerpo web y métricas NLP (Líneas 89–144)
+
+Los textos extraídos de periódicos web arrastran ruido peligroso: muros de suscripción, avisos de *cookies*, etiquetas HTML (`<p>`, `&nbsp;`), botones de *"Audio generado con IA de Google"*, créditos de foto, URLs y enlaces de **"Lea también: ..."**. Este último es especialmente crítico: si una nota sobre un frente de seguridad en Usaquén termina con *"Lea también: violento sicariato en Ciudad Bolívar"*, un clasificador ingenuo la marcaría por error como homicidio.
+
+La función `limpiar_cuerpo_web()` resuelve todo esto de forma modular:
+
+```r
+## 3.1 Depuración de ruido web, paywalls y etiquetas HTML ----
+limpiar_cuerpo_web <- function(cuerpo, resumen) {
+  es_ruido_portal <- str_detect(
+    cuerpo,
+    "Consulta aquí la información que te interesa sobre Bogotá|Publicidad Publicidad Publicidad|Puntos de venta Suscribirse a El Nuevo Siglo"
+  ) | (grepl("cookies", cuerpo, ignore.case = TRUE) & nchar(cuerpo) < 500)
+
+  texto <- if_else(es_ruido_portal, resumen, cuerpo)
+
+  patrones_ruido <- c(
+    "<[^>]+>",
+    "&nbsp;|&#160;|&quot;|&amp;|&lt;|&gt;|&#[0-9]+;",
+    "(?i)[^\n.]*\\bcookies\\b[^\n.]*\\.?",
+    "¿Cómo podemos ayudarte\\?.*",
+    "Audio generado con IA de Google [0-9]+:[0-9]+ / [0-9]+:[0-9]+",
+    "¡Comparte\\s+esta nota!.*",
+    "COPYRIGHT ©.*",
+    "(?i)(lea también|lea además|le puede interesar|vea también|siga leyendo|noticia en desarrollo)[^.]*\\.",
+    "(?i)(foto|crédito|video):\\s*[^.]*(\\.|\\n|$)",
+    "\\bPublicidad\\b",
+    "https?://\\S+|www\\.\\S+",
+    "[\r\n\t\u00a0]+"
+  )
+
+  texto <- reduce(patrones_ruido, ~ gsub(.y, " ", .x, perl = TRUE), .init = texto) |>
+    str_squish()
+
+  # Si tras limpiar queda muy poco contenido útil, recurrimos al resumen depurado
+  texto <- if_else(nchar(texto) < 40 | is.na(texto), resumen, texto)
+  str_squish(gsub("<[^>]+>", " ", texto))
+}
+
+cuerpo_original <- df_crudo$cuerpo
+cuerpo_depurado <- limpiar_cuerpo_web(cuerpo_original, df_crudo$resumen)
+
+## 3.2 Métricas de volumen léxico y texto unificado ----
+df_limpio <- df_crudo |>
+  mutate(
+    titulo             = str_squish(gsub("<[^>]+>", " ", titulo)),
+    cuerpo             = cuerpo_depurado,
+    caracteres_cuerpo  = nchar(cuerpo),
+    palabras_cuerpo    = str_count(cuerpo, "\\S+"),
+    palabras_titulo    = str_count(titulo, "\\S+"),
+    texto_completo_nlp = str_squish(paste(titulo, ".", cuerpo))
+  )
+```
+
+## Paso 2.3: Clasificador inteligente de los 11 DAI (Líneas 146–377)
+
+Primero `normalizar_texto()` pasa el texto a ASCII sin tildes, minúsculas y sin signos de puntuación, truncando el cuerpo a los primeros `1.500` caracteres (`str_sub(cuerpo, 1, 1500)`) porque el inicio de la noticia describe el hecho principal mientras los párrafos finales suelen citar antecedentes históricos.
+
+```r
+normalizar_texto <- function(x) {
+  x |>
+    stri_trans_general("Latin-ASCII") |>
+    str_to_lower() |>
+    str_replace_all("[^a-z0-9 ]", " ") |>
+    str_squish()
+}
+
+df_clasif <- df_limpio |>
+  mutate(
+    txt_titulo  = normalizar_texto(titulo),
+    txt_resumen = normalizar_texto(resumen),
+    txt_cuerpo  = normalizar_texto(str_sub(cuerpo, 1, 1500))
+  )
+```
+
+Luego el clasificador aplica **cuatro reglas de precisión**:
+
+### Regla 1: Candados anti-falsos positivos (*Negative Lookaheads*) y proximidad de 4 palabras
+
+- En `verbo_hurto`, `rob(?!(ust|ot|ert|led|ins|le\b|les\b))\w*` captura *robo, robó, robaron*, pero bloquea *robusto, robot, Roberto, roble*.
+- En `objetos_hurto`, `casas?(?! de (empeno|cambio|apuestas))` evita clasificar un robo a una *casa de cambio* como hurto a residencias.
+- En `patron_sexual`, `violacion(es)?(?! (de|a) (la|los|las|derechos|medidas?|domicilio|normas?|protocolos?|privacidad))` evita clasificar *"violación de derechos"* como delito sexual.
+- Y `construir_patron_objeto()` exige que el verbo de hurto y el objeto robado aparezcan a **máximo 4 palabras de distancia** (o 3 palabras antes del participio *robado/hurtado*), evitando asignar mal el delito cuando una nota menciona *"moto"* y *"robaron un celular"* en frases separadas:
+
+```r
+participio_hurto <- "(robad[oa]s?|hurtad[oa]s?|saquead[oa]s?|desvalijad[oa]s?)"
+
+construir_patron_objeto <- function(objeto) {
+  paste0(
+    "\\b", verbo_hurto, "\\b(\\s+\\w+){0,4}\\s+\\b", objeto, "\\b|",
+    "\\b", objeto, "\\b(\\s+\\w+){0,3}\\s+\\b", participio_hurto, "\\b"
+  )
+}
+patrones_objeto <- lapply(objetos_hurto, construir_patron_objeto)
+```
+
+### Regla 2: Filtro de siniestros viales (`es_transito`)
+
+Noticias de accidentes de tránsito suelen reportar *"choque dejó dos muertos y tres heridos"*. El patrón `patron_transito` bloquea `homicidio` y `lesiones_personales` en esos casos, salvo que la nota mencione explícitamente un ataque criminal (`sicariato`, `asesinato` u `homicidio`).
+
+### Regla 3: Orden de prioridad en `clasificar_dai_vector()`
+
+La función evalúa cada texto en orden estricto: primero delitos contra la vida e integridad (`homicidio`, `delitos_sexuales`, `violencia_intrafamiliar`, `extorsion`), luego modalidades específicas de hurto (entidades financieras, automotores, motos, bicicletas, celulares, residencias — excluyendo hurto de cables/alcantarillas en `nodai_otros_hurtos` —, comercio y personas), luego `lesiones_personales`, `hurto_no_identificado` y finalmente categorías de exclusión No DAI (`nodai_microtrafico`, `nodai_otros_delitos`, `nodai_operatividad`, `nodai_politica_seguridad`, `nodai_sin_hecho_delictivo`):
+
+```r
+clasificar_dai_vector <- function(txt) {
+  txt <- coalesce(txt, "")
+  es_transito <- str_detect(txt, patron_transito)
+  case_when(
+    str_detect(txt, patron_homicidio) & !(es_transito & !str_detect(txt, "\\b(sicari\\w*|asesin\\w*|homicidio)\\b")) ~ "homicidio",
+    str_detect(txt, patron_sexual)                             ~ "delitos_sexuales",
+    str_detect(txt, patron_vif)                                ~ "violencia_intrafamiliar",
+    str_detect(txt, patron_extorsion)                          ~ "extorsion",
+    str_detect(txt, patrones_objeto$hurto_entidades_financieras) ~ "hurto_entidades_financieras",
+    str_detect(txt, patrones_directos$hurto_automotores) |
+      str_detect(txt, patrones_objeto$hurto_automotores)       ~ "hurto_automotores",
+    str_detect(txt, patrones_directos$hurto_motocicletas) |
+      str_detect(txt, patrones_objeto$hurto_motocicletas)      ~ "hurto_motocicletas",
+    str_detect(txt, patrones_objeto$hurto_bicicletas)          ~ "hurto_bicicletas",
+    str_detect(txt, patrones_objeto$hurto_celulares)           ~ "hurto_celulares",
+    str_detect(txt, patrones_directos$hurto_residencias) |
+      str_detect(txt, patrones_objeto$hurto_residencias)       ~ "hurto_residencias",
+    str_detect(txt, patron_hurto) &
+      str_detect(txt, patron_otros_hurtos)                     ~ "nodai_otros_hurtos",
+    str_detect(txt, patrones_directos$hurto_comercio) |
+      str_detect(txt, patrones_objeto$hurto_comercio)          ~ "hurto_comercio",
+    str_detect(txt, patrones_directos$hurto_personas) |
+      str_detect(txt, patrones_objeto$hurto_personas)          ~ "hurto_personas",
+    str_detect(txt, patron_hurto) &
+      str_detect(txt, contexto_comercio)                       ~ "hurto_comercio",
+    str_detect(txt, patron_hurto) &
+      str_detect(txt, contexto_personas)                       ~ "hurto_personas",
+    str_detect(txt, patron_lesiones) & !es_transito            ~ "lesiones_personales",
+    str_detect(txt, patron_hurto)                              ~ "hurto_no_identificado",
+    str_detect(txt, patron_microtrafico)                       ~ "nodai_microtrafico",
+    str_detect(txt, patron_otros_delitos)                      ~ "nodai_otros_delitos",
+    str_detect(txt, patron_operatividad)                       ~ "nodai_operatividad",
+    str_detect(txt, patron_politica)                           ~ "nodai_politica_seguridad",
+    TRUE                                                       ~ "nodai_sin_hecho_delictivo"
+  )
+}
+```
+
+### Regla 4: Cascada `Titular -> Resumen -> Cuerpo` y mapeo oficial SDSCJ
+
+Se evalúan `txt_titulo`, `txt_resumen` y `txt_cuerpo` por separado. Si el titular ya identifica un delito específico, gana inmediatamente con `confianza_dai = "Alta"`; si no, pasa al resumen (`"Media"`) y por último al cuerpo (`"Baja"`). Luego `mapa_sdscj` traduce el resultado a las 11 categorías oficiales (agrupando celulares y bicicletas dentro de `"Hurto a personas"`):
+
+```r
+mapa_sdscj <- c(
+  homicidio                   = "Homicidio",
+  lesiones_personales         = "Lesiones personales",
+  hurto_personas              = "Hurto a personas",
+  hurto_celulares             = "Hurto a personas",
+  hurto_bicicletas            = "Hurto a personas",
+  hurto_residencias           = "Hurto a residencias",
+  hurto_comercio              = "Hurto a comercio",
+  hurto_entidades_financieras = "Hurto a entidades financieras",
+  hurto_automotores           = "Hurto de automotores",
+  hurto_motocicletas          = "Hurto de motocicletas",
+  extorsion                   = "Extorsión",
+  delitos_sexuales            = "Delitos sexuales",
+  violencia_intrafamiliar     = "Violencia intrafamiliar",
+  hurto_no_identificado       = "Hurto (modalidad no identificada)"
+)
+```
+
+## Paso 2.4: Exportación, tablas de auditoría y diagnóstico final (Líneas 379–452)
+
+El script retira las columnas auxiliares de matching, ordena por `(localidad, fecha)`, asigna `id = "doc_1".."doc_3916"`, guarda `noticias_procesadas.parquet` y exporta tres tablas de control en `output/tables/`:
+
+1. **`tabla_reclasificacion_dai.csv`:** compara la etiqueta original del scraper contra `delito_sdscj`.
+2. **`tabla_conteo_localidad_anio_dai.csv`:** resume las noticias DAI por localidad y año (`2022`–`2026`), diferenciando DAI amplio, DAI estricto y ventana enero–septiembre (`ventana_ene_sep`).
+3. **`muestra_validacion_manual_dai.csv`:** extrae una muestra estratificada de `15` noticias por categoría (mezclada aleatoriamente) con columnas vacías para revisión manual de precisión.
+
+```r
+# Conteo anual por localidad (2022–2026) desagregado entre DAI amplio, DAI
+# estricto y ventana enero–septiembre para verificar cobertura sin vacíos.
+tabla_conteo <- noticias_dai |>
+  count(localidad, año, name = "noticias_dai") |>
+  complete(localidad, año = 2022:2026, fill = list(noticias_dai = 0L)) |>
+  left_join(
+    noticias_dai |> filter(es_dai_estricto) |> count(localidad, año, name = "noticias_dai_estricto"),
+    by = c("localidad", "año")
+  ) |>
+  left_join(
+    noticias_dai |> filter(ventana_ene_sep) |> count(localidad, año, name = "noticias_dai_ene_sep"),
+    by = c("localidad", "año")
+  ) |>
+  mutate(across(starts_with("noticias"), ~ coalesce(.x, 0L)))
+write_csv(tabla_conteo, file.path(ruta_salida_tablas, "tabla_conteo_localidad_anio_dai.csv"))
+
+# Muestra aleatoria estratificada de 15 noticias por categoría (mezclada al azar)
+# con columnas vacías para revisar manualmente la precisión de las reglas regex.
+muestra_validacion <- df_procesado_final |>
+  group_by(delito_sdscj) |>
+  slice_sample(n = 15) |>
+  ungroup() |>
+  slice_sample(prop = 1) |>
+  transmute(
+    localidad, año, titulo, resumen, delito_alto_impacto,
+    delito_sdscj, modalidad_dai, campo_clasificacion,
+    validacion_correcta = NA_character_, categoria_correcta = NA_character_
+  )
+write_csv(muestra_validacion, file.path(ruta_salida_tablas, "muestra_validacion_manual_dai.csv"), na = "")
+```
+
+Finalmente, la sección 6 imprime los estadísticos de longitud antes y después de limpiar, comprueba `0` nulos con `colSums(is.na(...))` en las 9 variables clave y muestra el desglose oficial del corpus: **2.588** noticias en los 11 DAI estrictos, **538** en hurto sin modalidad identificada y **790** clasificadas como `No DAI`.

@@ -1,0 +1,6 @@
+espacio,silueta_media,n_silueta_neg,wss,ari_vs_base,pca_var_pc1,pca_var_pc2,pca_var_acum_2d
+Z-score (base),0.5416,1,13.5797,1,0.7065,0.2573,0.9638
+"Min-Max [0, 1]",0.5619,0,1.0136,0.8484,0.7065,0.2573,0.9638
+Robusto (Mediana / IQR),0.4635,0,14.1014,1,0.7065,0.2573,0.9638
+Log(1 + x) + Z-score,0.4155,1,15.3351,0.3725,0.7065,0.2573,0.9638
+"PCA (PC1 + PC2 = 96,4% var)",0.5819,1,11.6271,1,0.7065,0.2573,0.9638

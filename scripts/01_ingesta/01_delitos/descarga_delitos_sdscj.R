@@ -2,6 +2,9 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R
 # ROL: Ingesta Oficial de Delitos de Alto Impacto y Cartografía (SDSCJ)
+# FUENTE: Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) /
+#         SIEDCO (Policía Nacional) — Datos Abiertos Bogotá:
+#         https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c
 # PRODUCE: data/raw/delitos/localidades_bogota_raw.geojson
 # ==============================================================================
 
