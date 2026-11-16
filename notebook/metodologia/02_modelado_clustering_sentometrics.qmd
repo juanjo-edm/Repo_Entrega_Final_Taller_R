@@ -940,7 +940,14 @@ Esta sección integra en vivo el código de `scripts/06_descriptivos_corpus.R` y
 
 ## Cobertura temporal, geográfica y extensión léxica del corpus
 
-Antes de calcular puntajes emocionales conviene verificar cuántas noticias hay por año y por localidad, si existen vacíos en algún cruce localidad-año y qué tan largos son los textos. Como las estadísticas oficiales de 2026 tienen corte a septiembre, nos aseguramos explícitamente de restringir el corpus a esa misma ventana temporal.
+En este primer bloque de la subsección 4.1 definimos el formato gráfico unificado de la sección, acotamos el corpus hasta septiembre de 2026 y cuantificamos el volumen de noticias por año de publicación y por localidad urbana. Este diagnóstico inicial es necesario dentro del flujo metodológico porque las denuncias oficiales de la SDSCJ tienen corte a septiembre de 2026; restringir las noticias a esa misma ventana evita mezclar meses fuera del periodo muestral y permite comprobar que tanto los cinco cortes anuales como las 19 localidades cuenten con una base documental suficiente antes de medir su polaridad.
+
+Las funciones principales empleadas en este bloque cumplen las siguientes tareas:
+
+* `ggplot2::theme_minimal()` y `ggplot2::theme()`: configuran el objeto `tema_limpio`, eliminando cuadrículas secundarias y unificando tipografías para todas las figuras descriptivas de la sección.
+* `dplyr::mutate()`, `dplyr::filter(!(año == 2026 & mes > 9))` y `stopifnot()`: convierten las variables de fecha a enteros, descartan cualquier artículo posterior a septiembre de 2026 y verifican que el subconjunto resultante (`noticias_desc`) conserve las 19 localidades urbanas.
+* `dplyr::group_by()`, `dplyr::summarise(conteo = n())` y `dplyr::arrange(desc(conteo))`: agregan el número de noticias primero por año (`noticias_por_anio`) y luego por localidad ordenada de mayor a menor cobertura (`noticias_por_localidad`).
+* `ggplot2::geom_col()`, `ggplot2::geom_text()`, `stats::reorder(localidad, conteo)` y `ggplot2::coord_flip()`: construyen el gráfico de barras verticales por año (`p_fig3`) y el gráfico de barras horizontales por localidad (`p_fig4`), mostrando sobre cada barra el conteo exacto formateado con `scales::comma()`.
 
 ```{r}
 #| label: fig-cobertura-corpus
@@ -1013,7 +1020,14 @@ print(p_fig3)
 print(p_fig4)
 ```
 
-Para comprobar que ninguna localidad quede vacía en algún año y entender la extensión léxica de los artículos, replicamos también el mapa de calor Localidad x Año y el histograma de palabras del cuerpo limpio.
+Una vez revisados los totales anuales y territoriales por separado, el segundo bloque construye un mapa de calor bidimensional que cruza las 19 localidades con los 5 años de análisis ($19 \times 5 = 95$ celdas). Este paso es necesario dentro del flujo metodológico para comprobar que ninguna localidad quede sin cobertura en algún año específico (lo que generaría celdas vacías al consolidar el panel anual de la Sección 6) y para identificar en qué zonas y años se concentra la mayor intensidad periodística.
+
+Las funciones principales que intervienen en este bloque son:
+
+* `dplyr::group_by(localidad, año)` y `dplyr::summarise(conteo = n())`: tabulan el número de artículos disponibles en cada combinación de localidad y año (`heatmap_df`).
+* `stats::reorder(localidad, conteo, FUN = sum)`: ordena las localidades en el eje vertical según la suma acumulada de sus noticias en todo el periodo, facilitando la lectura de arriba hacia abajo.
+* `ggplot2::geom_tile()` y `ggplot2::geom_text(aes(label = conteo, color = conteo > 55))`: dibujan la matriz de celdas e imprimen el número exacto de noticias en su interior, alternando el color del texto según el umbral de 55 artículos para mantener contraste legible sobre el fondo.
+* `ggplot2::scale_fill_viridis_c(option = "plasma")` y `ggplot2::scale_color_manual()`: asignan el gradiente de intensidad para el relleno de las celdas y fijan los dos colores de texto (blanco para celdas oscuras y negro para celdas claras).
 
 ```{r}
 #| label: fig-heatmap-corpus
@@ -1048,6 +1062,14 @@ p_fig5 <- ggplot(heatmap_df, aes(x = factor(año), y = reorder(localidad, conteo
 
 print(p_fig5)
 ```
+
+El tercer bloque de la subsección 4.1 examina la distribución de la longitud en palabras del cuerpo limpio de las noticias (`palabras_cuerpo`) mediante un histograma acompañado de su media y su mediana. Este diagnóstico es necesario dentro del flujo metodológico porque la extensión de los textos varía ampliamente entre notas cortas y crónicas detalladas; cuantificar esa dispersión y su asimetría justifica la regla de normalización intradocumental (`proportionalPol`) que se adopta a partir de la subsección 4.2 para que la longitud de un artículo no distorsione su puntaje de sentimiento.
+
+Para construir este diagnóstico léxico se utilizan las siguientes funciones principales:
+
+* `stats::median()` y `base::mean()` dentro de `tibble::tibble()`: calculan la mediana y el promedio de palabras por noticia y almacenan ambos valores junto con sus etiquetas en la tabla `estadisticas_longitud`.
+* `ggplot2::geom_histogram(binwidth = 50)`: agrupa el conteo de palabras en intervalos de 50 unidades para visualizar la concentración de artículos cortos y la cola derecha de reportajes extensos.
+* `ggplot2::geom_vline()`, `ggplot2::scale_color_manual()` y `ggplot2::scale_linetype_manual()` (apoyadas en `stats::setNames()`): trazan las dos líneas verticales de referencia para la mediana y la media y sincronizan su color y tipo de trazo en una sola leyenda superior.
 
 ```{r}
 #| label: fig-longitud-corpus
@@ -1149,7 +1171,15 @@ Los pesos temporales $b_j^{(\tau)}$ siempre suman $1$ y funcionan como una curva
 2. **Exponencial (`alphasExp = 0.2` y `0.5`, 2 esquemas):** el peso cae rápido al principio y deja una cola suave. Con $\alpha = 0{,}5$ casi toda la señal se concentra en el mes presente y el inmediatamente anterior; con $\alpha = 0{,}2$ el pasado pesa durante más tiempo.
 3. **Curvas Beta (`aBeta = 1, 2` x `bBeta = 2, 3`, 4 esquemas):** son curvas flexibles que pueden concentrar el peso en el presente, repartirlo suavemente o formar una pequeña "campana" donde el impacto alcanza su pico uno o dos meses después de la noticia.
 
-Al combinar **2 diccionarios** ($\ell$) x **26 filtros binarios** ($k$) x **7 esquemas de memoria** ($\tau$), construimos $2 \times 26 \times 7 = 364$ series mensuales que resumen la narrativa mediática desde ángulos complementarios. Luego, en la Sección 5, Elastic Net se encarga de seleccionar cuáles de esas memorias ayudan realmente a predecir la dinámica del hurto.
+Al combinar **2 diccionarios** ($\ell$) x **26 filtros binarios** ($k$) x **7 esquemas de memoria** ($\tau$), construimos $2 \times 26 \times 7 = 364$ series mensuales que resumen la narrativa mediática desde ángulos complementarios. La @tbl-arquitectura-agregacion sintetiza cómo se traduce cada uno de estos tres pasos matemáticos a las funciones y parámetros de `sentometrics` que ejecutamos en las subsecciones siguientes. Luego, en la Sección 5, Elastic Net se encarga de seleccionar cuáles de esas memorias ayudan realmente a predecir la dinámica del hurto.
+
+| Etapa / Nivel de agregación | Función o parámetro en `sentometrics` | Estructura y formulación matemática | Propósito analítico en el modelo |
+| :--- | :--- | :--- | :--- |
+| **Paso 1: Nivel intradocumental (`within`)** | `sento_lexicons(lexiconsIn, valenceIn)` y `compute_sentiment(..., how = "proportionalPol")` (o `ctr_agg(howWithin = "proportionalPol")`) | Evalúa la @eq-sent-doc en cada noticia $d_i$: multiplica el peso léxico $m_w^{(\ell)}$ por el modificador contextual $v_w$ ($t \in \{1, 2, 3, 4\}$), divide entre el total de palabras con carga polar $N_{\text{pol}}(d_i)$ y activa el filtro binario $f_{i,k} \in \{0, 1\}$. | Evitar que los artículos extensos vean diluida su polaridad por incluir vocabulario descriptivo neutro y corregir el signo o la intensidad ante negaciones, amplificadores, atenuadores y conectores adversativos. |
+| **Paso 2: Nivel mensual entre documentos (`docs`)** | `ctr_agg(howDocs = "proportional", by = "month", do.ignoreZeros = TRUE)` y `measures_fill(..., fill = "zero")` | Evalúa la @eq-sent-docs en cada mes $t$: pondera las noticias con polaridad distinta de cero según su participación $\theta_{i,t}$ en el volumen mensual de palabras y asigna $0$ únicamente cuando ninguna noticia menciona la característica $k$ en todo el mes. | Otorgar mayor peso dentro del mes a los reportajes de mayor desarrollo informativo frente a despachos breves, impidiendo que artículos puramente neutros ($s = 0$) arrastren artificialmente el promedio hacia cero. |
+| **Paso 3: Nivel intertemporal (`time`)** | `ctr_agg(howTime = c("linear", "exponential", "beta"), lag = 6, alphasExp = c(0.2, 0.5), aBeta = c(1, 2), bBeta = c(2, 3))` dentro de `sento_measures()` | Evalúa la @eq-sent-agg sobre una ventana móvil de 6 meses ($j = 0, \dots, 5$) bajo 7 curvas de ponderación $b_j^{(\tau)}$ que suman $1$: 1 lineal, 2 exponenciales y 4 curvas Beta, generando $2 \times 26 \times 7 = 364$ series continuas. | Modelar la persistencia del clima mediático y del temor ciudadano a lo largo de varios meses, permitiendo que la regresión regularizada identifique si la relación con las denuncias responde a choques inmediatos o a rezagos acumulados. |
+
+: Síntesis de los tres niveles de puntuación y agregación temporal en `sentometrics` y su correspondencia funcional en R {#tbl-arquitectura-agregacion}
 
 ## Construcción del `sento_corpus` y diagnósticos de `corpus_summarize()`
 
