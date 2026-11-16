@@ -80,9 +80,16 @@ stopifnot(length(unique(panel_localidades$codigo_localidad)) == 19)
 lista_localidades <- sort(unique(panel_localidades$localidad))
 
 modalidades <- c(
+  "Total"        = "tasa_hurto_total",
   "Personas"     = "tasa_hurto_personas",
   "Residencias"  = "tasa_hurto_residencias",
   "Motocicletas" = "tasa_hurto_motos"
+)
+
+mapa_modalidad_noticia <- c(
+  "tasa_hurto_personas"    = "Hurto a personas",
+  "tasa_hurto_residencias" = "Hurto a residencias",
+  "tasa_hurto_motos"       = "Hurto de motocicletas"
 )
 
 medidas_prensa <- c(
@@ -138,31 +145,73 @@ formato <- function(x, digitos = 0) {
 }
 
 ## 3.2 Resumen del panel para un año o para el promedio 2022-2026 ----
-resumir_panel <- function(anio) {
+resumir_panel <- function(anio, modalidad = "tasa_hurto_total") {
   if (anio == "todos") {
-    panel_localidades |>
+    base_tasas <- panel_localidades |>
       group_by(codigo_localidad, localidad, cluster_nombre, silueta_localidad) |>
       summarise(
         tasa_hurto_personas    = mean(tasa_hurto_personas, na.rm = TRUE),
         tasa_hurto_residencias = mean(tasa_hurto_residencias, na.rm = TRUE),
         tasa_hurto_motos       = mean(tasa_hurto_motos, na.rm = TRUE),
+        tasa_hurto_total       = mean(tasa_hurto_total, na.rm = TRUE),
         noticias_conteo        = sum(noticias_conteo, na.rm = TRUE),
         sentimiento_promedio   = mean(sentimiento_promedio, na.rm = TRUE),
         prop_negativas         = mean(prop_negativas, na.rm = TRUE),
         .groups = "drop"
       )
   } else {
-    panel_localidades |>
+    base_tasas <- panel_localidades |>
       filter(año == as.integer(anio))
   }
+
+  # Si se selecciona una modalidad específica, filtramos las métricas de prensa por esa modalidad
+  if (!is.null(modalidad) && modalidad %in% names(mapa_modalidad_noticia)) {
+    noticias_filtradas <- tabla_noticias |>
+      filter(delito_sdscj == unname(mapa_modalidad_noticia[modalidad]))
+
+    if (anio != "todos") {
+      noticias_filtradas <- noticias_filtradas |>
+        filter(año == as.integer(anio))
+    }
+
+    prensa_mod <- noticias_filtradas |>
+      group_by(localidad) |>
+      summarise(
+        noticias_conteo      = n(),
+        sentimiento_promedio = round(mean(sentimiento_score, na.rm = TRUE), 4),
+        prop_negativas       = round(mean(sentimiento_categoria == "Negativo", na.rm = TRUE) * 100, 2),
+        .groups = "drop"
+      )
+
+    base_tasas <- base_tasas |>
+      select(-noticias_conteo, -sentimiento_promedio, -prop_negativas) |>
+      left_join(prensa_mod, by = "localidad") |>
+      mutate(
+        noticias_conteo      = replace_na(noticias_conteo, 0L),
+        sentimiento_promedio = replace_na(sentimiento_promedio, 0),
+        prop_negativas       = replace_na(prop_negativas, 0)
+      )
+  }
+
+  base_tasas
 }
 
 # Pre-cálculo del panel promedio 2022-2026 (constante entre sesiones)
-datos_promedio_global <- resumir_panel("todos")
+datos_promedio_global <- resumir_panel("todos", "tasa_hurto_total")
 
 ## 3.3 Paleta de 4 niveles (cuartiles) para los mapas ----
 paleta_cuartiles <- function(valores, colores) {
+  rango <- range(valores, na.rm = TRUE)
+  if (!all(is.finite(rango)) || rango[1] == rango[2]) {
+    val_unico <- ifelse(is.finite(rango[1]), rango[1], 0)
+    cortes <- seq(val_unico - 1, val_unico + 1, length.out = 5)
+    return(colorBin(colores, domain = c(val_unico - 1, val_unico + 1), bins = cortes))
+  }
+
   cortes <- unique(quantile(valores, probs = seq(0, 1, 0.25), na.rm = TRUE))
+  if (length(cortes) < 5) {
+    cortes <- seq(rango[1], rango[2], length.out = 5)
+  }
   colorBin(colores, domain = valores, bins = cortes)
 }
 
@@ -293,7 +342,8 @@ ui <- page_navbar(
     card(uiOutput("ficha_titulo")),
 
     layout_columns(
-      col_widths = c(4, 4, 4),
+      col_widths = c(3, 3, 3, 3),
+      tarjeta_cifra("Hurto total", "loc_total", "por 100.000 hab. (promedio)", ambar),
       tarjeta_cifra("Hurto a personas", "loc_personas", "por 100.000 hab. (promedio)", ambar),
       tarjeta_cifra("Hurto a residencias", "loc_residencias", "por 100.000 hab. (promedio)", ambar),
       tarjeta_cifra("Hurto de motocicletas", "loc_motos", "por 100.000 hab. (promedio)", ambar)
@@ -579,9 +629,9 @@ server <- function(input, output, session) {
   ## 6.1 Pestaña 1: Panorama ----
 
   datos_panorama <- reactive({
-    resumir_panel(input$anio)
+    resumir_panel(input$anio, input$modalidad)
   }) |>
-    bindCache(input$anio)
+    bindCache(input$anio, input$modalidad)
 
   output$kpi_tasa <- renderText({
     formato(mean(datos_panorama()[[input$modalidad]], na.rm = TRUE), 1)
@@ -604,14 +654,22 @@ server <- function(input, output, session) {
       select(codigo_localidad, geometry) |>
       inner_join(datos_panorama(), by = "codigo_localidad")
 
+    etiqueta_mod <- names(modalidades)[modalidades == input$modalidad]
+
     if (input$capa_mapa == "hurto") {
       valores <- capa[[input$modalidad]]
       pal     <- paleta_cuartiles(valores, c("#33281A", "#6E4A1C", "#B0731F", ambar))
-      titulo  <- "Tasa por 100.000 hab."
+      titulo  <- paste0("Tasa (", etiqueta_mod, ") / 100k hab.")
+      digitos_lbl <- ifelse(input$modalidad %in% c("tasa_hurto_personas", "tasa_hurto_total"), 0, 1)
     } else {
       valores <- capa[[input$medida]]
       pal     <- paleta_cuartiles(valores, c("#1B2638", "#2C3D5C", "#4F74B3", azul))
-      titulo  <- names(medidas_prensa)[medidas_prensa == input$medida]
+      titulo  <- paste0(names(medidas_prensa)[medidas_prensa == input$medida], " (", etiqueta_mod, ")")
+      digitos_lbl <- case_when(
+        input$medida == "noticias_conteo"      ~ 0,
+        input$medida == "sentimiento_promedio" ~ 3,
+        TRUE                                   ~ 1
+      )
     }
 
     leaflet(capa) |>
@@ -622,7 +680,7 @@ server <- function(input, output, session) {
         fillOpacity = 0.85,
         color       = fondo,
         weight      = 1.5,
-        label       = paste0(capa$localidad, ": ", formato(valores, 1)),
+        label       = paste0(capa$localidad, ": ", formato(valores, digitos_lbl)),
         highlightOptions = highlightOptions(weight = 3, color = "#E9EDF2",
                                             bringToFront = TRUE)
       ) |>
@@ -666,13 +724,20 @@ server <- function(input, output, session) {
       p(fila$cluster_nombre, style = paste0("color:", gris_texto, "; margin: 0")),
       h1(input$localidad, style = "font-weight: 800; margin: 4px 0"),
       p(HTML(paste0(
-        "Tiene la <strong style='color:", ambar, "'>", puesto("tasa_hurto_personas"),
-        ".ª</strong> tasa más alta de hurto a personas de las 19 localidades, con ",
-        formato(fila$tasa_hurto_personas), " casos por 100.000 habitantes al año."
+        "Ocupa el <strong style='color:", ambar, "'>puesto ", puesto("tasa_hurto_total"),
+        " de 19</strong> en hurto total consolidado, con ",
+        formato(fila$tasa_hurto_total), " casos por 100.000 habitantes al año (",
+        formato(fila$tasa_hurto_personas), " a personas, ",
+        formato(fila$tasa_hurto_residencias, 1), " a residencias y ",
+        formato(fila$tasa_hurto_motos, 1), " de motocicletas)."
       )), style = "font-size: 18px")
     )
   })
 
+  output$loc_total <- renderText({
+    paste0(formato(valor_loc("tasa_hurto_total")),
+           "  ·  puesto ", puesto("tasa_hurto_total"), " de 19")
+  })
   output$loc_personas <- renderText({
     paste0(formato(valor_loc("tasa_hurto_personas")),
            "  ·  puesto ", puesto("tasa_hurto_personas"), " de 19")
@@ -741,7 +806,7 @@ server <- function(input, output, session) {
   ## 6.3 Pestaña 3: Hurto vs. prensa ----
 
   datos_prensa <- reactive({
-    resumir_panel(input$anio_prensa) |>
+    resumir_panel(input$anio_prensa, input$modalidad_prensa) |>
       mutate(eje_x = .data[[input$modalidad_prensa]])
   }) |>
     bindCache(input$anio_prensa, input$modalidad_prensa)
@@ -761,11 +826,18 @@ server <- function(input, output, session) {
 
     linea <- function(x0, x1, y0, y1) {
       list(type = "line", x0 = x0, x1 = x1, y0 = y0, y1 = y1,
-           line = list(color = "#4A5363", dash = "dash"))
+            line = list(color = "#4A5363", dash = "dash"))
     }
     nota <- function(x, y, texto, color = gris_texto) {
       list(x = x, y = y, xref = "paper", yref = "paper", text = texto,
            showarrow = FALSE, font = list(color = color, size = 12))
+    }
+
+    titulo_eje_x <- if (input$modalidad_prensa == "tasa_hurto_total") {
+      "Tasa de hurto total (por 100.000 hab.)"
+    } else {
+      paste("Tasa de hurto a", tolower(names(modalidades)[modalidades == input$modalidad_prensa]),
+            "(por 100.000 hab.)")
     }
 
     plot_ly(
@@ -792,8 +864,7 @@ server <- function(input, output, session) {
         )
       ) |>
       estilo_plotly(
-        paste("Tasa de hurto a", tolower(names(modalidades)[modalidades == input$modalidad_prensa]),
-              "(por 100.000 hab.)"),
+        titulo_eje_x,
         "% de noticias con tono negativo"
       ) |>
       event_register("plotly_click")
@@ -895,7 +966,8 @@ server <- function(input, output, session) {
           "<span style='color: #9AA4B2; font-size: 12px;'>Coeficiente de silueta (s<sub>i</sub>): </span>",
           "<strong style='color: ", ambar, "; font-size: 13.5px;'>", formato(s_val, 3), "</strong> ",
           "<span style='color: #9AA4B2; font-size: 11.5px;'>(", nivel_s, ")</span><br>",
-          "<span style='color: #9AA4B2; font-size: 11.5px;'>Personas: ", formato(df_sub$tasa_hurto_personas[i], 0),
+          "<span style='color: #9AA4B2; font-size: 11.5px;'>Total: ", formato(df_sub$tasa_hurto_total[i], 0),
+          " · Personas: ", formato(df_sub$tasa_hurto_personas[i], 0),
           " · Residencias: ", formato(df_sub$tasa_hurto_residencias[i], 1),
           " · Motos: ", formato(df_sub$tasa_hurto_motos[i], 1), "</span>",
           "</div>"
@@ -988,6 +1060,7 @@ server <- function(input, output, session) {
       group_by(cluster_nombre) |>
       summarise(
         n_localidades = n(),
+        total         = mean(tasa_hurto_total),
         personas      = mean(tasa_hurto_personas),
         residencias   = mean(tasa_hurto_residencias),
         motos         = mean(tasa_hurto_motos),
@@ -995,7 +1068,7 @@ server <- function(input, output, session) {
         miembros      = paste(sort(localidad), collapse = ", "),
         .groups = "drop"
       ) |>
-      arrange(desc(personas))
+      arrange(desc(total))
 
     tarjetas <- lapply(seq_len(nrow(resumen)), function(i) {
       g <- resumen[i, ]
@@ -1026,7 +1099,9 @@ server <- function(input, output, session) {
             )
           ),
           layout_columns(
-            col_widths = c(4, 4, 4),
+            col_widths = c(3, 3, 3, 3),
+            div(p("Total", style = paste0("color:", gris_texto, "; margin: 0")),
+                h4(formato(g$total), style = paste0("color:", ambar))),
             div(p("Personas", style = paste0("color:", gris_texto, "; margin: 0")),
                 h4(formato(g$personas), style = paste0("color:", ambar))),
             div(p("Residencias", style = paste0("color:", gris_texto, "; margin: 0")),

@@ -1153,7 +1153,14 @@ Al combinar **2 diccionarios** ($\ell$) x **26 filtros binarios** ($k$) x **7 es
 
 ## Construcción del `sento_corpus` y diagnósticos de `corpus_summarize()`
 
-Replicamos ahora la Fase 1 de `scripts/03_analisis_sentometrics.R` y los diagnósticos de cobertura temporal por *feature* de `scripts/06_descriptivos_corpus.R`. Una regla estricta de `sentometrics` exige que los nombres de las características binarias no contengan guiones medios (`-`), ya que el paquete usa internamente doble guion (`--`) como separador entre diccionario, característica y esquema temporal. Por eso normalizamos los nombres de las 19 localidades a `snake_case` con el prefijo `loc_`.
+En este primer bloque de la subsección 4.3 transformamos la tabla depurada de 3.916 noticias en un objeto formal de clase `sento_corpus`, que es la estructura base exigida por `sentometrics` para cruzar textos, fechas y metadatos. Este paso resulta necesario dentro del flujo metodológico porque el paquete necesita saber no solo qué dice cada artículo y cuándo se publicó, sino también a qué territorios y temáticas pertenece mediante 26 indicadores binarios ($0$ o $1$): los 3 clústeres de $K$-Means obtenidos en la Sección 3, 4 grandes tópicos delictivos o institucionales y las 19 localidades urbanas. Además, este bloque resuelve un requisito estructural del paquete: `sentometrics` reserva el doble guion (`--`) para concatenar el nombre del diccionario, la característica y el esquema de memoria temporal, por lo que cualquier tilde, espacio o guion medio en los nombres de las columnas rompería la creación de las series posteriores.
+
+Para construir esta estructura se combinan cuatro grupos de funciones principales:
+
+* `stringi::stri_trans_general(..., "Latin-ASCII")` y `stringr::str_replace_all()`: limpian las cadenas de texto eliminando tildes y reemplazando espacios o guiones por guiones bajos (`_`), de modo que nombres como *"Antonio Nariño"* o *"San Cristóbal"* se conviertan en identificadores seguros (`loc_antonio_narino`, `loc_san_cristobal`).
+* `dplyr::left_join()` y `dplyr::mutate()`: integran la clasificación territorial de `df_clusters` con cada noticia y generan las columnas requeridas (`id`, `date`, `texts`) junto con las variables indicadoras de clúster y tema.
+* `dplyr::coalesce()`, `stringr::str_sub()` y `stringr::str_squish()`: unen en una sola cadena el titular, el resumen y los primeros 800 caracteres del cuerpo de la noticia, reemplazando posibles valores vacíos por texto en blanco y eliminando espacios repetidos para concentrar la señal informativa principal del artículo.
+* `stringr::str_detect()` y `sentometrics::sento_corpus()`: la primera busca patrones de palabras clave mediante expresiones regulares (como nombres de modalidades de hurto o acciones policiales) para encender en $1$ el indicador temático correspondiente; la segunda empaqueta la tabla resultante en el contenedor S3 `corpus_sento` con `do.clean = FALSE`, conservando intacta la limpieza lingüística previa.
 
 ```{r}
 #| label: build-sento-corpus
@@ -1262,7 +1269,12 @@ stopifnot(inherits(corpus_sento, "sento_corpus"))
 cat("Objeto sento_corpus creado en memoria con", nrow(df_sento_input), "documentos y", length(cols_features), "features.\n")
 ```
 
-Con el objeto `corpus_sento` ya en memoria, aplicamos `sentometrics::corpus_summarize()` para auditar la frecuencia mensual de artículos y el peso relativo de cada una de las 26 características a lo largo del tiempo.
+Una vez creado `corpus_sento` en memoria, el siguiente bloque audita cómo se distribuyen los documentos a lo largo de los 57 meses de estudio (enero de 2022 a septiembre de 2026). Este control previo es indispensable antes de calcular puntajes de polaridad porque las series temporales de sentimiento promedian los artículos disponibles en cada mes; si hubiera meses sin cobertura o saltos bruscos de muestreo no detectados, el índice mensual reflejaría cambios en la disponibilidad de datos en lugar de variaciones reales en el tono de la prensa.
+
+Las funciones principales que intervienen en este diagnóstico son:
+
+* `sentometrics::corpus_summarize(corpus_sento, by = "month")` y `by = "year"`: recorren internamente el objeto `sento_corpus` y calculan tablas de conteo de documentos, longitud de vocabulario y gráficas diagnósticas listas para inspección en frecuencia mensual y anual.
+* `summary_mes$plots$doc_plot` junto con `ggplot2::labs()` y `get_scales()`: extraen el gráfico nativo de evolución mensual de documentos generado por el paquete y actualizan sus títulos, subtítulos y nombres de ejes al español bajo el formato visual unificado del cuaderno (`tema_limpio`).
 
 ```{r}
 #| label: fig-corpus-summarize-docs
@@ -1292,6 +1304,14 @@ if (!is.null(sc_y8)) sc_y8$name <- "Número de documentos por mes"
 
 print(p_fig8)
 ```
+
+Además de verificar el total de noticias por mes, necesitamos comprobar que las 26 características binarias (las 19 localidades, los 3 clústeres territoriales y los 4 tópicos delictivos) registren menciones periódicas durante toda la ventana de análisis. Este segundo diagnóstico evita que alguna serie temática o territorial llegue vacía al modelo Elastic Net de la Sección 5 y permite comparar qué dimensiones concentran el mayor flujo informativo en cada coyuntura.
+
+En este bloque empleamos tres componentes gráficos sobre el resumen ya calculado:
+
+* `summary_mes$plots$feature_plot`: recupera del objeto `summary_mes` las 26 trayectorias mensuales de conteo de documentos por característica binaria.
+* `ggplot2::guides(color = guide_legend(ncol = 2))` y `ggplot2::theme()`: organizan la leyenda de las 26 series en dos columnas compactas para que todas las etiquetas territoriales y temáticas puedan leerse sin desbordar el lienzo.
+* `p_fig9$scales$get_scales()`: accede a las escalas internas del objeto `ggplot` devuelto por `sentometrics` para sobrescribir los nombres de los ejes horizontal, vertical y de color sin alterar los datos subyacentes.
 
 ```{r}
 #| label: fig-corpus-summarize-features
@@ -1325,9 +1345,28 @@ print(p_fig9)
 
 ## Diccionarios en español, modificadores de valencia, polaridad y noticias pico
 
-Replicamos la Fase 2 de `scripts/03_analisis_sentometrics.R`. Combinamos dos diccionarios complementarios: `nrc_es` (extraído del diccionario emocional NRC en español mediante `{syuzhet}`) y `crimen_es` (construido específicamente para capturar jerga de criminalidad y respuesta operativa en Bogotá, como *"fleteo"*, *"cosquilleo"*, *"escopolamina"*, *"sicariato"*, *"desarticulación"* o *"captura"*). A ambos les acoplamos la tabla de modificadores de valencia en español `tabla_valence_es` ($t \in \{1, 2, 3, 4\}$).
+La subsección 4.4 implementa la Fase 2 de `scripts/03_analisis_sentometrics.R` y la segunda parte de `scripts/06_descriptivos_corpus.R`. Antes de ejecutar el código, la @tbl-recursos-lexicos resume todos los recursos léxicos e insumos de polaridad que se construyen o emplean en esta etapa, detallando su estructura y el problema analítico que resuelve cada uno dentro del modelo.
 
-Después calculamos los puntajes documentales con `how = "proportionalPol"`, los contrastamos frente a `how = "TFIDF"` como prueba de robustez, enriquecemos la tabla de noticias para generar el gráfico anual de tono y la tabla descriptiva del corpus (`06_descriptivos_corpus.R`), y extraemos las noticias extremas con `peakdocs()`.
+| Nombre del recurso/objeto | Tipo | Contenido/Estructura | Propósito analítico |
+| :--- | :--- | :--- | :--- |
+| `nrc_es_crudo` / `lex_nrc_es` (`nrc_es`) | Diccionario general de polaridad en español | `data.frame` con columnas `x` (palabra simple en minúsculas, sin espacios y de más de una letra) e `y` (puntaje neto promedio en $[-1{,}0, +1{,}0]$ distinto de cero), depurado a partir de las categorías `positive` y `negative` del diccionario NRC de `{syuzhet}`. | Capturar el tono emocional general del texto periodístico (temor, alarma, calma o confianza) en español estándar y servir como línea base de polaridad amplia. |
+| `lex_crimen_bogota` (`crimen_es`) | Léxico especializado de dominio (seguridad urbana y crimen en Bogotá) | `data.frame` con 73 términos locales en columnas `x` e `y` ($y \in [-1{,}0, +0{,}9]$): asigna pesos negativos ($-1{,}0$ a $-0{,}4$) a delitos y violencia (*homicidio, sicariato, fleteo, escopolamina, cosquilleo, raponazo, rompevidrios, apartamenteros, extorsión*) y pesos positivos ($+0{,}4$ a $+0{,}9$) a acciones de control institucional (*captura, desarticulación, incautación, esclarecimiento, rescate, megatoma*). | Resolver la ceguera de los diccionarios traducidos frente a la jerga delictiva bogotana y distinguir en una misma cobertura entre hechos violentos (que restan al índice) y resultados operativos policiales o judiciales (que suman). |
+| `tabla_valence_es` (`valenceIn`) | Tabla de modificadores contextuales de valencia | `data.frame` de 30 conectores y adverbios en español con columnas `x` (término), `y` (factor multiplicador) y `t` (categoría entera $1\dots 4$): **negadores** ($t = 1, y = -1{,}0$: *no, nunca, jamás, sin, ni, ningún*), **amplificadores** ($t = 2, y \in \{1{,}5, 1{,}8\}$: *muy, gravemente, brutalmente, masivamente*), **atenuadores** ($t = 3, y \in \{0{,}2, 0{,}4\}$: *poco, apenas, levemente, casi*) y **adversativos** ($t = 4, y = -1{,}0$: *pero, aunque, obstante, embargo*). | Ajustar el signo y la magnitud de cada palabra polar según su vecindad sintáctica inmediata (como se formuló en la @eq-sent-doc), evitando errores frecuentes como puntuar positivamente *"operativo sin capturas"* o subestimar *"brutalmente atacado"*. |
+| `lexicons_es` | Contenedor compuesto de diccionarios y valencia (`sento_lexicons`) | Objeto S3 validado por `sentometrics::sento_lexicons()` que integra en una sola lista los dos diccionarios (`nrc_es` y `crimen_es`) acoplados a la regla contextual `valenceIn = tabla_valence_es`. | Garantizar la unicidad de tokens y suministrar a `compute_sentiment()` y `sento_measures()` el motor léxico dual listo para evaluar los documentos en paralelo bajo ambos vocabularios. |
+| `sentiment_scores` y `sentiment_tfidf` | Matrices documentales de polaridad (`sentiment`) | Objetos S3 (`data.table` de $3.916$ documentos $\times$ $54$ columnas: `id`, `date`, `word_count` y $2 \times 26$ combinaciones diccionario-característica) calculados respectivamente con `how = "proportionalPol"` (especificación principal) y `how = "TFIDF"` (prueba de sensibilidad). | Cuantificar la intensidad emocional de cada noticia controlando por el número de palabras polares (`proportionalPol`) y verificar que el ordenamiento relativo de los artículos se mantenga estable frente a un esquema de ponderación por rareza léxica (`TFIDF`). |
+| `df_sent_doc` y `df_noticias_enriquecida` | Tablas consolidadas de polaridad por artículo (`tibble`) | `tibble` de 3.916 filas que recupera el puntaje neto por documento en cada diccionario (`score_nrc_es`, `score_crimen_es`), su promedio equiponderado (`sentimiento_score`), el puntaje alternativo `score_tfidf_compuesto`, el clúster territorial y la clasificación `sentimiento_categoria` (`Negativo` si $< -0{,}02$, `Positivo` si $> +0{,}02$ y `Neutro` en $[-0{,}02, +0{,}02]$). | Unificar en una sola tabla maestra la información textual, geográfica y de sentimiento a nivel de noticia para alimentar los descriptivos anuales, la selección de titulares extremos y la vista por localidad del tablero Shiny. |
+
+: Resumen de los recursos léxicos, modificadores contextuales y objetos de polaridad documental construidos en la Sección 4.4 {#tbl-recursos-lexicos}
+
+El siguiente bloque ejecuta la construcción de todos los insumos descritos en la @tbl-recursos-lexicos y calcula la polaridad individual de las 3.916 noticias. Este paso es necesario dentro del flujo metodológico porque transforma el texto no estructurado de cada noticia en puntajes numéricos comparables entre artículos cortos y extensos, combinando la sensibilidad emocional general de `nrc_es` con la precisión terminológica de `crimen_es`. Asimismo, aprovecha que los tres clústeres territoriales (`c_centro`, `c_comercial` y `c_residencial`) forman una partición exhaustiva y mutuamente excluyente de las 19 localidades: como cada noticia pertenece exactamente a un clúster, sumar las tres columnas correspondientes devuelve el puntaje documental completo de esa noticia en cada diccionario.
+
+Las funciones principales empleadas en este chunk cumplen las siguientes tareas:
+
+* `syuzhet::get_sentiment_dictionary("nrc", language = "spanish")`: descarga localmente el léxico base NRC en español para filtrar sus palabras de polaridad positiva y negativa, limpiar espacios y colapsar posibles duplicados mediante `group_by(x)` y `summarise(y = round(mean(y), 4))`.
+* `tibble::tribble()`: define fila por fila en el código tanto el diccionario especializado `lex_crimen_bogota` como la tabla de modificadores `tabla_valence_es`, dejando explícito y auditable el peso asignado a cada palabra y conector.
+* `sentometrics::sento_lexicons()`: valida que los diccionarios (`lexiconsIn`) y los modificadores de valencia (`valenceIn`) no tengan entradas ambiguas y los compila en el objeto S3 `lexicons_es`.
+* `sentometrics::compute_sentiment()`: recorre las 3.916 noticias de `corpus_sento`, aplica las reglas de vecindad de `valenceIn` y calcula la matriz de puntajes por documento y característica bajo `how = "proportionalPol"` (dividiendo entre palabras polares) y bajo `how = "TFIDF"` (ponderando por frecuencia inversa de documento).
+* `dplyr::transmute()`, `dplyr::left_join()`, `stats::cor()` y `dplyr::case_when()`: consolidan los puntajes por diccionario en `df_sent_doc`, miden la correlación de robustez entre `proportionalPol` y `TFIDF`, cruzan los resultados con la base original de noticias y clasifican cada artículo en `Negativo`, `Neutro` o `Positivo`.
 
 ```{r}
 #| label: lexicos-y-sentimiento
@@ -1518,7 +1557,13 @@ cat(
 
 Al comparar ambos diccionarios se aprecia por qué conviene mantenerlos juntos: el diccionario general `nrc_es` tiene una media cercana a la neutralidad (`r round(comp_metodo$media_nrc_es, 4)`), mientras que el vocabulario especializado `crimen_es` capta con mucha mayor nitidez el tono negativo de los hechos delictivos (`r round(comp_metodo$media_crimen_es, 4)`). A su vez, `proportionalPol` mantiene una correlación positiva de `r round(comp_metodo$correlacion_propPol_tfidf, 4)` frente al esquema alternativo `TFIDF`.
 
-Con los puntajes documentales listos, ejecutamos ahora la segunda mitad de `scripts/06_descriptivos_corpus.R` (tabla anual resumen y distribución de tono por año) y la extracción de documentos pico con `sentometrics::peakdocs()`.
+Una vez asignado el puntaje de polaridad a cada artículo en `df_noticias_enriquecida`, el siguiente bloque construye una tabla resumen anual entre 2022 y septiembre de 2026. Este paso es necesario dentro del flujo metodológico porque permite verificar en una sola vista que cada año cuente con cobertura en las 19 localidades urbanas, cuantificar qué proporción de la prensa trata específicamente sobre los 11 delitos de alto impacto (DAI) de la SDSCJ y observar cómo evoluciona el sentimiento promedio anual junto con la extensión de los artículos.
+
+Las funciones principales utilizadas en este resumen tabular son:
+
+* `dplyr::filter(!(año == 2026 & mes > 9))` y `dplyr::group_by(año)`: aseguran que el corte temporal de 2026 llegue hasta septiembre (alineado con el cierre estadístico oficial de SIEDCO) y agrupan las observaciones por año calendario.
+* `dplyr::summarise()` y `dplyr::n_distinct()`: calculan para cada año el conteo total de artículos (`n()`), la suma de noticias clasificadas estrictamente en los 11 DAI (`sum(es_dai_estricto)`), el número de localidades distintas con cobertura (`n_distinct(localidad)`), la media y mediana de palabras del cuerpo y el promedio del puntaje combinado `sentimiento_score`.
+* `knitr::kable()`: formatea el `tibble` resultante en una tabla limpia con encabezados descriptivos para el reporte.
 
 ```{r}
 #| label: tbl-descriptivos-corpus-anual
@@ -1549,6 +1594,14 @@ knitr::kable(
   )
 )
 ```
+
+Mientras la tabla anterior reporta el promedio anual del puntaje continuo, el siguiente bloque desagrega ese balance en términos porcentuales según las tres categorías de tono (`Negativo`, `Neutro` y `Positivo`) para cada año del periodo. Este paso es necesario porque un promedio negativo podría deberse tanto a unos pocos artículos extremos como a una mayoría sistemática de titulares adversos; graficar la composición porcentual confirma que alrededor de dos tercios de la cobertura sobre seguridad en Bogotá mantienen una carga negativa año tras año, frente a una fracción menor de notas positivas vinculadas a operativos o capturas.
+
+Las funciones principales que construyen esta visualización son:
+
+* `dplyr::group_by(año, sentimiento_categoria)` y `dplyr::summarise(conteo = n())`: cuentan cuántos artículos caen en cada categoría de polaridad dentro de cada año.
+* `dplyr::group_by(año)` seguido de `dplyr::mutate(pct = conteo / sum(conteo) * 100)`: transforma los conteos absolutos en porcentajes que suman 100% dentro de cada año, haciendo comparables años completos (2022 a 2025) con el corte parcial de 2026.
+* `ggplot2::geom_col(position = position_dodge())`, `ggplot2::geom_text()` y `ggplot2::scale_fill_manual()`: dibujan las barras agrupadas lado a lado por año, imprimen el porcentaje exacto sobre cada barra y asignan una paleta semántica intuitiva (rojo para tono negativo, gris para neutro y verde para positivo).
 
 ```{r}
 #| label: fig-tono-anual
@@ -1590,6 +1643,14 @@ p_fig7 <- ggplot(tono_por_anio, aes(x = factor(año), y = pct, fill = sentimient
 
 print(p_fig7)
 ```
+
+Como cierre de la subsección 4.4, el siguiente bloque extrae y audita los artículos que registran los puntajes de sentimiento más extremos, tanto en el conjunto de Bogotá como dentro de cada una de las 19 localidades. Este paso cumple una doble función metodológica: por un lado, sirve como validación cualitativa de lectura cercana (*close reading*) para comprobar que los valores más negativos correspondan efectivamente a hechos de alta gravedad (homicidios, sicariato o atracos violentos) y los más positivos a desarticulaciones o balances operativos favorables; por otro lado, deja estructurado el catálogo de titulares extremos que alimenta la tabla interactiva de la pestaña *Mi localidad* en la aplicación Shiny.
+
+Para realizar esta extracción se emplean las siguientes funciones clave:
+
+* `sentometrics::peakdocs(sentiment_scores, n = 25, type = "both" / "neg" / "pos")`: inspecciona el objeto S3 `sentiment_scores` y devuelve los identificadores (`id`) de los 25 documentos con mayor magnitud absoluta, los 25 más negativos y los 25 más positivos de todo el corpus.
+* `dplyr::group_by(localidad)`, `dplyr::arrange(sentimiento_score)` y `dplyr::slice(unique(c(1:5, (n() - 4):n())))`: ordenan las noticias de menor a mayor puntaje dentro de cada localidad y seleccionan las 5 más negativas (primeras 5 filas) y las 5 más positivas (últimas 5 filas) de cada territorio.
+* `dplyr::case_when()`, `data.table::as.data.table()` y `stringr::str_trunc()`: etiquetan cada documento según su tipo de extremo (`Pico Negativo Global`, `Pico Positivo Global`, `Extremo Negativo Local`, `Extremo Positivo Local` o `Regular`), empaquetan el resultado en `objeto_peak_docs` y recortan los titulares a 65 caracteres para presentarlos en tabla mediante `knitr::kable()`.
 
 ```{r}
 #| label: tbl-peakdocs
@@ -1656,7 +1717,14 @@ knitr::kable(
 
 ## Series temporales multidimensionales, índice global y fechas críticas
 
-Replicamos la Fase 3 de `scripts/03_analisis_sentometrics.R`. Aquí traducimos las tres ecuaciones intuitivas de la Sección 4.2 directamente a código: `ctr_agg()` define cómo puntuar palabras, pesar documentos y aplicar los siete perfiles de memoria; `sento_measures()` construye las 364 series; `measures_fill()` rellena eventuales meses vacíos; `aggregate(..., do.global = TRUE)` resume el pulso distrital global; y `peakdates()` detecta los meses más críticos.
+En el primer bloque de la subsección 4.5 llevamos a la práctica la Fase 3 de `scripts/03_analisis_sentometrics.R`, convirtiendo los puntajes individuales de las noticias en un panel mensual continuo de $2 \times 26 \times 7 = 364$ series de sentimiento. Este paso es indispensable dentro del flujo metodológico porque el modelo econométrico de la Sección 5 requiere predictores regulares en el tiempo (una observación por cada mes $t$) que integren las tres dimensiones formuladas en la Sección 4.2: cómo se califica cada texto (`proportionalPol`), cómo se ponderan los artículos publicados dentro de un mismo mes (`proportional`) y cómo se suaviza la memoria emocional durante una ventana móvil de 6 meses bajo 7 curvas distintas. Además, el bloque construye el índice global distrital y detecta automáticamente los meses de mayor tensión informativa.
+
+Las funciones principales que articulan esta agregación tridimensional son:
+
+* `sentometrics::ctr_agg()`: define la regla de agregación en los tres niveles: nivel intradocumental (`howWithin = "proportionalPol"`), nivel mensual entre documentos (`howDocs = "proportional"`, `by = "month"`, `do.ignoreZeros = TRUE`) y nivel intertemporal (`howTime = c("linear", "exponential", "beta")` con `lag = 6`, `alphasExp = c(0.2, 0.5)`, `aBeta = c(1, 2)` y `bBeta = c(2, 3)`).
+* `sentometrics::sento_measures()` y `sentometrics::measures_fill(..., fill = "zero")`: la primera cruza el corpus, los diccionarios y el control de agregación para generar las 364 series mensuales; la segunda garantiza que cualquier mes sin noticias en alguna localidad o tema específico se complete con cero para mantener la continuidad de la matriz.
+* `data.table::as.data.table()`, `tidyr::pivot_longer()` y `tidyr::separate(..., sep = "--")`: extraen la matriz ancha de medidas, la reestructuran en formato largo (`df_measures_long`) y separan el identificador compuesto `serie_id` en sus tres coordenadas analíticas (`lexicon`, `feature` y `time`), añadiendo etiquetas legibles para visualización.
+* `stats::aggregate(medidas_sento, do.global = TRUE)` y `sentometrics::peakdates(..., n = 8, type = "both" / "neg" / "pos")`: la primera colapsa las 364 series en un índice global mensual para toda Bogotá (junto con sus promedios por dimensión); la segunda identifica las 8 fechas mensuales donde la serie agregada alcanzó sus picos más negativos, más positivos o más extremos en valor absoluto.
 
 ```{r}
 #| label: build-sento-measures
@@ -1756,7 +1824,13 @@ objeto_global_index <- list(
 medidas_sento
 ```
 
-La @fig-evolucion-sentimiento-cluster visualiza las series mensuales para los tres clústeres territoriales bajo el diccionario especializado `crimen_es` y el esquema de memoria exponencial ($\alpha = 0{,}5$), marcando con líneas verticales los meses de mayor negatividad detectados por `peakdates()`.
+Para cerrar la Sección 4 e inspeccionar visualmente el comportamiento de las series construidas antes de introducirlas en Elastic Net, el último bloque grafica la trayectoria mensual de los tres clústeres territoriales bajo el diccionario especializado `crimen_es` y el esquema de memoria exponencial ($\alpha = 0{,}5$), superponiendo los 8 meses críticos de negatividad detectados con `peakdates()`. Esta visualización es necesaria porque permite comprobar que las tres tipologías urbanas de $K$-Means exhiben dinámicas de prensa diferenciadas pero sincronizadas en torno a las coyunturas de mayor alarma ciudadana, y sirve como referencia directa de lo que el usuario explora de manera interactiva en la quinta pestaña de la aplicación Shiny.
+
+Las funciones principales utilizadas en este gráfico son:
+
+* `dplyr::filter()` y `stringr::str_remove(feature_label, "^Clúster: ")`: seleccionan del panel largo `df_measures_long` únicamente las tres series correspondientes a `grupo_feature == "Clúster Territorial"`, `lexicon == "crimen_es"` y `time == "exponential0.5"`, limpiando el prefijo de texto para simplificar la leyenda.
+* `ggplot2::geom_hline(yintercept = 0)` y `ggplot2::geom_vline(xintercept = ...)`: trazan la línea horizontal de referencia neutra ($0$) y las líneas verticales punteadas en las fechas exactas contenidas en `objeto_global_index$peakdates_neg`.
+* `ggplot2::geom_line()`, `ggplot2::scale_color_manual()` y `ggplot2::scale_x_date()`: dibujan las tres trayectorias mensuales manteniendo la misma paleta cromática de los clústeres definida en la Sección 3 y formatean el eje temporal con cortes semestrales (`date_breaks = "6 months"`).
 
 ```{r}
 #| label: fig-evolucion-sentimiento-cluster
