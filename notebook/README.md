@@ -11,7 +11,10 @@ notebook/
 │   └── 01_entrega_1_propuesta_eda.pdf        # Versión PDF de 3 páginas (Semana 11)
 └── metodologia/
     ├── 02_modelado_clustering_sentometrics.qmd   # Guía metodológica y pedagógica integral
-    └── 02_modelado_clustering_sentometrics.html  # Reporte interactivo con código y gráficos
+    ├── 02_modelado_clustering_sentometrics.html  # Reporte interactivo con código y gráficos
+    ├── 02_modelado_clustering_sentometrics.pdf
+    ├── 03_ingesta_tasas_poblacion.{qmd,html,pdf} # Ingesta y tratamiento de población (SDS) y tasas
+    └── 04_modelo_kmeans_clusters.{qmd,html,pdf}  # Modelo K-Means: explicación, resultados y perfiles
 ```
 
 ---
@@ -62,3 +65,19 @@ Aloja la guía técnica y pedagógica de minería de texto, agrupamiento no supe
 # Compilar a reporte HTML interactivo autocontenido:
 quarto render notebook/metodologia/02_modelado_clustering_sentometrics.qmd --to html
 ```
+
+---
+
+## 3. Notebooks `03` y `04` (`notebook/metodologia/`)
+
+* [**`03_ingesta_tasas_poblacion.qmd`**](metodologia/03_ingesta_tasas_poblacion.qmd): explica, con el código a la izquierda y la explicación a la derecha, `descarga_poblacion_sds.R` y `procesamiento_poblacion.R` (población por localidad y tasas por 100.000 habitantes).
+* [**`04_modelo_kmeans_clusters.qmd`**](metodologia/04_modelo_kmeans_clusters.qmd): explica `04_clustering_kmeans.R` (estandarización, K* por silueta, perfiles, sensibilidad).
+  * Los gráficos están en `output/figures/kmeans_*.png`. Fueron generados fuera de R (Python) a partir de `data/processed/clusters_localidades_kmeans.parquet`.
+
+```bash
+quarto render notebook/metodologia/03_ingesta_tasas_poblacion.qmd --to html
+quarto render notebook/metodologia/03_ingesta_tasas_poblacion.qmd --to pdf
+quarto render notebook/metodologia/04_modelo_kmeans_clusters.qmd --to html
+quarto render notebook/metodologia/04_modelo_kmeans_clusters.qmd --to pdf
+```
+Los bloques de código son estáticos (no se ejecutan al compilar), así que no requieren R. El PDF apila el código y su explicación en una sola columna.
