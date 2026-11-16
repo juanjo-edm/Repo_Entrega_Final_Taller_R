@@ -129,7 +129,9 @@ Repo_Entrega_Final_Taller_R/
 │   │   └── 01_entrega_1_propuesta_eda.pdf    # PDF académico listo para entrega
 │   └── metodologia/                          # Cuadernos metodológicos de modelado y analítica
 │       ├── 02_modelado_clustering_sentometrics.qmd  # Tasas, clustering K-means y Sentometrics
-│       └── 02_modelado_clustering_sentometrics.html # Reporte interactivo con código
+│       ├── 02_modelado_clustering_sentometrics.html # Reporte interactivo con código
+│       ├── 03_ingesta_tasas_poblacion.{qmd,html,pdf}  # Ingesta y tasas de población
+│       └── 04_modelo_kmeans_clusters.{qmd,html,pdf}   # Modelo K-Means y perfiles
 │
 └── app/                                      # Aplicación Shiny
     ├── README.md                             # Cómo funciona el tablero

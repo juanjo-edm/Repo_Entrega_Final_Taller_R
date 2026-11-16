@@ -1,0 +1,781 @@
+---
+title: "Ingesta y Tratamiento de los Datos de Población por Localidad (SDS) para el Cálculo de Tasas de Hurto (2022-2026)"
+subtitle: "Taller de Programación en R - Maestría en Economía Aplicada (MECA)"
+author:
+  - "Juan José Echeverry — 202616233"
+  - "Miguelangel Palma — 202621481"
+  - "Sergio Alejandro López Valderrama — 202111932"
+  - "Gabriel Arturo Echeverry Castaño — 201016705"
+  - "Olga Lucía Ramírez Contreras — 202624900"
+  - "Juan Esteban Carvajal Cruz — 202614312"
+date: "2026-11-16"
+lang: es
+format:
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    number-sections: true
+    embed-resources: true
+    code-fold: show
+    code-summary: "Mostrar código"
+    code-tools: true
+    code-overflow: wrap
+    fig-width: 9
+    fig-height: 5.5
+    grid:
+      sidebar-width: 260px
+      body-width: 1000px
+      margin-width: 60px
+  pdf:
+    pdf-engine: pdflatex
+    documentclass: article
+    papersize: letter
+    fontsize: 10pt
+    linestretch: 1.15
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    colorlinks: true
+    geometry:
+      - top=25mm
+      - bottom=25mm
+      - left=20mm
+      - right=20mm
+    fig-width: 7.5
+    fig-height: 4.5
+    include-in-header:
+      text: |
+        \usepackage{microtype}
+        \usepackage{charter}
+        \usepackage{fvextra}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\},fontsize=\small}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+        \DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}
+        \DeclareUnicodeCharacter{03BB}{\ensuremath{\lambda}}
+        \DeclareUnicodeCharacter{03BC}{\ensuremath{\mu}}
+        \DeclareUnicodeCharacter{00B2}{\ensuremath{^2}}
+        \DeclareUnicodeCharacter{2714}{\ensuremath{\checkmark}}
+        \DeclareUnicodeCharacter{2139}{i}
+        \DeclareUnicodeCharacter{2212}{\ensuremath{-}}
+        \DeclareUnicodeCharacter{2248}{\ensuremath{\approx}}
+        \DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+---
+
+# Script de ingesta: `descarga_poblacion_sds.R`
+
+Este script descarga de la API de Datos Abiertos de Bogotá las proyecciones de población por localidad que publica la Secretaría Distrital de Salud, y las guarda en `data/raw/poblacion/poblacion_localidades_raw.parquet`. Está en `scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R`.
+
+## Encabezado y configuración
+
+El script empieza como todos los del proyecto. Primero viene una cabecera que lo identifica, luego unas opciones generales, las librerías que va a usar y las rutas de las carpetas de trabajo.
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="2"}
+# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
+# SCRIPT: scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R
+# ROL: Ingesta Oficial de Proyecciones de Población por Localidad (SDS)
+# PRODUCE: data/raw/poblacion/poblacion_localidades_raw.parquet
+# ==============================================================================
+
+# 1. Configuración y Dependencias ----
+
+## 1.1 Opciones globales y semilla ----
+options(scipen = 999)
+set.seed(20261014)
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+La cabecera dice qué hace el script y qué archivo produce. Las dos opciones que siguen quitan la notación científica de los números y fijan la semilla `20261014`, que usa todo el proyecto.
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="14"}
+## 1.2 Carga de librerías y resolución de conflictos ----
+library(here)
+library(conflicted)
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(arrow)
+library(readr)
+
+conflict_prefer("filter", "dplyr", quiet = TRUE)
+conflict_prefer("lag",    "dplyr", quiet = TRUE)
+conflict_prefer("select", "dplyr", quiet = TRUE)
+
+## 1.3 Rutas relativas de almacenamiento ----
+ruta_raw_poblacion <- here::here("data", "raw", "poblacion")
+ruta_salida        <- file.path(ruta_raw_poblacion, "poblacion_localidades_raw.parquet")
+
+if (!dir.exists(ruta_raw_poblacion)) {
+  dir.create(ruta_raw_poblacion, recursive = TRUE, showWarnings = FALSE)
+}
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+Aquí se cargan una sola vez los paquetes del script. Si dos paquetes tienen una función con el mismo nombre, se le da prioridad a `dplyr` para `filter`, `lag` y `select`. Después se definen las rutas desde la raíz del proyecto con `here::here()` y se crea la carpeta de destino si todavía no existe.
+
+:::
+:::
+
+## Descarga desde la API
+
+Esta es la parte central del script. Primero se le pide a la API la ficha del conjunto de datos, que lista los archivos disponibles. De ahí se escoge el archivo correcto y se bajan todas sus filas por tandas, porque la API no entrega todo de una vez. Si algo falla en el camino, el script no se cae y pasa a un respaldo en CSV.
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="37"}
+## 2.1 Consulta paginada a la API CKAN (datastore_search) ----
+if (!file.exists(ruta_salida)) {
+  message(">>> Iniciando descarga de proyecciones poblacionales SDS...")
+  
+  url_api <- "https://datosabiertos.bogota.gov.co/api/3/action"
+  slug_dataset <- "piramide-poblacional-bogota-d-c"
+  limite_pagina <- 30000
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 38.** `if (!file.exists(ruta_salida))` hace que la descarga solo ocurra cuando el archivo crudo no existe. Si ya existe, el script salta al `else` de la línea 111 y lo lee del disco. *Si ya bajamos los datos antes, no los volvemos a pedir.*
+
+**Línea 39.** `message()` avisa por consola que empezó la descarga.
+
+**Líneas 41--43.** `url_api` es la dirección base de la API CKAN del portal, `slug_dataset` es el nombre del conjunto de datos (pirámide poblacional) y `limite_pagina` es el máximo de filas por solicitud, que es de 30.000. *Guardamos la dirección del portal, el nombre de los datos y cuántas filas pedimos en cada vuelta.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="45"}
+  poblacion_01_raw <- tryCatch({
+    resp_ficha <- httr::GET(
+      paste0(url_api, "/package_show"),
+      query = list(id = slug_dataset),
+      httr::timeout(60)
+    )
+    stopifnot(httr::status_code(resp_ficha) == 200)
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 45.** `tryCatch()` ejecuta el bloque entre llaves y, si algo falla, pasa al plan B de la línea 101. Lo que devuelve el bloque se guarda en `poblacion_01_raw`. *Intentamos la descarga y, si falla, tenemos un plan B.*
+
+**Líneas 46--50.** `httr::GET()` consulta el endpoint `package_show` con el `id` del conjunto y espera hasta 60 segundos. *Le pedimos al portal la ficha del conjunto de datos.*
+
+**Línea 51.** `stopifnot()` detiene el bloque si el servidor no responde con código 200, que significa respuesta correcta. *Si el portal no contesta bien, no seguimos y pasamos al plan B.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="53"}
+    ficha <- jsonlite::fromJSON(
+      httr::content(resp_ficha, as = "text", encoding = "UTF-8"),
+      simplifyVector = FALSE
+    )
+    stopifnot(isTRUE(ficha$success))
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Líneas 53--56.** `httr::content()` extrae el cuerpo de la respuesta como texto UTF-8 y `jsonlite::fromJSON()` lo convierte en listas de R. Con `simplifyVector = FALSE` se conserva la estructura anidada del JSON. *La API responde con un texto en formato JSON y aquí lo traducimos a algo que R puede leer y recorrer.*
+
+**Línea 57.** `isTRUE(ficha$success)` revisa que la API haya declarado la consulta como exitosa. *Confirmamos que la respuesta es válida antes de usarla.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="59"}
+    campo <- function(x, nombre) {
+      if (is.null(x[[nombre]])) NA_character_ else as.character(x[[nombre]])
+    }
+    
+    tabla_recursos <- tibble(
+      id = sapply(ficha$result$resources, function(r) campo(r, "id")),
+      nombre = sapply(ficha$result$resources, function(r) campo(r, "name")),
+      formato = sapply(ficha$result$resources, function(r) campo(r, "format")),
+      modificado = sapply(ficha$result$resources, function(r) campo(r, "last_modified")),
+      datastore = sapply(ficha$result$resources, function(r) isTRUE(r$datastore_active))
+    )
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Líneas 59--61.** `campo()` es una función auxiliar. Devuelve el campo pedido como texto, o `NA` si no existe, para que un archivo con datos incompletos no rompa el código.
+
+**Líneas 63--69.** `tibble()` arma una tabla con una fila por cada archivo del conjunto. Cada columna se llena con `sapply()`, que recorre `ficha$result$resources` y extrae el id, el nombre, el formato, la fecha de última modificación y si el archivo está activo en el almacén de datos. *Armamos una lista ordenada de todos los archivos que ofrece el portal.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="71"}
+    candidatos <- tabla_recursos |>
+      filter(datastore, formato == "CSV",
+             grepl("Localidad", nombre, ignore.case = TRUE),
+             !grepl("UPZ", nombre, ignore.case = TRUE))
+    stopifnot(nrow(candidatos) >= 1)
+    
+    recurso_id <- candidatos |>
+      arrange(desc(modificado)) |>
+      slice(1) |>
+      pull(id)
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Líneas 71--75.** Se filtran los candidatos, que son los archivos activos en el almacén de datos, en formato CSV, con la palabra Localidad en el nombre y sin la palabra UPZ. Si no queda ninguno, `stopifnot()` detiene el bloque. *Buscamos el archivo de población por localidad y descartamos el que viene por UPZ.*
+
+**Líneas 77--80.** Entre los candidatos se ordena por fecha de modificación, de la más reciente a la más antigua, con `arrange(desc(...))`. Se toma el primero con `slice(1)` y se extrae su `id` con `pull(id)`. *Si hay varios archivos, nos quedamos con el más reciente.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="82"}
+    pedir_pagina <- function(offset) {
+      r <- httr::GET(
+        paste0(url_api, "/datastore_search"),
+        query = list(resource_id = recurso_id, limit = limite_pagina, offset = offset),
+        httr::timeout(120)
+      )
+      stopifnot(httr::status_code(r) == 200)
+      jsonlite::fromJSON(httr::content(r, as = "text", encoding = "UTF-8"))
+    }
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 82.** `pedir_pagina(offset)` es una función que descarga un bloque de filas a partir de la posición `offset`.
+
+**Líneas 83--87.** Consulta el endpoint `datastore_search` con el `resource_id`, el `limit`, que es el tamaño del bloque, y el `offset`, que indica desde dónde leer. Espera hasta 120 segundos.
+
+**Líneas 88--89.** Revisa que la respuesta sea 200 y convierte el JSON en una tabla de R. *Dejamos lista una función que trae el siguiente pedazo de la tabla cada vez que la llamamos.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="92"}
+    primera <- pedir_pagina(0)
+    total_filas <- primera$result$total
+    bloques <- list(primera$result$records)
+    offset <- limite_pagina
+    while (offset < total_filas) {
+      bloques[[length(bloques) + 1]] <- pedir_pagina(offset)$result$records
+      offset <- offset + limite_pagina
+    }
+    bind_rows(bloques)
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Líneas 92--93.** Se pide la primera página con `offset = 0` y de ahí se lee `total_filas`, el total de registros que informa la API, que es de 131.502.
+
+**Líneas 94--95.** `bloques` es una lista donde se van guardando los pedazos descargados. Empieza con la primera página y el `offset` pasa a 30.000.
+
+**Líneas 96--99.** Mientras `offset` sea menor que `total_filas`, se pide la siguiente página, se agrega a la lista y se avanza el `offset`. Con 131.502 filas y bloques de 30.000 se hacen cinco solicitudes en total.
+
+**Línea 100.** `bind_rows()` apila todos los bloques en una sola tabla, que es lo que `tryCatch` asigna a `poblacion_01_raw`. *Pedimos tanda por tanda hasta completar las 131.502 filas y las pegamos en una sola tabla.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="101"}
+  }, error = function(e) {
+    ## 2.2 Mecanismo de respaldo directo en CSV ----
+    message("Aviso CKAN API: Descarga paginada falló. Usando recurso directo CSV de respaldo...")
+    url_csv_respaldo <- "https://datosabiertos.bogota.gov.co/dataset/85bf790d-84d1-4eda-bd6f-40af62e71d95/resource/37e58cb3-c870-4608-8c37-ce45db0eb7c1/download/osb_demografia-poblacion-localidad.csv"
+    readr::read_delim(url_csv_respaldo, delim = ";", show_col_types = FALSE)
+  })
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 101.** `error = function(e)` se ejecuta solo si algo falló dentro del `tryCatch`, incluidos los `stopifnot()`.
+
+**Líneas 103--105.** Avisa por consola y lee un CSV de respaldo con `readr::read_delim()`, con punto y coma como separador. La dirección de ese CSV es fija, así que podría no ser la versión más reciente de la API. *Si la descarga normal falla, bajamos un archivo equivalente de una dirección fija.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="108"}
+  ## 2.3 Materialización en Apache Parquet ----
+  arrow::write_parquet(as.data.frame(poblacion_01_raw), ruta_salida)
+  message("✔ Archivo de población guardado en: ", ruta_salida)
+} else {
+  message("ℹ Archivo de población ya existe en: ", ruta_salida, ". Omitiendo descarga remota.")
+  poblacion_01_raw <- arrow::read_parquet(ruta_salida)
+}
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 109.** `arrow::write_parquet()` guarda la tabla en Parquet, un formato liviano que se lee rápido.
+
+**Línea 110.** Un mensaje confirma la ruta del archivo.
+
+**Líneas 111--113.** En la rama `else`, cuando el archivo ya existía, se lee con `read_parquet()`. Así `poblacion_01_raw` queda definida por cualquiera de los dos caminos. *Guardamos la tabla en un archivo para no tener que descargarla otra vez.*
+
+:::
+:::
+
+## Verificación de la descarga
+
+Con la tabla en memoria, el script comprueba que el archivo exista y que cubra los años del estudio. Al final deja un reporte en consola.
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="118"}
+## 3.1 Comprobación de cobertura temporal (2005–2035) ----
+stopifnot(file.exists(ruta_salida))
+col_anio <- if ("ANO" %in% names(poblacion_01_raw)) "ANO" else "año"
+col_loc  <- if ("CODIGO_LOCALIDAD" %in% names(poblacion_01_raw)) "CODIGO_LOCALIDAD" else "codigo_localidad"
+
+anios_disponibles <- unique(poblacion_01_raw[[col_anio]])
+stopifnot(all(2022:2026 %in% anios_disponibles))
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 119.** Confirma que el archivo de salida exista.
+
+**Líneas 120--121.** Las columnas de año y de localidad pueden llamarse `ANO` y `CODIGO_LOCALIDAD` si vienen de la API, o `año` y `codigo_localidad` si vienen del CSV de respaldo. Estas líneas escogen el nombre que exista.
+
+**Líneas 123--124.** `unique()` lista los años presentes y `stopifnot(all(2022:2026 %in% ...))` exige que estén los cinco años del estudio. *Revisamos que la tabla traiga los años que necesitamos, de 2022 a 2026.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="126"}
+## 3.2 Reporte de auditoría en consola ----
+tamanio_kb <- round(file.info(ruta_salida)$size / 1024, 2)
+message("✔ Integridad verificada: ", nrow(poblacion_01_raw), " filas, cobertura temporal ", min(anios_disponibles), " a ", max(anios_disponibles), " (", tamanio_kb, " KB).")
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 127.** Calcula el tamaño del archivo en kilobytes, con dos decimales.
+
+**Línea 128.** Imprime un reporte con el número de filas, el rango de años y el tamaño del archivo. *Es un resumen para confirmar de un vistazo que todo salió bien.*
+
+:::
+:::
+
+## La tabla descargada
+
+La tabla descargada tiene 131.502 filas y ocho columnas. Cada localidad y año tiene 202 filas, que salen de 101 edades por 2 sexos, y en total hay 21 códigos de localidad.
+
+|Columna|Contenido|
+|:---|:---|
+|`ANO`|Año de la proyección (2005 a 2035).|
+|`CODIGO_LOCALIDAD`|El `0` es el total de Bogotá, del `1` al `19` van las localidades urbanas y el `20` es Sumapaz.|
+|`NOMBRE_LOCALIDAD`|Nombre de la localidad.|
+|`SEXO`|Hombres o Mujeres.|
+|`EDAD`|Edad simple, de 0 a 100 años.|
+|`CURSODEVIDA`, `GRUPOEDAD`|Etapa de vida y rango de edad.|
+|`POBLACION`|Habitantes proyectados en esa combinación.|
+
+: Columnas de la tabla cruda de población (SDS) {#tbl-columnas}
+
+Además comprobamos con el archivo del repositorio que la fila del total de Bogotá (`CODIGO_LOCALIDAD = 0`) coincide con la suma de las localidades. Este control lo hicimos aparte y no está programado en los scripts.
+
+|Año|Total Bogotá (código 0)|Suma de las 20 localidades|
+|---:|---:|---:|
+|2022|7.849.206|7.849.206|
+|2023|7.883.928|7.883.928|
+|2024|7.918.660|7.918.660|
+|2025|7.942.867|7.942.867|
+|2026|7.945.996|7.945.996|
+
+: Control de coherencia de la población proyectada, con el total de Bogotá frente a la suma de localidades {#tbl-coherencia}
+
+# Script de procesamiento: `procesamiento_poblacion.R`
+
+Este script toma la población cruda y la deja en un solo número por localidad y año. Luego la une con las denuncias para calcular las tasas de hurto por 100.000 habitantes. Está en `scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R`, lee `poblacion_localidades_raw.parquet` y `delitos_localidad_anual.parquet`, y escribe `data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet`.
+
+## Encabezado y configuración
+
+La configuración es la misma del script de ingesta. Cambian las librerías, porque se suma `stringr` para trabajar con texto, y las rutas, que ahora incluyen los tres archivos del proceso.
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="10"}
+# 1. Configuración y Dependencias ----
+
+## 1.1 Opciones globales y semilla ----
+options(scipen = 999)
+set.seed(20261014)
+
+## 1.2 Carga de librerías y resolución de conflictos ----
+library(here)
+library(conflicted)
+library(arrow)
+library(readr)
+library(dplyr)
+library(stringr)
+
+conflict_prefer("filter", "dplyr", quiet = TRUE)
+conflict_prefer("lag",    "dplyr", quiet = TRUE)
+conflict_prefer("select", "dplyr", quiet = TRUE)
+
+## 1.3 Rutas relativas y directorios ----
+ruta_raw_pob      <- here::here("data", "raw", "poblacion")
+ruta_proc_delitos <- here::here("data", "processed", "01_delitos")
+ruta_proc_pob     <- here::here("data", "processed", "02_poblacion")
+
+archivo_pob_raw   <- file.path(ruta_raw_pob, "poblacion_localidades_raw.parquet")
+archivo_delitos   <- file.path(ruta_proc_delitos, "delitos_localidad_anual.parquet")
+archivo_salida    <- file.path(ruta_proc_pob, "panel_delitos_poblacion_localidad.parquet")
+
+if (!dir.exists(ruta_proc_pob)) {
+  dir.create(ruta_proc_pob, recursive = TRUE, showWarnings = FALSE)
+}
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+Se fijan las opciones generales y la semilla del proyecto, se cargan `here`, `conflicted`, `arrow`, `readr`, `dplyr` y `stringr`, y se definen las rutas. La población cruda y los delitos procesados son las entradas y el panel final es la salida. Si la carpeta de salida no existe, se crea.
+
+:::
+:::
+
+## Carga de los datos
+
+Antes de transformar nada, el script revisa que existan los dos archivos de entrada. Si falta alguno se detiene y avisa qué script hay que correr primero.
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="43"}
+## 2.1 Comprobación de existencia de datos de entrada ----
+if (!file.exists(archivo_pob_raw)) {
+  stop("No se encontró '", archivo_pob_raw, "'. Ejecute primero: source('scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R')")
+}
+if (!file.exists(archivo_delitos)) {
+  stop("No se encontró '", archivo_delitos, "'. Ejecute primero: source('scripts/02_procesamiento/01_delitos/procesamiento_delitos.R')")
+}
+
+df_pob_raw    <- arrow::read_parquet(archivo_pob_raw)
+panel_delitos <- arrow::read_parquet(archivo_delitos)
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Líneas 44--49.** Si no existe el archivo de población o el de delitos, `stop()` termina el script e indica cuál ejecutar antes. *Sin los datos no se puede calcular nada, y es mejor avisar que fallar a mitad de camino.*
+
+**Línea 51.** `df_pob_raw` es la tabla cruda de población, con 131.502 filas.
+
+**Línea 52.** `panel_delitos` es el panel de denuncias por localidad y año, con 95 filas.
+
+:::
+:::
+
+## Agregación anual y homologación
+
+La tabla cruda trae una fila por localidad, año, edad y sexo, pero para una tasa hace falta un solo número por localidad y año. Aquí se descarta el total de Bogotá, se suman las filas de edad y sexo y se dejan los códigos y nombres de las localidades con el mismo formato de la tabla de delitos.
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="57"}
+poblacion_anual <- df_pob_raw |>
+  rename(
+    año = ANO,
+    codigo_localidad = CODIGO_LOCALIDAD,
+    localidad = NOMBRE_LOCALIDAD,
+    poblacion = POBLACION
+  ) |>
+  filter(codigo_localidad != 0) |> # Excluir total consolidado de Bogotá
+  group_by(codigo_localidad, localidad, año) |>
+  summarise(poblacion = sum(poblacion, na.rm = TRUE), .groups = "drop") |>
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 57.** `poblacion_anual` se construye desde la tabla cruda, encadenando pasos con el pipe nativo `|>`.
+
+**Líneas 58--63.** `rename(nuevo = viejo)` cambia los nombres originales (`ANO`, `CODIGO_LOCALIDAD`, `NOMBRE_LOCALIDAD` y `POBLACION`) por `año`, `codigo_localidad`, `localidad` y `poblacion`. *Les ponemos nombres más cómodos a las columnas.*
+
+**Línea 64.** `filter(codigo_localidad != 0)` quita el total consolidado de Bogotá, que de otro modo se contaría dos veces. *Sacamos la fila de Bogotá completa para no duplicar habitantes.*
+
+**Líneas 65--66.** `group_by()` agrupa por código, nombre y año, y `summarise(poblacion = sum(...))` suma las 202 filas de cada grupo, que salen de 101 edades por 2 sexos. `.groups = "drop"` quita el agrupamiento al terminar. Quedan 620 filas, de 20 localidades por 31 años. *Pasamos de una fila por edad y sexo a un solo total de habitantes por localidad y año.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="67"}
+  mutate(
+    codigo_localidad = sprintf("%02d", as.integer(codigo_localidad)),
+    localidad = str_to_title(trimws(localidad)),
+    localidad = case_when(
+      localidad == "Usaquen" ~ "Usaquén",
+      localidad == "San Cristobal" ~ "San Cristóbal",
+      localidad == "Engativa" ~ "Engativá",
+      localidad == "Fontibon" ~ "Fontibón",
+      localidad == "Candelaria" ~ "La Candelaria",
+      localidad == "Los Martires" ~ "Los Mártires",
+      localidad == "Antonio Narino" ~ "Antonio Nariño",
+      localidad == "Ciudad Bolivar" ~ "Ciudad Bolívar",
+      TRUE ~ localidad
+    )
+  )
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 68.** `sprintf("%02d", ...)` escribe el código con dos dígitos y como texto, por ejemplo `"09"`, igual que en la tabla de delitos. *Así los códigos de las dos tablas se pueden cruzar sin problema.*
+
+**Línea 69.** `trimws()` quita los espacios sobrantes y `str_to_title()` deja cada palabra con inicial mayúscula.
+
+**Líneas 70--80.** `case_when()` corrige algunos nombres. Devuelve las tildes, por ejemplo de `"Usaquen"` a `"Usaquén"`, y escribe `"La Candelaria"` y `"Los Mártires"` con su nombre oficial. La regla final, `TRUE ~ localidad`, deja igual los nombres que no necesitan cambio. El cruce con la tabla de delitos usa solo el código y el año, así que los nombres sirven para presentar resultados. *Arreglamos tildes y nombres para que las localidades se vean bien escritas.*
+
+:::
+:::
+
+## Cruce con las denuncias y cálculo de tasas
+
+Ahora se agrega la población a cada fila del panel de delitos y se calculan las tasas por 100.000 habitantes con esta fórmula. $$\text{Tasa}_{it} = \frac{\text{Denuncias}_{it}}{\text{Población}_{it}} \times 100.000$$ Por ejemplo, en Fontibón en 2022 hubo 14.252 denuncias de hurto a personas y una población proyectada de 384.590 habitantes. Eso da $14.252 / 384.590 \times 100.000 = 3.705{,}76$ denuncias por cada 100.000 habitantes.
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="86"}
+panel_indicadores <- panel_delitos |>
+  left_join(poblacion_anual |> select(codigo_localidad, año, poblacion), by = c("codigo_localidad", "año")) |>
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 86.** El punto de partida es el panel de delitos, con 95 filas que salen de 19 localidades urbanas por 5 años.
+
+**Línea 87.** `left_join()` conserva todas las filas del panel y le agrega la población, cruzando por `codigo_localidad` y `año`. Sumapaz queda fuera porque el panel solo tiene las 19 localidades urbanas. Si alguna combinación no encuentra población, queda `NA`. *A cada localidad y año le pegamos cuántos habitantes tenía.*
+
+:::
+:::
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="88"}
+  mutate(
+    tasa_hurto_personas    = round((hurto_personas / poblacion) * 100000, 2),
+    tasa_hurto_residencias = round((hurto_residencias / poblacion) * 100000, 2),
+    tasa_hurto_motos       = round((hurto_motos / poblacion) * 100000, 2),
+    tasa_hurto_total       = round(((hurto_personas + hurto_residencias + hurto_motos) / poblacion) * 100000, 2)
+  )
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 88.** `mutate()` crea las nuevas columnas.
+
+**Líneas 89--91.** Las tasas de hurto a personas, a residencias y a motocicletas son las denuncias divididas por la población y multiplicadas por 100.000. `round(..., 2)` deja dos decimales.
+
+**Línea 92.** La tasa total suma primero las denuncias de los tres tipos y luego divide. *Convertimos los conteos en tasas para poder comparar localidades de tamaños muy distintos.*
+
+:::
+:::
+
+## Controles y guardado
+
+::: {.columns}
+::: {.column width="52%"}
+
+```{.r .numberLines startFrom="97"}
+## 5.1 Comprobación de integridad del panel (19 localidades x 5 años = 95 obs) ----
+stopifnot(nrow(panel_indicadores) == 95)
+stopifnot(length(unique(panel_indicadores$codigo_localidad)) == 19)
+stopifnot(all(!is.na(panel_indicadores$tasa_hurto_personas)))
+
+## 5.2 Exportación a Apache Parquet ----
+arrow::write_parquet(panel_indicadores, archivo_salida)
+message("✔ Panel de delitos y población guardado exitosamente en: ", archivo_salida)
+```
+
+:::
+
+::: {.column width="3%"}
+:::
+
+::: {.column width="45%"}
+
+**Línea 98.** El panel debe tener exactamente 95 filas, de 19 localidades por 5 años. Si el cruce duplicara filas, esta revisión fallaría.
+
+**Línea 99.** Debe haber 19 códigos de localidad distintos.
+
+**Línea 100.** Ninguna tasa de hurto a personas puede ser `NA`, porque un vacío significaría que una localidad no encontró su población. *Son tres revisiones rápidas para asegurar que el cruce quedó completo y sin huecos.*
+
+**Líneas 103--104.** `write_parquet()` guarda el panel y se imprime la ruta como confirmación. *Este archivo es el resultado final del proceso de población.*
+
+:::
+:::
+
+# Seguimiento de la tabla de población
+
+La siguiente tabla resume lo que se le hace a la población en cada etapa del pipeline y cuántas filas quedan después de cada una.
+
+|N.°|Etapa|Qué se le hace|Tamaño resultante|
+|:---|:---|:---|:---|
+|1|Ingesta (API de la SDS)|Se descarga por páginas y se guarda sin modificar.|131.502 filas (31 años $\times$ 21 códigos $\times$ 202)|
+|2|Agregación por localidad-año|Se descarta el código 0, se suman las 202 filas (edad $\times$ sexo) y se homologan códigos y nombres.|620 filas (20 localidades $\times$ 31 años)|
+|3|Unión con las denuncias|Se une por código de localidad y año y quedan solo las 19 localidades urbanas de 2022 a 2026.|95 filas|
+|4|Cálculo de tasas|Se divide cada tipo de denuncia por la población y se multiplica por 100.000.|95 filas, 4 tasas nuevas|
+
+: Cómo cambia la tabla de población en cada etapa {#tbl-seguimiento}
+
+# Ejecución y observaciones
+
+## Cómo ejecutarlo
+
+Para actualizar la población hay que borrar el archivo crudo, porque si existe el script no vuelve a descargar. Después se ejecuta la ingesta y se recalculan las tasas con el script maestro, que arranca en la etapa de procesamiento.
+
+```r
+source(here::here("scripts", "01_ingesta", "02_poblacion", "descarga_poblacion_sds.R"))
+source(here::here("scripts", "master.R"))
+```
+
+## Observaciones sobre los datos
+
+Hay cuatro cosas que conviene tener presentes al usar estos datos.
+
+-   Se trata de una proyección. Si la SDS actualiza sus proyecciones, cambian las tasas y todo lo que se calcula después.
+
+-   En 2026 se mezclan dos periodos distintos. La población proyectada es la del año completo, pero las denuncias de 2026 llegan hasta septiembre, así que las tasas de 2026 quedan subestimadas.
+
+-   La unión depende de que los códigos y los años coincidan. Si no coinciden, la población queda vacía y el control de tasas sin `NA` detiene el script.
+
+-   La población es la residente. En localidades con mucha población flotante, la tasa por residente exagera el riesgo de quien vive allí.
