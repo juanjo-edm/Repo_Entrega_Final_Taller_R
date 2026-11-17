@@ -68,7 +68,7 @@ Este cuaderno funciona como la guía principal para estudiar y replicar paso a p
 2. **Agrupamiento territorial no supervisado ($K$-Means):** réplica completa de `scripts/04_clustering_kmeans.R`, desde la normalización $Z$-score y la búsqueda del número óptimo de grupos ($K^* = 3$) hasta el etiquetado determinístico de centroides y su inspección tridimensional.
 3. **Descriptivos del corpus y análisis de sentimiento (`sentometrics`):** réplica en vivo de `scripts/06_descriptivos_corpus.R` y de las tres primeras fases de `scripts/03_analisis_sentometrics.R`, acompañada de una explicación intuitiva de cada ecuación antes de mostrar el código que construye el `sento_corpus`, los diccionarios en español, los modificadores de valencia, las noticias pico y las 364 series mensuales.
 4. **Modelado econométrico supervisado (Elastic Net) y atribuciones:** réplica de la cuarta fase de `scripts/03_analisis_sentometrics.R`, mensualizando la tasa distrital de hurto para estimar `sento_model()` y descomponer el aporte marginal de cada dimensión con `attributions()`.
-5. **Cartografía espacial (`sf`), panel consolidado e integración hacia R Shiny:** cruce vectorial por localidad para contrastar la tasa oficial frente al volumen noticioso, más una síntesis de cómo el tablero interactivo consume los resultados finales.
+5. **Cartografía espacial (`sf`), panel consolidado e integración hacia R Shiny:** representación cartográfica de los clústeres de $K$-Means y comparación por modalidad entre las tasas oficiales de hurto y las tasas de cobertura noticiosa por cada 100.000 habitantes, más una síntesis de cómo el tablero interactivo consume los resultados finales.
 
 ::: {.callout-note}
 ## Punto de partida y ejecución autocontenida
@@ -182,7 +182,7 @@ digraph pipeline {
     {
       rank=same;
       v_map [
-        label="Mapas vectoriales sf y panel anual (Sección 6)\nContraste entre tasa oficial y volumen de prensa",
+        label="Mapas vectoriales sf y panel anual (Sección 6)\nClústeres K-Means y tasas de hurto vs. noticias por modalidad",
         fillcolor="#ffffff",
         color="#c2410c"
       ];
@@ -2458,16 +2458,18 @@ En varios meses (por ejemplo, en el segundo semestre de 2022 o en mediados de 20
 
 # Cartografía espacial e integración para R Shiny {#sec-mapa}
 
-Clasificar las 19 localidades en tres clústeres resume los grandes perfiles de seguridad, pero oculta dónde se concentra cada modalidad delictiva en el mapa y si la prensa cubre esos territorios en la misma proporción. En esta sección consolidamos en memoria el panel anual Localidad x Año (Fase 5 de `scripts/03_analisis_sentometrics.R`), proyectamos los mapas vectoriales con `{sf}` y resumimos la conexión hacia la aplicación Shiny.
+Después de estimar los clústeres territoriales (Sección 3) y modelar el sentimiento mensual (Secciones 4 y 5), pasamos los resultados al mapa de las 19 localidades urbanas de Bogotá. Primero armamos en memoria el panel anual por localidad y año (Fase 5 de `scripts/03_analisis_sentometrics.R`) y dibujamos los tres grupos de $K$-Means. Luego comparamos por modalidad las denuncias frente a las noticias (en tasas, volúmenes totales y sentimiento neto promedio) y resumimos cómo pasan estos insumos a la aplicación Shiny.
 
-## Geografía del delito por modalidad
+## Distribución espacial de los clústeres $K$-Means
+
+Para no repetir los mapas por modalidad que van más adelante, partimos ubicando en el mapa los tres grupos obtenidos en la Sección 3 (@fig-mapa-clusters). Así se ve cómo queda la vecindad geográfica de cada grupo sobre la geometría oficial de la SDSCJ.
 
 ```{r}
-#| label: fig-mapa-facetas-delitos
-#| fig-cap: "Distribución espacial de las tasas de hurto por 100.000 habitantes en las 19 localidades urbanas de Bogotá (2022-2026)"
-#| fig-alt: "Cuatro mapas coropléticos de Bogotá que muestran las tasas de hurto a personas, residencias, motocicletas y tasa total por localidad."
-#| fig-width: 9.5
-#| fig-height: 8.5
+#| label: fig-mapa-clusters
+#| fig-cap: "Distribución espacial de los tres clústeres territoriales de K-Means (K* = 3) en las 19 localidades urbanas de Bogotá"
+#| fig-alt: "Mapa coroplético de las 19 localidades urbanas de Bogotá coloreadas según su pertenencia a los tres clústeres de K-Means: Céntrico e Institucional, Comercial y Automotor, y Residencial y Periférico."
+#| fig-width: 8.5
+#| fig-height: 6.2
 # 6. Consolidación anual, cartografía vectorial (sf) e integración Shiny ----
 
 ## 6.1 Consolidación del panel anual Localidad x Año (Fase 5 de 03_analisis_sentometrics.R) ----
@@ -2503,41 +2505,258 @@ panel_consolidado <- panel_delitos |>
 
 stopifnot(nrow(panel_consolidado) == 95)
 
-## 6.2 Preparación de polígonos oficiales (sf) y mapas por modalidad ----
+## 6.2 Preparación de polígonos oficiales (sf) y mapa de clústeres K-Means ----
+orden_clusters <- c(
+  "Céntrico e Institucional",
+  "Comercial y Automotor",
+  "Residencial y Periférico"
+)
+
 geo_bogota <- sf::st_read(archivo_geo_raw, quiet = TRUE) |>
   mutate(codigo_localidad = sprintf("%02d", as.integer(CMIULOCAL))) |>
   filter(!codigo_localidad %in% c("20", "99")) |>
-  left_join(df_clusters, by = "codigo_localidad")
+  left_join(df_clusters, by = "codigo_localidad") |>
+  mutate(
+    cluster_nombre = factor(cluster_nombre, levels = orden_clusters),
+    tooltip_cluster = paste0(
+      "<b>", localidad, "</b><br>",
+      "Clúster: ", cluster_nombre, "<br>",
+      "Silueta S(i): ", round(silueta_localidad, 3), "<br>",
+      "Hurto personas: ", scales::comma(round(tasa_personas_prom, 1)), " / 100k<br>",
+      "Hurto residencias: ", scales::comma(round(tasa_resid_prom, 1)), " / 100k<br>",
+      "Hurto motos: ", scales::comma(round(tasa_motos_prom, 1)), " / 100k"
+    )
+  )
 
 stopifnot(nrow(geo_bogota) == 19)
 
-generar_mapa_delito <- function(df, var_col, titulo, etiqueta_leyenda, paleta = "magma") {
+p_mapa_clusters <- ggplot(sf::st_simplify(geo_bogota, preserveTopology = TRUE, dTolerance = 40)) +
+  geom_sf(
+    aes(fill = cluster_nombre, text = tooltip_cluster),
+    color     = "white",
+    linewidth = 0.35
+  ) +
+  scale_fill_manual(
+    values = colores_clusters,
+    name   = "Clúster territorial (K* = 3)"
+  ) +
+  labs(
+    title    = "Mapa de Clústeres Territoriales de Criminalidad en Bogotá",
+    subtitle = "Segmentación K-Means sobre tasas promedio de hurto por 100.000 habitantes (2022-2026)"
+  ) +
+  theme_void(base_size = 11) +
+  theme(
+    plot.title      = element_text(face = "bold", size = 13, hjust = 0.5, margin = margin(b = 4)),
+    plot.subtitle   = element_text(size = 10, color = "grey35", hjust = 0.5, margin = margin(b = 8)),
+    legend.position = "bottom",
+    legend.title    = element_text(size = 9.5, face = "bold"),
+    legend.text     = element_text(size = 9),
+    plot.margin     = margin(8, 8, 8, 8)
+  )
+
+if (knitr::is_html_output()) {
+  ply_clusters <- plotly::ggplotly(
+    p_mapa_clusters +
+      labs(title = NULL, subtitle = NULL) +
+      theme(legend.title = element_blank()),
+    tooltip = "text"
+  ) |>
+    plotly::layout(
+      title  = list(
+        text    = "<b>Mapa de Clústeres Territoriales de Criminalidad (K* = 3)</b>",
+        x       = 0.5,
+        xanchor = "center",
+        font    = list(size = 13)
+      ),
+      legend = list(
+        title       = list(text = ""),
+        orientation = "h",
+        x           = 0.5,
+        xanchor     = "center",
+        y           = -0.02,
+        yanchor     = "top",
+        font        = list(size = 9.5)
+      ),
+      margin = list(l = 10, r = 10, t = 45, b = 60)
+    ) |>
+    plotly::config(displayModeBar = FALSE)
+
+  ply_clusters$height                     <- 540
+  ply_clusters$sizingPolicy$defaultHeight <- 540
+  ply_clusters$sizingPolicy$knitr$figure  <- FALSE
+  ply_clusters
+} else {
+  p_mapa_clusters +
+    ggrepel::geom_label_repel(
+      aes(geometry = geometry, label = localidad),
+      stat               = "sf_coordinates",
+      size               = 2.35,
+      fontface           = "bold",
+      fill               = alpha("white", 0.85),
+      label.size         = 0.15,
+      label.padding      = unit(0.11, "lines"),
+      box.padding        = 0.36,
+      point.padding      = 0.15,
+      force              = 3.5,
+      min.segment.length = 0.12,
+      max.overlaps       = Inf,
+      seed               = 20261014,
+      show.legend        = FALSE
+    )
+}
+```
+
+La cartografía muestra que los tres grupos forman bloques geográficos continuos. El clúster **Céntrico e Institucional** ocupa el centro-oriente (La Candelaria, Santa Fe, Chapinero, Teusaquillo y Barrios Unidos); justo al occidente queda el corredor **Comercial y Automotor** (Los Mártires y Antonio Nariño); y alrededor de ambos aparece el cinturón **Residencial y Periférico** con las doce localidades restantes del norte, occidente y sur.
+
+## Comparación espacial por modalidad: tasas, conteos totales y sentimiento promedio
+
+Para revisar si la cobertura de prensa sigue la misma geografía que las denuncias en cada tipo de hurto, separamos los mapas en las tres modalidades del panel (**hurto a personas**, **hurto a residencias** y **hurto de motocicletas**) más su **total comparable**. Las tres figuras comparan siempre la tasa anual de denuncias por cada 100.000 habitantes en la columna izquierda frente a una lectura distinta de la prensa en la columna derecha: tasas noticiosas por 100.000 habitantes (@fig-mapa-desajuste-espacial), conteo total de artículos (@fig-mapa-desajuste-conteos) y sentimiento neto promedio (@fig-mapa-delitos-sentimiento).
+
+En todas las escalas los colores oscuros marcan los valores numéricos más bajos y los colores claros los más altos. La escala `magma` (denuncias) arranca en morado oscuro (`0,22`) y la escala `mako` (prensa y sentimiento) en azul oscuro (`0,26`), sin llegar al negro puro.
+
+::: {.callout-note}
+## Alcance del corpus comparable por modalidad (992 frente a 3.916 noticias)
+El panel oficial de delitos de la SDSCJ mide tres modalidades de hurto (`hurto_personas`, `hurto_residencias` y `hurto_motos`). En la clasificación textual `delito_sdscj` del corpus de prensa, esas tres categorías suman **992 noticias (25,3 % de las 3.916 notas)**: 736 de hurto a personas, 140 de hurto a residencias y 116 de hurto de motocicletas. Las **2.924 noticias restantes (74,7 %)** cubren otros delitos o temas de seguridad (794 *No DAI*, 575 de hurto de automotores, 540 de hurto sin modalidad identificada, 452 de homicidio y 349 de hurto a comercio, entre otros). Para comparar numeradores equivalentes, la fila Total (3 modalidades) cruza las denuncias combinadas de esos tres hurtos contra esas 992 noticias, mientras que la @tbl-correlacion-modalidades incluye aparte la fila de referencia con las 3.916 notas del corpus.
+:::
+
+```{r}
+#| label: fig-mapa-desajuste-espacial
+#| fig-cap: "Comparación espacial por modalidad entre la tasa anual de hurtos denunciados y la tasa anual de noticias por cada 100.000 habitantes (2022-septiembre de 2026)"
+#| fig-alt: "Matriz de ocho mapas coropléticos (cuatro filas por modalidad y dos columnas) que compara la tasa oficial de hurtos por 100.000 habitantes a la izquierda en escala morado-claro frente a la tasa de cobertura noticiosa por 100.000 habitantes a la derecha en escala azul-claro."
+#| fig-width: 9.2
+#| fig-height: 11.4
+## 6.3 Tasas, conteos, sentimiento por modalidad y contraste espacial ----
+noticias_filtradas_6 <- df_noticias_enriquecida |>
+  mutate(año = as.integer(año), mes = as.integer(mes)) |>
+  filter(año >= 2022 & año <= 2026, !(año == 2026 & mes > 9))
+
+noticias_mod_anual <- noticias_filtradas_6 |>
+  group_by(localidad, año) |>
+  summarise(
+    n_noti_personas = sum(delito_sdscj == "Hurto a personas", na.rm = TRUE),
+    n_noti_resid    = sum(delito_sdscj == "Hurto a residencias", na.rm = TRUE),
+    n_noti_motos    = sum(delito_sdscj == "Hurto de motocicletas", na.rm = TRUE),
+    n_noti_3mod     = n_noti_personas + n_noti_resid + n_noti_motos,
+    n_noti_corpus   = n(),
+    .groups = "drop"
+  )
+
+sent_noti_localidad <- noticias_filtradas_6 |>
+  group_by(localidad) |>
+  summarise(
+    sent_noti_personas = mean(sentimiento_score[delito_sdscj == "Hurto a personas"], na.rm = TRUE),
+    sent_noti_resid    = mean(sentimiento_score[delito_sdscj == "Hurto a residencias"], na.rm = TRUE),
+    sent_noti_motos    = mean(sentimiento_score[delito_sdscj == "Hurto de motocicletas"], na.rm = TRUE),
+    sent_noti_3mod     = mean(
+      sentimiento_score[delito_sdscj %in% c("Hurto a personas", "Hurto a residencias", "Hurto de motocicletas")],
+      na.rm = TRUE
+    ),
+    sent_noti_corpus   = mean(sentimiento_score, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(across(starts_with("sent_noti_"), ~ ifelse(is.nan(.x), NA_real_, .x)))
+
+tasas_noti_localidad <- panel_delitos |>
+  select(codigo_localidad, localidad, año, poblacion) |>
+  left_join(noticias_mod_anual, by = c("localidad", "año")) |>
+  mutate(across(starts_with("n_noti_"), ~ replace_na(.x, 0L))) |>
+  mutate(
+    tasa_noti_personas = (n_noti_personas / poblacion) * 100000,
+    tasa_noti_resid    = (n_noti_resid    / poblacion) * 100000,
+    tasa_noti_motos    = (n_noti_motos    / poblacion) * 100000,
+    tasa_noti_3mod     = (n_noti_3mod     / poblacion) * 100000,
+    tasa_noti_corpus   = (n_noti_corpus   / poblacion) * 100000
+  ) |>
+  group_by(codigo_localidad, localidad) |>
+  summarise(
+    tasa_noti_personas_prom = mean(tasa_noti_personas),
+    tasa_noti_resid_prom    = mean(tasa_noti_resid),
+    tasa_noti_motos_prom    = mean(tasa_noti_motos),
+    tasa_noti_3mod_prom     = mean(tasa_noti_3mod),
+    tasa_noti_corpus_prom   = mean(tasa_noti_corpus),
+    n_noti_personas_tot     = sum(n_noti_personas),
+    n_noti_resid_tot        = sum(n_noti_resid),
+    n_noti_motos_tot        = sum(n_noti_motos),
+    n_noti_3mod_tot         = sum(n_noti_3mod),
+    n_noti_corpus_tot       = sum(n_noti_corpus),
+    .groups = "drop"
+  )
+
+geo_bogota_modalidades <- geo_bogota |>
+  sf::st_simplify(preserveTopology = TRUE, dTolerance = 40) |>
+  left_join(
+    tasas_noti_localidad |> select(-localidad),
+    by = "codigo_localidad"
+  ) |>
+  left_join(
+    sent_noti_localidad,
+    by = "localidad"
+  )
+
+stopifnot(nrow(geo_bogota_modalidades) == 19)
+stopifnot(
+  sum(geo_bogota_modalidades$n_noti_3mod_tot) ==
+    sum(
+      geo_bogota_modalidades$n_noti_personas_tot +
+        geo_bogota_modalidades$n_noti_resid_tot +
+        geo_bogota_modalidades$n_noti_motos_tot
+    )
+)
+
+generar_mapa_tasa <- function(df, var_col, titulo_panel, etiqueta_leyenda,
+                              paleta = "magma", decimales = 1,
+                              conteo_col = NULL, etiqueta_unidad = "por 100k hab.") {
+  begin_val <- if (paleta == "magma") 0.22 else 0.26
+  end_val   <- 0.96
+
+  linea_conteo <- if (!is.null(conteo_col)) {
+    paste0("<br>Artículos en el corpus: <b>", scales::comma(df[[conteo_col]]), "</b>")
+  } else {
+    ""
+  }
+
+  vals <- df[[var_col]]
+  val_txt <- ifelse(
+    is.na(vals),
+    "Sin noticias registradas (0 artículos)",
+    paste0(
+      "<b>",
+      scales::comma(round(vals, decimales), accuracy = 10^(-decimales)),
+      "</b> ",
+      etiqueta_unidad
+    )
+  )
+
   df$tooltip <- paste0(
     "<b>", df$localidad, "</b><br>",
-    titulo, ": <b>", scales::comma(round(df[[var_col]], 1)), "</b> por 100k hab.<br>",
-    "Clúster: ", df$cluster_nombre
+    titulo_panel, ": ", val_txt,
+    linea_conteo,
+    "<br>Clúster: ", df$cluster_nombre
   )
 
   ggplot(df) +
     geom_sf(aes(fill = .data[[var_col]], text = tooltip), color = "white", linewidth = 0.25) +
     scale_fill_viridis_c(
       option    = paleta,
-      direction = -1,
+      begin     = begin_val,
+      end       = end_val,
+      direction = 1,
+      na.value  = "#d9d9d9",
       name      = etiqueta_leyenda,
-      labels    = scales::comma
+      labels    = scales::label_number(accuracy = 10^(-decimales), big.mark = ",")
     ) +
-    labs(title = titulo) +
-    theme_void(base_size = 11) +
+    labs(title = titulo_panel) +
+    theme_void(base_size = 10) +
     theme(
-      plot.title      = element_text(face = "bold", size = 11, hjust = 0.5, margin = margin(b = 6)),
+      plot.title      = element_text(face = "bold", size = 10, hjust = 0.5, margin = margin(b = 4)),
       legend.position = "right",
-      legend.title    = element_text(size = 8.5, face = "bold"),
-      legend.text     = element_text(size = 8),
-      plot.margin     = margin(6, 6, 6, 6)
+      legend.title    = element_text(size = 8, face = "bold"),
+      legend.text     = element_text(size = 7.5),
+      plot.margin     = margin(2, 4, 2, 4)
     )
 }
 
-fijar_colorbar <- function(ply, x_pos, y_pos = 0.5, len_val = 0.65, thick = 14, titulo = NULL) {
+fijar_colorbar <- function(ply, x_pos, y_pos, len_val = 0.17, thick = 10, titulo = NULL) {
   for (i in seq_along(ply$x$data)) {
     if (!is.null(ply$x$data[[i]]$marker$colorbar)) {
       ply$x$data[[i]]$marker$colorbar$x         <- x_pos
@@ -2547,166 +2766,324 @@ fijar_colorbar <- function(ply, x_pos, y_pos = 0.5, len_val = 0.65, thick = 14, 
       ply$x$data[[i]]$marker$colorbar$xanchor   <- "left"
       ply$x$data[[i]]$marker$colorbar$yanchor   <- "middle"
       if (!is.null(titulo)) {
-        ply$x$data[[i]]$marker$colorbar$title <- titulo
+        ply$x$data[[i]]$marker$colorbar$title     <- titulo
+        ply$x$data[[i]]$marker$colorbar$titlefont <- list(size = 9.5)
       }
     }
   }
   ply
 }
 
-p_pers  <- generar_mapa_delito(geo_bogota, "tasa_personas_prom", "Hurto a Personas", "Tasa por\n100k hab.")
-p_resid <- generar_mapa_delito(geo_bogota, "tasa_resid_prom", "Hurto a Residencias", "Tasa por\n100k hab.")
-p_motos <- generar_mapa_delito(geo_bogota, "tasa_motos_prom", "Hurto de Motocicletas", "Tasa por\n100k hab.")
-p_total <- generar_mapa_delito(geo_bogota, "tasa_total_prom", "Tasa Total de Hurtos", "Tasa por\n100k hab.")
+renderizar_matriz_4x2 <- function(spec_df,
+                                  leyenda_izq = "Denuncias /\n100k hab.",
+                                  leyenda_der = "Noticias /\n100k hab.",
+                                  unidad_izq = "denuncias/100k",
+                                  unidad_der = "noticias/100k",
+                                  titulo_html = "Tasas Anuales por Modalidad",
+                                  titulo_pdf = "Tasas Anuales por Modalidad",
+                                  subtitulo_pdf = "Promedio 2022-sep. 2026 por localidad",
+                                  encabezado_izq = "Denuncias oficiales (SDSCJ / 100k hab.)",
+                                  encabezado_der = "Cobertura en prensa",
+                                  cb_izq = "Del./100k",
+                                  cb_der = "Not./100k",
+                                  sub_izq = "Denuncias",
+                                  sub_der = "Noticias") {
+  mapas_izq <- vector("list", nrow(spec_df))
+  mapas_der <- vector("list", nrow(spec_df))
 
-if (knitr::is_html_output()) {
-  ply1 <- plotly::ggplotly(p_pers,  tooltip = "text") |> fijar_colorbar(0.44, 0.77, 0.35, 11, "Tasa / 100k")
-  ply2 <- plotly::ggplotly(p_resid, tooltip = "text") |> fijar_colorbar(1.00, 0.77, 0.35, 11, "Tasa / 100k")
-  ply3 <- plotly::ggplotly(p_motos, tooltip = "text") |> fijar_colorbar(0.44, 0.22, 0.35, 11, "Tasa / 100k")
-  ply4 <- plotly::ggplotly(p_total, tooltip = "text") |> fijar_colorbar(1.00, 0.22, 0.35, 11, "Tasa / 100k")
+  for (i in seq_len(nrow(spec_df))) {
+    fila <- spec_df[i, ]
+    col_ct <- if ("col_conteo" %in% names(spec_df) && !is.na(fila$col_conteo)) {
+      fila$col_conteo
+    } else {
+      NULL
+    }
 
-  anotaciones_4 <- list(
-    list(x = 0.20, y = 1.02, text = "<b>Hurto a Personas</b>",      showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11)),
-    list(x = 0.74, y = 1.02, text = "<b>Hurto a Residencias</b>",   showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11)),
-    list(x = 0.20, y = 0.48, text = "<b>Hurto de Motocicletas</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11)),
-    list(x = 0.74, y = 0.48, text = "<b>Tasa Total de Hurtos</b>",  showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 11))
+    mapas_izq[[i]] <- generar_mapa_tasa(
+      df               = geo_bogota_modalidades,
+      var_col          = fila$col_izq,
+      titulo_panel     = paste0(fila$mod_titulo, " (", sub_izq, ")"),
+      etiqueta_leyenda = leyenda_izq,
+      paleta           = "magma",
+      decimales        = fila$dec_izq,
+      etiqueta_unidad  = unidad_izq
+    )
+    mapas_der[[i]] <- generar_mapa_tasa(
+      df               = geo_bogota_modalidades,
+      var_col          = fila$col_der,
+      titulo_panel     = paste0(fila$mod_titulo, " (", sub_der, ")"),
+      etiqueta_leyenda = leyenda_der,
+      paleta           = "mako",
+      decimales        = fila$dec_der,
+      conteo_col       = col_ct,
+      etiqueta_unidad  = unidad_der
+    )
+  }
+
+  if (knitr::is_html_output()) {
+    y_centros_fila <- c(0.89, 0.625, 0.375, 0.11)
+    y_titulos_fila <- c(1.015, 0.740, 0.490, 0.240)
+
+    lista_plotly  <- vector("list", 8)
+    anotaciones_8 <- vector("list", 8)
+
+    for (i in seq_len(nrow(spec_df))) {
+      mod_txt <- spec_df$mod_corto[i]
+      idx_iz <- 2 * i - 1
+      idx_dr <- 2 * i
+
+      lista_plotly[[idx_iz]] <- plotly::ggplotly(mapas_izq[[i]] + labs(title = NULL), tooltip = "text") |>
+        fijar_colorbar(0.445, y_centros_fila[i], len_val = 0.17, thick = 10, titulo = cb_izq)
+      lista_plotly[[idx_dr]] <- plotly::ggplotly(mapas_der[[i]] + labs(title = NULL), tooltip = "text") |>
+        fijar_colorbar(1.005, y_centros_fila[i], len_val = 0.17, thick = 10, titulo = cb_der)
+
+      anotaciones_8[[idx_iz]] <- list(
+        x = 0.22, y = y_titulos_fila[i],
+        text = paste0("<b>", mod_txt, " — ", sub_izq, "</b>"),
+        showarrow = FALSE, xref = "paper", yref = "paper",
+        xanchor = "center", font = list(size = 10.5)
+      )
+      anotaciones_8[[idx_dr]] <- list(
+        x = 0.78, y = y_titulos_fila[i],
+        text = paste0("<b>", mod_txt, " — ", sub_der, "</b>"),
+        showarrow = FALSE, xref = "paper", yref = "paper",
+        xanchor = "center", font = list(size = 10.5)
+      )
+    }
+
+    ply_matriz <- plotly::subplot(
+      lista_plotly[[1]], lista_plotly[[2]],
+      lista_plotly[[3]], lista_plotly[[4]],
+      lista_plotly[[5]], lista_plotly[[6]],
+      lista_plotly[[7]], lista_plotly[[8]],
+      nrows  = 4,
+      margin = c(0.06, 0.06, 0.03, 0.03)
+    ) |>
+      plotly::layout(
+        title       = list(
+          text    = paste0("<b>", titulo_html, "</b>"),
+          x       = 0.5,
+          xanchor = "center",
+          y       = 0.992,
+          font    = list(size = 12.5)
+        ),
+        annotations = anotaciones_8,
+        margin      = list(l = 12, r = 68, t = 62, b = 15)
+      ) |>
+      plotly::config(displayModeBar = FALSE)
+
+    ply_matriz$height                     <- 1120
+    ply_matriz$sizingPolicy$defaultHeight <- 1120
+    ply_matriz$sizingPolicy$knitr$figure  <- FALSE
+    return(ply_matriz)
+  }
+
+  encabezados_col <- cowplot::plot_grid(
+    cowplot::ggdraw() +
+      cowplot::draw_label(encabezado_izq, x = 0.44, hjust = 0.5, fontface = "bold", size = 10.5, color = "#451077"),
+    cowplot::ggdraw() +
+      cowplot::draw_label(encabezado_der, x = 0.44, hjust = 0.5, fontface = "bold", size = 10.5, color = "#1f5a7a"),
+    ncol = 2
   )
 
-  plotly::subplot(ply1, ply2, ply3, ply4, nrows = 2, margin = c(0.06, 0.06, 0.08, 0.08)) |>
-    plotly::layout(
-      annotations = anotaciones_4,
-      margin      = list(l = 10, r = 50, t = 40, b = 10)
-    )
-} else {
-  grid_delitos <- cowplot::plot_grid(p_pers, p_resid, p_motos, p_total, ncol = 2, align = "hv")
+  pares_intercalados <- unlist(
+    lapply(seq_len(nrow(spec_df)), function(i) {
+      list(
+        mapas_izq[[i]] + labs(title = spec_df$mod_titulo[i]),
+        mapas_der[[i]] + labs(title = spec_df$mod_titulo[i])
+      )
+    }),
+    recursive = FALSE
+  )
 
-  titulo_facetas <- cowplot::ggdraw() +
+  grid_8_mapas <- cowplot::plot_grid(plotlist = pares_intercalados, ncol = 2, align = "hv")
+
+  titulo_matriz <- cowplot::ggdraw() +
     cowplot::draw_label(
-      "Distribución Espacial de las Tasas de Hurto por Modalidad",
-      fontface = "bold", size = 13, hjust = 0.5, x = 0.5, y = 0.65
+      titulo_pdf,
+      fontface = "bold", size = 12, hjust = 0.5, x = 0.5, y = 0.68
     ) +
     cowplot::draw_label(
-      "Tasas anuales promedio por 100.000 habitantes en las 19 localidades urbanas de Bogotá (2022-2026)",
-      size = 10, color = "grey35", hjust = 0.5, x = 0.5, y = 0.25
+      subtitulo_pdf,
+      size = 9, color = "grey35", hjust = 0.5, x = 0.5, y = 0.24
     )
 
-  cowplot::plot_grid(titulo_facetas, grid_delitos, ncol = 1, rel_heights = c(0.08, 1))
+  cowplot::plot_grid(
+    titulo_matriz,
+    encabezados_col,
+    grid_8_mapas,
+    ncol        = 1,
+    rel_heights = c(0.055, 0.028, 1)
+  )
 }
+
+spec_tasas <- tibble::tribble(
+  ~mod_titulo,              ~mod_corto,     ~col_izq,              ~dec_izq, ~col_der,                  ~col_conteo,           ~dec_der,
+  "Hurto a Personas",       "Personas",     "tasa_personas_prom",  0L,       "tasa_noti_personas_prom",  "n_noti_personas_tot", 1L,
+  "Hurto a Residencias",    "Residencias",  "tasa_resid_prom",     0L,       "tasa_noti_resid_prom",     "n_noti_resid_tot",    2L,
+  "Hurto de Motocicletas",  "Motocicletas", "tasa_motos_prom",     0L,       "tasa_noti_motos_prom",     "n_noti_motos_tot",    2L,
+  "Total (3 Modalidades)",  "Total 3 mod.", "tasa_total_prom",     0L,       "tasa_noti_3mod_prom",      "n_noti_3mod_tot",     1L
+)
+
+renderizar_matriz_4x2(
+  spec_df        = spec_tasas,
+  leyenda_izq    = "Denuncias /\n100k hab.",
+  leyenda_der    = "Noticias /\n100k hab.",
+  unidad_izq     = "denuncias/100k",
+  unidad_der     = "noticias/100k",
+  titulo_html    = "Tasas Anuales por Modalidad: Denuncias vs. Noticias (por 100k hab.)",
+  titulo_pdf     = "Tasas Anuales por Modalidad: Denuncias vs. Cobertura Noticiosa (por 100.000 hab.)",
+  subtitulo_pdf  = "Promedio anual 2022-sep. 2026 por localidad; la fila Total agrupa las 3 modalidades comparables (992 de 3.916 noticias)",
+  encabezado_izq = "Denuncias oficiales (SDSCJ / 100k hab.)",
+  encabezado_der = "Cobertura en prensa (Noticias / 100k hab.)",
+  cb_izq         = "Del./100k",
+  cb_der         = "Not./100k",
+  sub_izq        = "Denuncias",
+  sub_der        = "Noticias"
+)
 ```
 
-Los mapas confirman que cada modalidad sigue una geografía distinta. El hurto a personas alcanza sus tasas más altas en el centro ampliado y el eje oriental: Los Mártires registra 8.390 casos por 100.000 habitantes, La Candelaria 7.615, Chapinero 6.641 y Santa Fe 6.177, impulsado por la concentración comercial y la población flotante diurna. En cambio, el hurto de motocicletas se concentra en Los Mártires (178 por 100.000 habitantes) y Antonio Nariño (128), zonas vinculadas a talleres y comercio de repuestos. El hurto a residencias muestra mayor presencia en sectores consolidados como Teusaquillo (217), Chapinero (192) y Barrios Unidos (168).
-
-## Desajuste espacial entre delito registrado y cobertura periodística
-
-Para contrastar la señal de las denuncias policiales frente a la atención de la prensa digital, comparamos lado a lado la tasa promedio de hurtos y el conteo acumulado de noticias por localidad.
+En la @fig-mapa-desajuste-conteos cambiamos las tasas per cápita de prensa por el conteo acumulado de noticias en cada localidad, manteniendo en la columna izquierda las denuncias por 100.000 habitantes.
 
 ```{r}
-#| label: fig-mapa-desajuste-espacial
-#| fig-cap: "Comparación entre la tasa delictiva oficial y el volumen de noticias sobre delincuencia por localidad"
-#| fig-alt: "Dos mapas coropléticos lado a lado que contrastan la tasa delictiva oficial por cada 100.000 habitantes frente al número total de artículos de prensa por localidad."
-#| fig-width: 9.5
-#| fig-height: 5.8
-## 6.3 Contraste espacial entre tasa oficial y cobertura mediática ----
-noticias_conteo <- df_noticias_enriquecida |>
-  count(localidad, name = "total_noticias")
-
-geo_bogota_dual <- geo_bogota |>
-  left_join(noticias_conteo, by = "localidad")
-
-geo_bogota_dual$tooltip_delito <- paste0(
-  "<b>", geo_bogota_dual$localidad, "</b><br>",
-  "Tasa real: <b>", scales::comma(round(geo_bogota_dual$tasa_total_prom, 1)), "</b> por 100k hab.<br>",
-  "Clúster: ", geo_bogota_dual$cluster_nombre
+#| label: fig-mapa-desajuste-conteos
+#| fig-cap: "Comparación espacial por modalidad entre la tasa anual de hurtos denunciados por 100.000 habitantes y las noticias totales acumuladas por localidad (2022-septiembre de 2026)"
+#| fig-alt: "Matriz de ocho mapas coropléticos (cuatro filas por modalidad y dos columnas) que compara la tasa oficial de hurtos por 100.000 habitantes a la izquierda frente al conteo acumulado de noticias por localidad a la derecha."
+#| fig-width: 9.2
+#| fig-height: 11.4
+## 6.4 Matriz 4x2: tasa delictiva por 100k hab. vs. noticias totales por modalidad ----
+spec_conteos <- tibble::tribble(
+  ~mod_titulo,              ~mod_corto,     ~col_izq,              ~dec_izq, ~col_der,              ~dec_der,
+  "Hurto a Personas",       "Personas",     "tasa_personas_prom",  0L,       "n_noti_personas_tot", 0L,
+  "Hurto a Residencias",    "Residencias",  "tasa_resid_prom",     0L,       "n_noti_resid_tot",    0L,
+  "Hurto de Motocicletas",  "Motocicletas", "tasa_motos_prom",     0L,       "n_noti_motos_tot",    0L,
+  "Total (3 Modalidades)",  "Total 3 mod.", "tasa_total_prom",     0L,       "n_noti_3mod_tot",     0L
 )
 
-geo_bogota_dual$tooltip_noticias <- paste0(
-  "<b>", geo_bogota_dual$localidad, "</b><br>",
-  "Noticias en el corpus: <b>", scales::comma(geo_bogota_dual$total_noticias), "</b> artículos<br>",
-  "Clúster: ", geo_bogota_dual$cluster_nombre
+renderizar_matriz_4x2(
+  spec_df        = spec_conteos,
+  leyenda_izq    = "Denuncias /\n100k hab.",
+  leyenda_der    = "Noticias\ntotales",
+  unidad_izq     = "denuncias/100k",
+  unidad_der     = "artículos",
+  titulo_html    = "Por Modalidad: Denuncias (100k hab.) vs. Noticias Totales",
+  titulo_pdf     = "Comparación por Modalidad: Denuncias (por 100.000 hab.) vs. Noticias Totales",
+  subtitulo_pdf  = "Tasa anual promedio 2022-sep. 2026 (izquierda) frente a conteo acumulado de artículos (derecha; 992 notas en 3 mod.)",
+  encabezado_izq = "Denuncias oficiales (SDSCJ / 100k hab.)",
+  encabezado_der = "Noticias totales acumuladas (conteo)",
+  cb_izq         = "Del./100k",
+  cb_der         = "Notas",
+  sub_izq        = "Denuncias",
+  sub_der        = "Total notas"
 )
-
-p_delito_real <- ggplot(geo_bogota_dual) +
-  geom_sf(aes(fill = tasa_total_prom, text = tooltip_delito), color = "white", linewidth = 0.3) +
-  scale_fill_viridis_c(
-    option    = "magma",
-    direction = -1,
-    name      = "Tasa por\n100k hab.",
-    labels    = scales::comma
-  ) +
-  labs(title = "Tasa Delictiva Real (Policía SDSCJ)") +
-  theme_void(base_size = 11) +
-  theme(
-    plot.title      = element_text(face = "bold", size = 11, hjust = 0.5, margin = margin(b = 6)),
-    legend.position = "right",
-    legend.title    = element_text(size = 8.5, face = "bold"),
-    legend.text     = element_text(size = 8),
-    plot.margin     = margin(6, 6, 6, 6)
-  )
-
-p_prensa_vol <- ggplot(geo_bogota_dual) +
-  geom_sf(aes(fill = total_noticias, text = tooltip_noticias), color = "white", linewidth = 0.3) +
-  scale_fill_viridis_c(
-    option    = "magma",
-    direction = -1,
-    name      = "Total\nnoticias",
-    labels    = scales::comma
-  ) +
-  labs(title = "Cobertura Noticiosa (Google News)") +
-  theme_void(base_size = 11) +
-  theme(
-    plot.title      = element_text(face = "bold", size = 11, hjust = 0.5, margin = margin(b = 6)),
-    legend.position = "right",
-    legend.title    = element_text(size = 8.5, face = "bold"),
-    legend.text     = element_text(size = 8),
-    plot.margin     = margin(6, 6, 6, 6)
-  )
-
-if (knitr::is_html_output()) {
-  ply_delito   <- plotly::ggplotly(p_delito_real, tooltip = "text") |> fijar_colorbar(0.44, 0.5, 0.65, 13, "Tasa / 100k")
-  ply_noticias <- plotly::ggplotly(p_prensa_vol,  tooltip = "text") |> fijar_colorbar(1.00, 0.5, 0.65, 13, "Noticias")
-
-  anotaciones_dual <- list(
-    list(x = 0.20, y = 1.03, text = "<b>Tasa Delictiva Real (Policía SDSCJ)</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 12)),
-    list(x = 0.74, y = 1.03, text = "<b>Cobertura Noticiosa (Google News)</b>", showarrow = FALSE, xref = "paper", yref = "paper", xanchor = "center", font = list(size = 12))
-  )
-
-  plotly::subplot(ply_delito, ply_noticias, nrows = 1, margin = 0.08) |>
-    plotly::layout(
-      annotations = anotaciones_dual,
-      margin      = list(l = 10, r = 50, t = 35, b = 10)
-    )
-} else {
-  grid_dual <- cowplot::plot_grid(p_delito_real, p_prensa_vol, ncol = 2, align = "hv")
-
-  titulo_dual <- cowplot::ggdraw() +
-    cowplot::draw_label(
-      "Contraste Espacial: Criminalidad Registrada frente a Cobertura Noticiosa",
-      fontface = "bold", size = 13, hjust = 0.5, x = 0.5, y = 0.65
-    ) +
-    cowplot::draw_label(
-      "Tasas de denuncia por 100.000 hab. (SIEDCO) vs. número total de noticias en el corpus (2022-2026)",
-      size = 10, color = "grey35", hjust = 0.5, x = 0.5, y = 0.25
-    )
-
-  cowplot::plot_grid(titulo_dual, grid_dual, ncol = 1, rel_heights = c(0.12, 1))
-}
 ```
 
-El contraste evidencia una asimetría clara entre el riesgo relativo registrado y el foco noticioso. Localidades con tasas per cápita muy altas, como La Candelaria y Santa Fe, concentran un volumen modesto de noticias (`r noticias_conteo$total_noticias[noticias_conteo$localidad == "La Candelaria"]` y `r noticias_conteo$total_noticias[noticias_conteo$localidad == "Santa Fe"]` artículos). Por el contrario, localidades muy pobladas como Ciudad Bolívar (`r noticias_conteo$total_noticias[noticias_conteo$localidad == "Ciudad Bolívar"]`), Bosa (`r noticias_conteo$total_noticias[noticias_conteo$localidad == "Bosa"]`) y Kennedy (`r noticias_conteo$total_noticias[noticias_conteo$localidad == "Kennedy"]`) reciben mucha más cobertura en términos absolutos aunque sus tasas por 100.000 habitantes sean bastante más bajas que las del centro histórico.
+La @fig-mapa-delitos-sentimiento cruza las denuncias por cada 100.000 habitantes frente al sentimiento neto promedio (`sentimiento_score`) de las noticias publicadas sobre cada localidad y modalidad. En hurto a residencias y hurto de motocicletas, Usme aparece en gris claro porque no tuvo artículos en esas categorías (`0` notas).
 
-## Integración conceptual hacia el tablero R Shiny ("Dos lecturas de Bogotá")
+```{r}
+#| label: fig-mapa-delitos-sentimiento
+#| fig-cap: "Comparación espacial por modalidad entre la tasa anual de hurtos denunciados por 100.000 habitantes y el sentimiento neto promedio de las noticias por localidad (2022-septiembre de 2026)"
+#| fig-alt: "Matriz de ocho mapas coropléticos (cuatro filas por modalidad y dos columnas) que compara la tasa oficial de hurtos por 100.000 habitantes a la izquierda frente al sentimiento neto promedio por localidad a la derecha."
+#| fig-width: 9.2
+#| fig-height: 11.4
+## 6.5 Matriz 4x2: tasa delictiva por 100k hab. vs. sentimiento neto promedio ----
+spec_sentimiento <- tibble::tribble(
+  ~mod_titulo,              ~mod_corto,     ~col_izq,              ~dec_izq, ~col_der,             ~col_conteo,           ~dec_der,
+  "Hurto a Personas",       "Personas",     "tasa_personas_prom",  0L,       "sent_noti_personas", "n_noti_personas_tot", 3L,
+  "Hurto a Residencias",    "Residencias",  "tasa_resid_prom",     0L,       "sent_noti_resid",    "n_noti_resid_tot",    3L,
+  "Hurto de Motocicletas",  "Motocicletas", "tasa_motos_prom",     0L,       "sent_noti_motos",    "n_noti_motos_tot",    3L,
+  "Total (3 Modalidades)",  "Total 3 mod.", "tasa_total_prom",     0L,       "sent_noti_3mod",     "n_noti_3mod_tot",     3L
+)
 
-Para que la aplicación interactiva (`app/app.R`) responda en milisegundos sin recalcular modelos ni leer archivos GeoJSON en cada sesión de usuario, la arquitectura separa el cómputo pesado del tablero web:
+renderizar_matriz_4x2(
+  spec_df        = spec_sentimiento,
+  leyenda_izq    = "Denuncias /\n100k hab.",
+  leyenda_der    = "Sentimiento\nmedio",
+  unidad_izq     = "denuncias/100k",
+  unidad_der     = "(score neto)",
+  titulo_html    = "Por Modalidad: Denuncias (100k hab.) vs. Sentimiento Neto Promedio",
+  titulo_pdf     = "Comparación por Modalidad: Denuncias (por 100.000 hab.) vs. Sentimiento Neto",
+  subtitulo_pdf  = "Tasa anual promedio 2022-sep. 2026 (izquierda) frente a sentimiento neto medio por modalidad (derecha; gris = 0 notas)",
+  encabezado_izq = "Denuncias oficiales (SDSCJ / 100k hab.)",
+  encabezado_der = "Sentimiento neto promedio (sentimiento_score)",
+  cb_izq         = "Del./100k",
+  cb_der         = "Sent. med.",
+  sub_izq        = "Denuncias",
+  sub_der        = "Sentimiento"
+)
+```
 
-* **Empaquetado único (`scripts/05_export_insumos_shiny.R`):** reúne el panel anual consolidado, los clústeres de $K$-Means, los polígonos simplificados en coordenadas WGS84, las estadísticas del corpus, las series largas y los resultados de Elastic Net dentro de un único archivo binario (`datos_consolidados_shiny.rds`).
-* **Renderizado cartográfico con Leaflet:** las pestañas *Panorama* y *Clusters* cargan las geometrías directamente sobre un mapa base oscuro de OpenStreetMap para comparar la lectura de las denuncias (en ámbar) frente a la lectura mediática (en azul).
-* **Sincronización reactiva por clics:** al seleccionar una localidad en el mapa o en el gráfico de dispersión, los observadores `input$mapa_panorama_shape_click` y `plotly_click` actualizan de inmediato la ficha territorial con sus series mensuales, distribución de tono y artículos extremos (`peakdocs`).
+### Cómo interpretar los mapas comparativos y el sentimiento neto promedio
 
-# Verificación de consistencia, guía de estudio y conclusiones {#sec-conclusiones}
+En las tres matrices (@fig-mapa-desajuste-espacial, @fig-mapa-desajuste-conteos y @fig-mapa-delitos-sentimiento), la columna izquierda repite las denuncias anuales por cada 100.000 habitantes: el morado oscuro indica tasas bajas y el amarillo claro tasas altas. La columna derecha cambia de indicador en cada figura y usa la escala `mako`, que va de azul oscuro a aguamarina claro.
+
+Para leer bien esas dos columnas, conviene distinguir qué representa cada tono de azul:
+
+* En @fig-mapa-desajuste-espacial y @fig-mapa-desajuste-conteos, el azul oscuro indica pocas noticias (en tasa por 100.000 habitantes o en conteo acumulado) y el aguamarina claro indica mayor cantidad de artículos.
+* En @fig-mapa-delitos-sentimiento, en cambio, la barra derecha mide el sentimiento neto promedio (`sentimiento_score`, en $[-1, +1]$) calculado con `nrc_es`, `crimen_es` y `valenceIn`. Las palabras sobre hurtos y violencia restan y producen valores negativos; las notas sobre capturas, recuperaciones u operativos policiales suman y acercan el puntaje a cero o lo vuelven positivo. Como la barra ordena los números de menor a mayor, el azul oscuro señala el promedio más negativo (localidades donde predominan los reportes de robos), el azul claro o aguamarina indica un tono menos negativo o positivo, y el gris claro marca las celdas con cero artículos en esa modalidad (Usme en residencias y motocicletas).
+
+Esta lectura explica por qué varias localidades residenciales e intermedias se ven más oscuras que el centro en @fig-mapa-delitos-sentimiento. En hurto a personas (`736` notas) y en el total de tres modalidades (`992` notas), las 19 localidades tienen promedios negativos (de `-0,403` a `-0,121` en el agregado). Localidades como Teusaquillo (`-0,400`, con `87,1 %` de notas negativas y `6,5 %` positivas), Tunjuelito (`-0,396`, con `89,5 %` negativas), Fontibón (`-0,348`), Puente Aranda (`-0,329`) y Kennedy (`-0,322`) aparecen en azul oscuro porque casi toda su prensa en esa categoría trata sobre atracos. En corredores céntricos y en localidades como La Candelaria (`-0,240`, con `35,3 %` de notas positivas), Antonio Nariño (`-0,216`, `31,6 %` positivas), Suba (`-0,192`, `30,2 %` positivas), Chapinero (`-0,201`) y Santa Fe (`-0,213`), las notas de capturas y balances policiales compensan parte de los titulares de robo y suben el promedio hacia cero. Al coincidir tasas altas de denuncia en el centro con puntajes menos negativos, la correlación lineal $r$ entre tasa delictiva y sentimiento resulta positiva ($r = 0{,}364$ en personas y $r = 0{,}303$ en las tres modalidades).
+
+En hurto a residencias (`140` notas) y hurto de motocicletas (`116` notas), varias localidades tienen entre una y cuatro notas en todo el periodo. Con tan pocos casos, un par de artículos mueven el promedio por encima o muy por debajo de la media distrital: en motocicletas, Santa Fe promedia `+0,625` sobre `2` artículos sobre recuperación de motos y el hallazgo de un taller clandestino, Puente Aranda marca `+0,295` sobre `4` notas (tres de ellas sobre capturas, recuperación o robo frustrado) y Fontibón cae a `-0,900` por una sola nota de hurto. En residencias, Santa Fe obtiene `+0,500` a partir de un único artículo cuya composición léxica dio puntaje positivo. Conviene leer la @fig-mapa-delitos-sentimiento junto con los conteos de la @fig-mapa-desajuste-conteos y la @tbl-correlacion-modalidades antes de interpretar casos aislados.
+
+```{r}
+#| label: tbl-correlacion-modalidades
+#| tbl-cap: "Resumen estadístico y correlación espacial entre tasas de hurtos (por 100.000 hab.) y las tres métricas periodísticas por localidad según modalidad (n = 19 localidades; n = 18 con tono en residencias y motos)"
+## 6.6 Métricas y correlación espacial por modalidad en tasas, conteos y sentimiento ----
+datos_corr_mod <- sf::st_drop_geometry(geo_bogota_modalidades)
+
+resumir_modalidad_espacial <- function(etiqueta, col_del, col_not, col_n, col_sent) {
+  x      <- datos_corr_mod[[col_del]]
+  y_tasa <- datos_corr_mod[[col_not]]
+  y_n    <- datos_corr_mod[[col_n]]
+  y_sent <- datos_corr_mod[[col_sent]]
+
+  tibble(
+    Modalidad     = etiqueta,
+    Notas         = sum(y_n),
+    `Del./100k`   = round(mean(x), 1),
+    `Not./100k`   = round(mean(y_tasa), 2),
+    `Sent. med.`  = round(mean(y_sent, na.rm = TRUE), 3),
+    `r (tasa)`    = round(cor(x, y_tasa, method = "pearson"), 3),
+    `rho (tasa)`  = round(cor(x, y_tasa, method = "spearman"), 3),
+    `r (conteo)`  = round(cor(x, y_n, method = "pearson"), 3),
+    `r (sent.)`   = round(cor(x, y_sent, method = "pearson", use = "complete.obs"), 3)
+  )
+}
+
+tabla_corr_modalidades <- bind_rows(
+  resumir_modalidad_espacial("Hurto personas", "tasa_personas_prom", "tasa_noti_personas_prom", "n_noti_personas_tot", "sent_noti_personas"),
+  resumir_modalidad_espacial("Hurto residencias", "tasa_resid_prom", "tasa_noti_resid_prom", "n_noti_resid_tot", "sent_noti_resid"),
+  resumir_modalidad_espacial("Hurto motos", "tasa_motos_prom", "tasa_noti_motos_prom", "n_noti_motos_tot", "sent_noti_motos"),
+  resumir_modalidad_espacial("Total (3 mod.)", "tasa_total_prom", "tasa_noti_3mod_prom", "n_noti_3mod_tot", "sent_noti_3mod"),
+  resumir_modalidad_espacial("Ref.: corpus", "tasa_total_prom", "tasa_noti_corpus_prom", "n_noti_corpus_tot", "sent_noti_corpus")
+)
+
+knitr::kable(
+  tabla_corr_modalidades,
+  align = c("l", "r", "r", "r", "r", "r", "r", "r", "r")
+)
+```
+
+Al cruzar las tres comparaciones de la @tbl-correlacion-modalidades con las figuras anteriores, salen cuatro patrones concretos:
+
+1. Cuando denuncias y noticias se dividen por los habitantes residentes (@fig-mapa-desajuste-espacial), la correlación espacial es alta en el agregado ($r = 0{,}838$, $\rho = 0{,}812$) y en hurto a personas ($r = 0{,}847$, $\rho = 0{,}779$). El centro-oriente (La Candelaria, Los Mártires y Chapinero) encabeza ambas tasas per cápita por la mezcla de población residente reducida y millones de visitantes diarios, aunque Santa Fe tiene una tasa oficial alta (`6.364,1` denuncias/100k hab.) frente a una tasa moderada de prensa (`4,60` noticias/100k hab. en las tres modalidades).
+2. Al pasar al conteo acumulado de artículos sin ajustar por población (@fig-mapa-desajuste-conteos), la correlación con la tasa de denuncias se vuelve cercana a cero o negativa ($r = 0{,}010$ en personas, $r = -0{,}185$ en residencias, $r = 0{,}176$ en motos, $r = -0{,}121$ en las tres modalidades y $r = -0{,}402$ en todo el corpus). El mayor número bruto de noticias cae en Chapinero (`101` notas en las tres modalidades; `90` en personas), Bosa (`90` en tres modalidades; líder en motos con `17`), Suba (`79` en tres modalidades; líder en residencias con `17`), Engativá (`78`), Usaquén (`65`), Kennedy (`60` comparables y `260` totales) y Ciudad Bolívar (`55` comparables y `323` totales), mientras La Candelaria suma solo `21` notas comparables (`90` en todo el corpus).
+3. En hurto a personas y en el total de tres modalidades (@fig-mapa-delitos-sentimiento), el sentimiento promedio es siempre negativo, pero más severo en Teusaquillo, Tunjuelito, Fontibón, Puente Aranda y Kennedy que en Chapinero, Santa Fe, La Candelaria, Suba o Barrios Unidos, donde las notas sobre capturas y resultados policiales compensan parcialmente la carga negativa de los robos.
+4. El hurto de motocicletas (`r sum(geo_bogota_modalidades$n_noti_motos_tot)` noticias) tiene la correlación ordinal más débil en tasas ($\rho = 0{,}402$, $r = 0{,}605$) porque mezcla dos dinámicas distintas. Por población residente y presencia de talleres y autopartes, lideran Los Mártires (`178,2` denuncias/100k; `1,86` noticias/100k, `7` notas), Antonio Nariño (`127,8` denuncias/100k; líder en prensa con `2,82` noticias/100k, `11` notas) y Puente Aranda (`92,5`). Pero a diferencia del hurto a personas o residencias, varias localidades periféricas del sur y suroccidente también tienen tasas altas (Ciudad Bolívar `82,2`, Kennedy `78,1` y Rafael Uribe Uribe `72,2`, por encima de La Candelaria `64,7`, Santa Fe `62,8`, Teusaquillo `60,8`, Chapinero `42,5` y Usaquén `16,6`). En volumen absoluto, cinco localidades periféricas suman el `59,2 %` de las `22.733` denuncias distritales (`13.462` casos): Kennedy (`4.278`, `18,8 %`), Ciudad Bolívar (`2.767`, `12,2 %`), Engativá (`2.434`, `10,7 %`), Bosa (`2.088`, `9,2 %`) y Suba (`1.895`, `8,3 %`). Pese a ese peso, su cobertura per cápita es mínima (Kennedy `0,13` noticias/100k, Ciudad Bolívar `0,26` y Usme `0,00`). Tres datos de movilidad y seguridad explican esa concentración periférica:
+   * Según la Encuesta de Movilidad 2023 de la Secretaría Distrital de Movilidad (SDM), en Bogotá circulan `551.518` motocicletas de hogares (`81,77 %` de las `674.444` de Bogotá-Región, es decir, `1` moto por cada `5,40` hogares) y se hacen `887.352` viajes diarios (`7 %` de la partición modal). La propiedad y los orígenes de viaje se concentran en la periferia (Kennedy lidera con más de `92.000` motocicletas, cerca del `13,7 %` del parque distrital, seguida por Suba, Bosa, Engativá y Ciudad Bolívar), mientras los destinos laborales y de servicios van hacia el centro ampliado y corredores como Los Mártires, Puente Aranda, Teusaquillo y Chapinero.
+   * Un estudio de ProBogotá Región (2023) documenta que cerca del `90 %` de los viajes en motocicleta se origina en estratos 1, 2 y 3 de la periferia, con recorridos promedio de `10,4` km (`50` minutos) hacia zonas de empleo, donde la moto suple rutas troncales y funciona como vehículo de trabajo o reparto.
+   * Reportes de la SDSCJ y la Policía Metropolitana de Bogotá (MEBOG) indican que cerca de 7 de cada 10 hurtos de motocicletas se cometen por «halado» sobre vehículos estacionados en vía pública, bahías o frentes de casas sin parqueadero vigilado. Eso deja más expuesto el parque residencial en barrios populares de la periferia y alimenta ventas clandestinas de repuestos en zonas comerciales céntricas.
+
+## Integración hacia el tablero R Shiny ("Dos lecturas de Bogotá")
+
+Para que `app/app.R` responda sin retrasos y sin leer archivos GeoJSON ni estimar modelos en cada visita de usuario, `scripts/05_export_insumos_shiny.R` empaqueta el panel consolidado, los clústeres, los polígonos en WGS84, las estadísticas del corpus, las series mensuales y los resultados de Elastic Net en un único archivo binario (`datos_consolidados_shiny.rds`). Al abrirse la aplicación, las pestañas *Panorama* y *Clusters* dibujan los polígonos directamente sobre un mapa oscuro de OpenStreetMap (denuncias en ámbar frente a noticias en azul), y cada clic en un polígono (`input$mapa_panorama_shape_click`) o punto (`plotly_click`) filtra las series de sentimiento, la distribución de tono y los titulares extremos (`peakdocs`).
+
+# Verificación de consistencia y conclusiones {#sec-conclusiones}
 
 ## Auditoría programática de los objetos calculados en memoria
 
-Como cierre técnico de la ejecución autocontenida, comprobamos la clase S3 y las dimensiones de cada objeto construido en vivo a lo largo de este cuaderno.
+Como cierre de la ejecución en memoria, revisamos la clase S3 y el tamaño de cada objeto creado durante la compilación.
 
 ```{r}
 #| label: tbl-auditoria-integridad
@@ -2773,35 +3150,25 @@ tabla_auditoria <- data.frame(
 knitr::kable(tabla_auditoria, row.names = FALSE, align = c("l", "l", "l", "r", "c"))
 ```
 
-## Preguntas de estudio para sustentación
-
-::: {.callout-tip}
-## Puntos de repaso metodológico
-1. **¿Cómo se conectan $K$-Means y `sentometrics`?** `04_clustering_kmeans.R` segmenta las 19 localidades en $K^* = 3$ perfiles delictivos según sus tasas estandarizadas. Esas asignaciones se transforman en tres indicadores binarios (`c_centro`, `c_comercial`, `c_residencial`) dentro de `sento_corpus()`, permitiendo construir series mensuales de sentimiento por clúster y medir su aporte predictivo en `attributions()`.
-2. **¿Por qué combinar `nrc_es` y `crimen_es` con `valenceIn`?** Un diccionario general traducido no captura términos locales como *"fleteo"*, *"cosquilleo"* o *"escopolamina"*, ni distingue el vocabulario de seguridad pública. Al sumar `crimen_es` y los modificadores de valencia ($t \in \{1, 2, 3, 4\}$), frases con negaciones (*"sin capturas"*) o intensificadores (*"brutal atraco"*) reciben el signo y la magnitud adecuados.
-3. **¿Por qué dividir por $N_{\text{pol}}(d_i)$ (`proportionalPol`)?** En nuestro corpus conviven notas cortas de alrededor de 20 palabras con crónicas de más de 500 palabras. Normalizar solo entre palabras con carga polar evita que el texto descriptivo neutro diluya el tono de los reportajes largos y mantiene comparables ambos formatos.
-4. **¿Cómo responde rápido la aplicación Shiny?** Todo el cómputo pesado se ejecuta previamente en `scripts/master.R` y se empaqueta en `datos_consolidados_shiny.rds`. Al abrirse, `app/app.R` lee ese archivo único y actualiza mapas y gráficos con la respuesta en memoria.
-:::
-
 ## Conclusiones empíricas
 
-La articulación de registros policiales oficiales, minería de texto y modelado regularizado deja tres hallazgos principales:
+El cruce de denuncias oficiales, análisis de texto y regresión regularizada deja tres resultados principales:
 
-1. **Especialización territorial del hurto:** la partición en $K^* = 3$ clústeres (silueta promedio `r max(diagnostico_k$silueta_media)`) muestra dinámicas urbanas diferenciadas. El núcleo céntrico e institucional concentra niveles muy elevados de hurto a personas (hasta `r scales::comma(round(df_clusters$tasa_personas_prom[df_clusters$localidad == "La Candelaria"]))` casos por 100.000 habitantes en La Candelaria) debido a su población flotante diaria; el corredor comercial de Los Mártires y Antonio Nariño encabeza el hurto a personas (`r scales::comma(round(df_clusters$tasa_personas_prom[df_clusters$localidad == "Los Mártires"]))` en Los Mártires) y el hurto de motocicletas (178 y 128 por 100.000 habitantes); y las doce localidades periféricas registran tasas relativas menores pero concentran el mayor número absoluto de residentes afectados.
-2. **Medición contextual del tono periodístico:** combinar `nrc_es` con `crimen_es` y modificadores de valencia evitó distorsiones por negaciones y amplificadores, y la extracción de `peakdocs()` permitió aislar los episodios informativos de mayor alarma en transporte masivo y homicidios.
-3. **Capacidad explicativa y asimetría espacial:** Elastic Net retuvo `r metricas_mod$n_activos` de las `r metricas_mod$n_predictores` series de sentimiento y explicó el `r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)` de la varianza mensual de la intensidad delictiva ($h = 1$). Al mismo tiempo, los mapas revelan que la cobertura periodística se concentra en localidades populosas de la periferia sur y occidental (Ciudad Bolívar, Bosa, Kennedy), mientras que las tasas per cápita más altas ocurren en el centro histórico.
+1. La partición en $K^* = 3$ clústeres (silueta promedio `r max(diagnostico_k$silueta_media)`) distingue zonas urbanas con perfiles distintos de hurto. El grupo céntrico e institucional concentra las tasas más altas de hurto a personas (hasta `r scales::comma(round(df_clusters$tasa_personas_prom[df_clusters$localidad == "La Candelaria"]))` por 100.000 habitantes en La Candelaria) por su población flotante diaria. El corredor de Los Mártires y Antonio Nariño encabeza la tasa relativa en personas (`r scales::comma(round(df_clusters$tasa_personas_prom[df_clusters$localidad == "Los Mártires"]))` en Los Mártires) y en motocicletas (`178,2` y `127,8` por 100.000 habitantes). Las doce localidades periféricas tienen tasas totales más bajas por habitante, pero concentran la mayor población afectada en términos absolutos y el `59,2 %` de los hurtos de motocicletas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba, en línea con los orígenes de viaje y tenencia medidos por la Encuesta de Movilidad 2023 de la SDM).
+2. Sumar `crimen_es` a `nrc_es` junto con modificadores de valencia evitó invertir el signo de frases con negación y permitió identificar con `peakdocs()` los episodios informativos de mayor severidad en transporte masivo y homicidios.
+3. Elastic Net seleccionó `r metricas_mod$n_activos` de las `r metricas_mod$n_predictores` series mensuales y explicó el `r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)` de la varianza mensual de la tasa de hurto a un mes ($h = 1$). Al desagregar los mapas por modalidad en tasas por 100.000 habitantes, denuncias y noticias muestran una correlación positiva ($r = `r format(tabla_corr_modalidades[["r (tasa)"]][4], decimal.mark = ",")`$ en las tres modalidades y $r = `r format(tabla_corr_modalidades[["r (tasa)"]][1], decimal.mark = ",")`$ en personas). En conteos brutos esa relación desaparece ($r = `r format(tabla_corr_modalidades[["r (conteo)"]][4], decimal.mark = ",")`$) porque las notas absolutas se acumulan en localidades populosas como Bosa, Suba, Engativá, Kennedy y Ciudad Bolívar. Por último, el sentimiento neto promedio tiende a ser más negativo en sectores residenciales e intermedios que en el centro ($r = `r format(tabla_corr_modalidades[["r (sent.)"]][1], decimal.mark = ",")`$ en personas), donde las noticias de capturas moderan el balance diario.
 
 ## Limitaciones de la investigación
 
-La lectura de estos resultados debe considerar tres límites del diseño empírico:
+El alcance de estos resultados tiene tres límites que conviene tener presentes:
 
-1. **Subregistro y cifra negra:** las cifras de la SDSCJ contabilizan únicamente los delitos denunciados formalmente. En zonas con menor confianza institucional o en hurtos de menor cuantía, el subregistro tiende a ser mayor, de modo que las tasas reflejan tanto incidencia real como propensión a denunciar.
-2. **Sesgo editorial en fuentes digitales:** Google News indexa portales con criterios propios de noticiabilidad, priorizando incidentes visibles o localidades con mayor audiencia potencial frente a hechos cotidianos en sectores menos cubiertos.
-3. **Agregación por localidad:** trabajar a escala de localidad por disponibilidad de proyecciones poblacionales oculta diferencias internas dentro de territorios de más de un millón de habitantes como Suba o Kennedy, donde coexisten barrios residenciales tranquilos y corredores comerciales de alta congestión.
+1. Las cifras de la SDSCJ solo cubren delitos denunciados formalmente. En zonas con menor confianza institucional o en hurtos de menor cuantía suele haber mayor subregistro, por lo que las tasas mezclan incidencia real y propensión a denunciar.
+2. Google News indexa portales con criterios propios de noticiabilidad y suele priorizar hechos visibles o zonas con mayor cobertura mediática frente a delitos cotidianos en barrios periféricos.
+3. Agregar por localidad responde a la disponibilidad de proyecciones poblacionales, pero oculta diferencias internas en territorios de más de un millón de habitantes como Suba o Kennedy, donde conviven sectores residenciales tranquilos y corredores comerciales congestionados.
 
 ## Implicaciones de política pública
 
-Los resultados orientan dos decisiones concretas para la planeación de la seguridad urbana:
+Estos hallazgos sugieren dos criterios concretos para la gestión de la seguridad:
 
-1. **Intervenciones diferenciadas por modalidad:** los corredores céntricos requieren patrullaje peatonal, control en estaciones de transporte masivo e iluminación en horas pico; el eje de Los Mártires y Antonio Nariño exige control a mercados de autopartes y talleres mecánicos; y las localidades residenciales masivas demandan fortalecimiento de frentes locales de seguridad y prevención comunitaria.
-2. **Uso complementario de cifras policiales y monitoreo mediático:** orientar la asignación operativa de recursos únicamente por la presión de la agenda noticiosa puede sobre-atender zonas de alta exposición en prensa mientras descuida territorios con alta victimización absoluta o alto riesgo relativo por habitante.
+1. Las intervenciones deben ajustarse al tipo de hurto predominante en cada zona: patrullaje peatonal, vigilancia en estaciones de transporte e iluminación en el centro; control a talleres y venta de autopartes en Los Mártires y Antonio Nariño; y prevención comunitaria y control de espacio público en localidades residenciales extensas.
+2. Guiar los operativos únicamente por el volumen o el tono de las noticias puede concentrar recursos en sectores con alta cobertura mediática mientras deja desatendidas localidades con mayor número absoluto de víctimas, como ocurre en el hurto de motocicletas en el sur y occidente de la ciudad.
