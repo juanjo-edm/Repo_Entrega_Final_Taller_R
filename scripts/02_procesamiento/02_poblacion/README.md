@@ -1,6 +1,6 @@
 # Procesamiento Demográfico y Tasas de Hurto (SDS)
 
-Este módulo procesa las proyecciones de población distrital de la Secretaría de Salud ([`data/raw/poblacion/poblacion_localidades_raw.parquet`](file:///data/raw/poblacion/poblacion_localidades_raw.parquet)), unifica los nombres de las 19 localidades urbanas, calcula la población residente proyectada por año y la cruza con el panel de delitos para calcular las tasas oficiales de hurto por cada 100.000 habitantes.
+Este módulo procesa las proyecciones de población distrital de la Secretaría de Salud ([`data/raw/poblacion/poblacion_localidades_raw.parquet`](../../../data/raw/poblacion/poblacion_localidades_raw.parquet)), unifica los nombres de las 19 localidades urbanas, calcula la población residente proyectada por año y la cruza con el panel de delitos para calcular las tasas oficiales de hurto por cada 100.000 habitantes.
 
 ---
 

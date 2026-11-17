@@ -1340,17 +1340,29 @@ La lógica de la @eq-sent-docs responde a dos criterios de sentido común:
 
 ### Paso 3: ¿Cómo capturamos que el miedo y la agenda noticiosa persisten varios meses?
 
-La opinión pública no borra su memoria el primer día de cada mes. Una ola de atracos cubierta en abril sigue pesando sobre la percepción ciudadana y el clima político en mayo o junio, aunque ese efecto se vaya desvaneciendo. Por eso la @eq-sent-agg suaviza el sentimiento mensual usando una ventana móvil de 6 meses (el mes actual $j = 0$ y los 5 meses anteriores $j = 1, \dots, 5$, configurado con `lag = 6`):
+La opinión pública no borra su memoria el primer día de cada mes. Una ola de atracos cubierta en abril sigue pesando sobre la percepción ciudadana y la respuesta policial en mayo o junio, aunque ese efecto cambie de intensidad con el paso de las semanas. Por eso la @eq-sent-agg suaviza el termómetro mensual mediante un promedio ponderado sobre una ventana móvil de 6 meses (el mes actual más los 5 anteriores, configurado en R con `lag = 6`):
 
 $$
 S_t^{(\ell, k, \tau)} = \sum_{j=0}^{5} b_j^{(\tau)} \, \bar{S}_{t-j}^{(\ell, k)}
 $$ {#eq-sent-agg}
 
-Los pesos temporales $b_j^{(\tau)}$ siempre suman $1$ y funcionan como una curva de memoria: dicen qué proporción de la lectura de hoy viene del mes actual frente a uno, dos o cinco meses atrás. Como no sabemos de antemano si la agenda mediática olvida rápido o recuerda varios meses, generamos **siete curvas de memoria distintas** ($\tau$):
+Cada término y parámetro de la @eq-sent-agg cumple un papel específico:
 
-1. **Lineal (1 esquema):** la memoria cae de manera pareja mes tras mes.
-2. **Exponencial (`alphasExp = 0.2` y `0.5`, 2 esquemas):** el peso cae rápido al principio y deja una cola suave. Con $\alpha = 0{,}5$ casi toda la señal se concentra en el mes presente y el inmediatamente anterior; con $\alpha = 0{,}2$ el pasado pesa durante más tiempo.
-3. **Curvas Beta (`aBeta = 1, 2` x `bBeta = 2, 3`, 4 esquemas):** son curvas flexibles que pueden concentrar el peso en el presente, repartirlo suavemente o formar una pequeña "campana" donde el impacto alcanza su pico uno o dos meses después de la noticia.
+* $S_t^{(\ell, k, \tau)}$ (el índice suavizado del mes): es la serie final que entra al modelo econométrico de la Sección 5. Resume el clima mediático acumulado hasta el mes $t$ para el diccionario $\ell$ (`nrc_es` o `crimen_es`), la característica $k$ (una de las 19 localidades, 3 clústeres o 4 temas) y la curva de memoria $\tau$.
+* $t$ y $j$ (el reloj del mes actual y el rezago): $t$ marca el mes que se está calculando (por ejemplo, junio de 2024) y $j$ recorre cuántos meses atrás mira la ventana, desde $j = 0$ (el mes presente) hasta $j = 5$ (cinco meses atrás, es decir, enero de 2024). Al sumar de $j = 0$ a $5$ se cubren exactamente 6 meses continuos.
+* $\bar{S}_{t-j}^{(\ell, k)}$ (el termómetro mensual sin suavizar): es el puntaje del mes $t - j$ obtenido en el Paso 2 (@eq-sent-docs). Si $t$ es junio y $j = 2$, corresponde al sentimiento promedio de abril.
+* $\tau$ (el esquema de memoria): identifica cuál de las 7 curvas temporales seleccionadas en `ctr_agg()` define la forma de recordar el pasado.
+* $b_j^{(\tau)}$ (el peso temporal de cada mes del semestre): indica qué fracción de la lectura actual proviene del mes situado $j$ meses atrás. En las 7 curvas, los seis pesos cumplen $\sum_{j=0}^{5} b_j^{(\tau)} = 1$, de modo que la escala original del sentimiento se conserva sin inflar ni encoger el índice.
+
+En `ctr_agg()` generamos **7 curvas de memoria ($\tau$)** para probar distintas velocidades de reacción y persistencia sobre los mismos 6 meses:
+
+1. **Lineal (`linear`, 1 esquema):** asigna el mayor peso al mes actual ($b_0 = 28{,}6\%$) y descuenta de forma pareja hasta hace cinco meses ($b_1 = 23{,}8\%$, $b_2 = 19{,}0\%$, $b_3 = 14{,}3\%$, $b_4 = 9{,}5\%$ y $b_5 = 4{,}8\%$). Representa un olvido uniforme mes a mes.
+2. **Exponencial (`alphasExp = c(0.2, 0.5)`, 2 esquemas):** concentra la atención en los meses más recientes y deja una cola decreciente. Con $\alpha = 0{,}5$ (`exponential0.5`), más de la mitad del peso recae en el mes presente ($b_0 = 56{,}9\%$) y casi una cuarta parte en el mes anterior ($b_1 = 24{,}7\%$), reduciendo el peso de hace cinco meses a $b_5 = 0{,}9\%$. Con $\alpha = 0{,}2$ (`exponential0.2`), la caída es más lenta ($b_0 = 32{,}8\%$ hasta $b_5 = 6{,}2\%$).
+3. **Curvas Beta (`aBeta = c(1, 2)` x `bBeta = c(2, 3)`, 4 esquemas):** siguen la densidad Beta normalizada implementada en `sentometrics`, donde $a$ controla el peso hacia el presente y $b$ hacia los rezagos anteriores dentro de la ventana de 6 meses. En las combinaciones elegidas ($b > a$), estas curvas asignan $0\%$ al mes presente ($b_0 = 0\%$) y trasladan la carga hacia los meses rezagados ($j = 1, \dots, 5$): `beta22` forma una campana simétrica centrada hacia la mitad del semestre ($25{,}7\%$ en $j = 3$), `beta23` alcanza su pico cuatro meses atrás ($30{,}5\%$ en $j = 4$), y `beta12` junto con `beta13` cargan su mayor peso sobre los rezagos de cuatro y cinco meses ($33{,}3\%$ y $45{,}5\%$ en $j = 5$). De este modo, las 7 curvas cubren desde impactos casi inmediatos (`exponential0.5`) hasta efectos intermedios o retardados (`beta22`, `beta13`).
+
+Por ejemplo, si en mayo ($j = 1$) una racha de hurtos llevó el sentimiento de Chapinero a $\bar{S}_{\text{mayo}} = -0{,}60$ y en junio ($j = 0$) las noticias bajaron a $\bar{S}_{\text{junio}} = -0{,}20$, la serie `exponential0.5` reflejará sobre todo el alivio reciente de junio (porque pondera ese mes con $56{,}9\%$), mientras `linear` o `beta22` seguirán arrastrando el choque de mayo y los meses previos.
+
+La elección de una ventana de **6 meses (`lag = 6`)** responde a tres criterios complementarios. En primer lugar, la literatura sobre establecimiento de agenda (*agenda-setting*) muestra que la influencia de la prensa escrita sobre la percepción pública de un problema persiste durante semanas y se extiende hasta horizontes de 26 semanas, es decir, alrededor de medio año (Wanta y Hu, 1994). En segundo lugar, desde el diseño econométrico de series mixtas que implementa `sentometrics` (Ardia et al., 2021, siguiendo a Ghysels, Sinko y Valkanov, 2007), el parámetro `lag = 6` fija un techo máximo y no obliga a que los seis meses pesen igual: las curvas rápidas (`exponential0.5`, `exponential0.2` y `linear`) concentran la señal en el presente o el último bimestre, mientras las curvas Beta (`beta12`, `beta13`, `beta22`, `beta23`) capturan rezagos más profundos para que Elastic Net seleccione la dinámica que mejor ajusta los datos. Por último, existe una restricción práctica de muestra: en una serie de 57 meses (enero de 2022 a septiembre de 2026), usar `lag = 6` descarta los primeros 5 meses y conserva 52 meses efectivos ($N = 51$ observaciones al proyectar $h = 1$ mes adelante), mientras que ampliar la ventana a 12 meses sacrificaría casi una quinta parte de la serie histórica disponible.
 
 Al combinar **2 diccionarios** ($\ell$) x **26 filtros binarios** ($k$) x **7 esquemas de memoria** ($\tau$), construimos $2 \times 26 \times 7 = 364$ series mensuales que resumen la narrativa mediática desde ángulos complementarios. La @tbl-arquitectura-agregacion sintetiza cómo se traduce cada uno de estos tres pasos matemáticos a las funciones y parámetros de `sentometrics` que ejecutamos en las subsecciones siguientes. Luego, en la Sección 5, Elastic Net se encarga de seleccionar cuáles de esas memorias ayudan realmente a predecir la dinámica del hurto.
 
@@ -1361,6 +1373,14 @@ Al combinar **2 diccionarios** ($\ell$) x **26 filtros binarios** ($k$) x **7 es
 | **Paso 3: Nivel intertemporal (`time`)** | `ctr_agg(howTime = c("linear", "exponential", "beta"), lag = 6, alphasExp = c(0.2, 0.5), aBeta = c(1, 2), bBeta = c(2, 3))` dentro de `sento_measures()` | Evalúa la @eq-sent-agg sobre una ventana móvil de 6 meses ($j = 0, \dots, 5$) bajo 7 curvas de ponderación $b_j^{(\tau)}$ que suman $1$: 1 lineal, 2 exponenciales y 4 curvas Beta, generando $2 \times 26 \times 7 = 364$ series continuas. | Modelar la persistencia del clima mediático y del temor ciudadano a lo largo de varios meses, permitiendo que la regresión regularizada identifique si la relación con las denuncias responde a choques inmediatos o a rezagos acumulados. |
 
 : Síntesis de los tres niveles de puntuación y agregación temporal en `sentometrics` y su correspondencia funcional en R {#tbl-arquitectura-agregacion}
+
+En términos aplicados a nuestro corpus de Bogotá, las tres etapas de la @tbl-arquitectura-agregacion operan en cadena sobre cada noticia:
+
+**Etapa 1 (Dentro de la noticia):** cuando llega un artículo sobre un fleteo en Chapinero o una captura en Bosa, el algoritmo no cuenta todas sus palabras por igual. Busca los términos presentes en `nrc_es` y `crimen_es`, ajusta su signo o fuerza si aparecen junto a modificadores como *"sin"* o *"brutalmente"*, y divide únicamente por las palabras con carga polar (`proportionalPol`). Así, un despacho breve de 25 palabras y una crónica de 600 palabras quedan medidos en la misma escala de intensidad y asignados solo a su localidad, clúster y modalidad delictiva ($f_{i,k} = 1$).
+
+**Etapa 2 (Dentro del mes):** al cerrar cada mes entre 2022 y septiembre de 2026, las noticias calificadas en la etapa anterior se agrupan por localidad, clúster y tema. Si en Kennedy se publicaron ese mes un reportaje extenso de 500 palabras y una nota corta de 50 palabras, ambos conservan su puntaje justo del Paso 1, pero el reportaje pesa diez veces más en el promedio mensual porque ocupó mayor espacio informativo (`howDocs = "proportional"`). Las notas sin coincidencias léxicas no diluyen ese promedio (`do.ignoreZeros = TRUE`), y si una localidad no tuvo menciones en todo el mes la serie se completa con cero (`fill = "zero"`).
+
+**Etapa 3 (Entre meses):** por último, el promedio mensual suelto se proyecta sobre una ventana móvil de 6 meses (`lag = 6`) con siete perfiles de memoria distintos. Esto evita que un pico de noticias sobre homicidios o atracos desaparezca de los datos al cambiar de hoja en el calendario y deja listas las 364 series para que Elastic Net pruebe si las denuncias de hurto en Bogotá responden más al tono inmediato del último mes (`exponential0.5`) o a la acumulación mediática de varios meses atrás (`linear` o curvas `beta`).
 
 ## Construcción del `sento_corpus` y diagnósticos de `corpus_summarize()`
 
@@ -1521,35 +1541,39 @@ Además de verificar el total de noticias por mes, necesitamos comprobar que las
 En este bloque empleamos tres componentes gráficos sobre el resumen ya calculado:
 
 * `summary_mes$plots$feature_plot`: recupera del objeto `summary_mes` las 26 trayectorias mensuales de conteo de documentos por característica binaria.
-* `ggplot2::guides(color = guide_legend(ncol = 2))` y `ggplot2::theme()`: organizan la leyenda de las 26 series en dos columnas compactas para que todas las etiquetas territoriales y temáticas puedan leerse sin desbordar el lienzo.
-* `p_fig9$scales$get_scales()`: accede a las escalas internas del objeto `ggplot` devuelto por `sentometrics` para sobrescribir los nombres de los ejes horizontal, vertical y de color sin alterar los datos subyacentes.
+* `ggplot2::facet_wrap(~ variable, ncol = 4, scales = "free_y")` y `ggplot2::theme(legend.position = "none")`: separan las 26 series en una cuadrícula de paneles independientes de cuatro columnas con escala vertical propia para evitar superposiciones de líneas y prescindir de una leyenda extensa.
+* `p_fig9$scales$get_scales()`: accede a las escalas internas del objeto `ggplot` devuelto por `sentometrics` para sobrescribir los nombres de los ejes horizontal y vertical sin alterar los datos subyacentes.
 
 ```{r}
 #| label: fig-corpus-summarize-features
 #| fig-cap: "Evolución mensual de menciones por característica (localidad, clúster y tema DAI)"
-#| fig-alt: "Múltiples series mensuales entre 2022 y 2026 mostrando el conteo mensual de documentos para cada una de las 26 características binarias del corpus."
-#| fig-width: 9.5
-#| fig-height: 5.8
+#| fig-alt: "Cuadrícula de 26 paneles mensuales entre 2022 y 2026 mostrando el conteo mensual de documentos para cada característica binaria del corpus sin superposición."
+#| fig-width: 10
+#| fig-height: 10.2
+#| out-height: !expr 'if (knitr::is_latex_output()) "0.84\\textheight" else NULL'
 ## 4.3.2 Diagnóstico mensual de frecuencia por característica ----
 p_fig9 <- summary_mes$plots$feature_plot +
+  facet_wrap(~ variable, ncol = 4, scales = "free_y") +
   labs(
     title    = "Evolución Mensual de Frecuencia por Feature en el Corpus",
-    subtitle = "Menciones mensuales por localidad, clúster y categoría delictiva (2022-sep. 2026)",
+    subtitle = "Paneles separados por localidad, clúster y categoría delictiva (2022-sep. 2026)",
     x        = "Fecha (mes)",
     y        = "Conteo mensual por feature",
-    color    = "Feature",
     caption  = "Fuente: diagnóstico S3 con sentometrics::corpus_summarize()."
   ) +
   tema_limpio +
-  guides(color = guide_legend(ncol = 2)) +
-  theme(legend.text = element_text(size = 8))
+  theme(
+    legend.position = "none",
+    strip.text      = element_text(size = 8.5, face = "bold"),
+    axis.text.x     = element_text(size = 7),
+    axis.text.y     = element_text(size = 7.5),
+    panel.spacing   = grid::unit(0.6, "lines")
+  )
 
 sc_x9 <- p_fig9$scales$get_scales("x")
 sc_y9 <- p_fig9$scales$get_scales("y")
-sc_c9 <- p_fig9$scales$get_scales("colour")
 if (!is.null(sc_x9)) sc_x9$name <- "Fecha (mes)"
 if (!is.null(sc_y9)) sc_y9$name <- "Conteo mensual por feature"
-if (!is.null(sc_c9)) sc_c9$name <- "Feature"
 
 print(p_fig9)
 ```
@@ -2625,6 +2649,7 @@ El panel oficial de delitos de la SDSCJ mide tres modalidades de hurto (`hurto_p
 #| fig-alt: "Matriz de ocho mapas coropléticos (cuatro filas por modalidad y dos columnas) que compara la tasa oficial de hurtos por 100.000 habitantes a la izquierda en escala morado-claro frente a la tasa de cobertura noticiosa por 100.000 habitantes a la derecha en escala azul-claro."
 #| fig-width: 9.2
 #| fig-height: 11.4
+#| out-height: !expr 'if (knitr::is_latex_output()) "0.84\\textheight" else NULL'
 ## 6.3 Tasas, conteos, sentimiento por modalidad y contraste espacial ----
 noticias_filtradas_6 <- df_noticias_enriquecida |>
   mutate(año = as.integer(año), mes = as.integer(mes)) |>
@@ -2951,6 +2976,7 @@ En la @fig-mapa-desajuste-conteos cambiamos las tasas per cápita de prensa por 
 #| fig-alt: "Matriz de ocho mapas coropléticos (cuatro filas por modalidad y dos columnas) que compara la tasa oficial de hurtos por 100.000 habitantes a la izquierda frente al conteo acumulado de noticias por localidad a la derecha."
 #| fig-width: 9.2
 #| fig-height: 11.4
+#| out-height: !expr 'if (knitr::is_latex_output()) "0.84\\textheight" else NULL'
 ## 6.4 Matriz 4x2: tasa delictiva por 100k hab. vs. noticias totales por modalidad ----
 spec_conteos <- tibble::tribble(
   ~mod_titulo,              ~mod_corto,     ~col_izq,              ~dec_izq, ~col_der,              ~dec_der,
@@ -2986,6 +3012,7 @@ La @fig-mapa-delitos-sentimiento cruza las denuncias por cada 100.000 habitantes
 #| fig-alt: "Matriz de ocho mapas coropléticos (cuatro filas por modalidad y dos columnas) que compara la tasa oficial de hurtos por 100.000 habitantes a la izquierda frente al sentimiento neto promedio por localidad a la derecha."
 #| fig-width: 9.2
 #| fig-height: 11.4
+#| out-height: !expr 'if (knitr::is_latex_output()) "0.84\\textheight" else NULL'
 ## 6.5 Matriz 4x2: tasa delictiva por 100k hab. vs. sentimiento neto promedio ----
 spec_sentimiento <- tibble::tribble(
   ~mod_titulo,              ~mod_corto,     ~col_izq,              ~dec_izq, ~col_der,             ~col_conteo,           ~dec_der,

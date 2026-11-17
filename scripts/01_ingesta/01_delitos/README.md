@@ -9,7 +9,7 @@ Este submódulo gestiona la descarga y extracción reproducible de la capa espac
 * **Entidad Emisora:** Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) / Policía Nacional (SIEDCO).
 * **Portal Oficial:** [Datos Abiertos Bogotá — Delito de Alto Impacto](https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c).
 * **Recurso de Origen:** Paquete comprimido `dai_geojson.zip` con geometrías y tablas agregadas.
-* **Archivo de Salida:** [`data/raw/delitos/localidades_bogota_raw.geojson`](file:///data/raw/delitos/localidades_bogota_raw.geojson).
+* **Archivo de Salida:** [`data/raw/delitos/localidades_bogota_raw.geojson`](../../../data/raw/delitos/localidades_bogota_raw.geojson).
 * **Sistema de Coordenadas:** WGS 84 (`EPSG:4326`), compatible directamente con `{sf}` y mapas interactivos `{leaflet}`.
 * **Corte Temporal Oficial:** Enero de 2018 a Septiembre de 2026 (Atributo de metadato: `CMMES: Ene-Sep (2018vs2026)`).
 
@@ -47,7 +47,7 @@ Cada entidad espacial cuenta con 137 atributos que registran conteos delictivos 
 
 ## 4. Lógica de Ejecución del Script
 
-El script [`descarga_delitos_sdscj.R`](file:///scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R) opera de la siguiente manera:
+El script [`descarga_delitos_sdscj.R`](descarga_delitos_sdscj.R) opera de la siguiente manera:
 
 ```mermaid
 flowchart TD

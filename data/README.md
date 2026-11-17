@@ -16,17 +16,27 @@ data/
 │   └── noticias/                                  # Ingesta consolidada de prensa (Google News RSS)
 │       ├── noticias_google_news_consolidado.parquet # Base consolidada y enriquecida (3.916 noticias)
 │       └── noticias_google_news_consolidado.rds     # Respaldo en formato binario RDS
-└── processed/                                     # Datos listos y normalizados (1 archivo por script)
+└── processed/                                     # Datos listos y artefactos analíticos
     ├── 01_delitos/
-    │   └── delitos_localidad_anual.parquet        # Conteo anual oficial de denuncias
+    │   └── delitos_localidad_anual.parquet        # Conteo anual oficial de denuncias (95 filas)
     ├── 02_poblacion/
-    │   └── panel_delitos_poblacion_localidad.parquet # Tasas por 100k hab (19 locs x 5 años)
+    │   └── panel_delitos_poblacion_localidad.parquet # Tasas por 100k hab (19 locs × 5 años)
     ├── 03_noticias/
-    │   └── noticias_procesadas.parquet            # Corpus depurado con 11 DAI y métricas NLP
-    ├── panel_consolidado_localidad_anual.parquet  # Fusión de tasas oficiales y sentimiento mediático
-    ├── clusters_localidades_kmeans.parquet        # Perfiles de agrupamiento espacial K-means
-    └── datos_consolidados_shiny.rds               # Insumo empaquetado para app/
+    │   └── noticias_procesadas.parquet            # Corpus depurado con 11 DAI y métricas NLP (3.916 filas)
+    ├── 01_sento_corpus.rds                        # Objeto sento_corpus (26 features sin '-')
+    ├── 02_lexicons_es.rds                         # Léxicos nrc_es, crimen_es y valencia
+    ├── 03_sentiment_scores.rds                    # Puntajes documentales proportionalPol
+    ├── 04_peak_docs.rds                           # Noticias extremas (peakdocs)
+    ├── 05_sento_measures.rds                      # 364 series mensuales (lag = 6)
+    ├── 06_measures_long.rds / 06_measures_wide.rds # Series continuas en formato long y wide
+    ├── 07_global_index.rds                        # Índice global distrital y peakdates
+    ├── 08_attributions.rds                        # Modelo Elastic Net (BIC) y atribuciones
+    ├── panel_consolidado_localidad_anual.parquet  # Fusión anual de tasas y sentimiento (95 × 20)
+    ├── clusters_localidades_kmeans.parquet        # Perfiles espaciales K-Means (K* = 3)
+    └── datos_consolidados_shiny.rds               # Insumo empaquetado para app/app.R
 ```
+
+Para consultar la definición campo por campo, llaves primarias y linaje completo de cada tabla o artefacto `.rds`, consulte el [**Diccionario de Datos (`docs/diccionario_datos/`)**](../docs/diccionario_datos/README.md) y [`data/processed/README.md`](processed/README.md).
 
 ---
 
@@ -41,4 +51,4 @@ data/
 ---
 
 ## 3. Reproducibilidad
-Para reconstruir o actualizar los datos procesados a partir de los insumos crudos, ejecute los módulos de `scripts/` de forma secuencial (ver detalle en [`scripts/README.md`](file:///scripts/README.md)).
+Para reconstruir o actualizar los datos procesados a partir de los insumos crudos, ejecute los módulos de `scripts/` de forma secuencial (ver detalle en [`scripts/README.md`](../scripts/README.md)).

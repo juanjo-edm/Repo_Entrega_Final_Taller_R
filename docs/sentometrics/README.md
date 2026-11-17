@@ -1,6 +1,6 @@
 # Guía Técnica y Catálogo de Funciones de `sentometrics`
 
-**Proyecto:** Hurtos y Sentimiento Mediático en Bogotá (2022–2025)  
+**Proyecto:** Hurtos y Sentimiento Mediático en Bogotá (2022–2026)  
 **Programa:** Maestría en Economía Aplicada (MECA) — *Taller de Programación en R*  
 **Integrantes:** Juan José Echeverry, Sergio López Valderrama, Olga Lucía Ramírez (Sub-equipo NLP y Visualización)  
 
@@ -14,8 +14,8 @@ Esta guía documenta cada una de las funciones del paquete [`sentometrics`](http
 
 | Archivo | Tipo | Descripción y cita |
 | :--- | :--- | :--- |
-| [**`paper_sentometrics_jss_2021.pdf`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/sentometrics/paper_sentometrics_jss_2021.pdf) | Paper JSS | **Ardia, D., Bluteau, K., Borms, S. y Boudt, K. (2021).** *The R Package sentometrics to Compute, Aggregate, and Predict with Textual Sentiment*. Journal of Statistical Software, 99(2), 1–40. [doi:10.18637/jss.v099.i02](https://doi.org/10.18637/jss.v099.i02). |
-| [**`manual_referencia_sentometrics_cran.pdf`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/sentometrics/manual_referencia_sentometrics_cran.pdf) | Manual CRAN | Manual oficial de referencia técnica (versión 1.0.1, 58 páginas) con la especificación completa de funciones y clases S3. |
+| [**`paper_sentometrics_jss_2021.pdf`**](paper_sentometrics_jss_2021.pdf) | Paper JSS | **Ardia, D., Bluteau, K., Borms, S. y Boudt, K. (2021).** *The R Package sentometrics to Compute, Aggregate, and Predict with Textual Sentiment*. Journal of Statistical Software, 99(2), 1–40. [doi:10.18637/jss.v099.i02](https://doi.org/10.18637/jss.v099.i02). |
+| [**`manual_referencia_sentometrics_cran.pdf`**](manual_referencia_sentometrics_cran.pdf) | Manual CRAN | Manual oficial de referencia técnica (versión 1.0.1, 58 páginas) con la especificación completa de funciones y clases S3. |
 
 * **Documentación oficial y tutoriales:** [https://sentometrics-research.com/sentometrics/](https://sentometrics-research.com/sentometrics/)
 * **Repositorio en GitHub:** [https://github.com/SentometricsResearch/sentometrics](https://github.com/SentometricsResearch/sentometrics)
@@ -163,8 +163,8 @@ Filtra filas o columnas del panel de medidas según un vector de fechas de inter
 #### `aggregate(sento_measures, do.global = TRUE)`
 Colapsa todas las dimensiones de un objeto `sento_measures` mediante una suma ponderada para obtener una serie única de sentimiento general para toda la ciudad.
 
-#### `peakdates(sento_measures, n = 5, type = "neg")`
-Detecta las fechas (meses o días) en las que el sentimiento agregado alcanzó sus niveles más extremos. Permite aislar los momentos históricos de mayor negatividad en Bogotá entre 2022 y 2025 para contextualizarlos con eventos de orden público.
+#### `peakdates(sento_measures, n = 8, type = "both")`
+Detecta las fechas (meses o días) en las que el sentimiento agregado alcanzó sus niveles más extremos. Permite aislar los momentos históricos de mayor negatividad o positividad en Bogotá entre enero de 2022 y septiembre de 2026 para contextualizarlos con eventos de orden público.
 
 ---
 
@@ -173,30 +173,31 @@ Detecta las fechas (meses o días) en las que el sentimiento agregado alcanzó s
 #### `ctr_model(model, type, alphas, h, ...)`
 Configura la estimación del modelo predictivo.
 
-* **Parámetros utilizados:**
-  * `model = "elasticnet"`: Regresión lineal con penalización mixta $L_1$ y $L_2$ (Zou y Hastie, 2005).
-  * `type = "cv"`: Calibración del parámetro de penalización $\lambda$ mediante validación cruzada en 10 pliegues (*10-fold cross-validation*).
-  * `alphas = c(0.2, 0.5, 0.8)`: Rejilla de búsqueda para el balance entre Ridge ($\alpha = 0$) y LASSO ($\alpha = 1$). El valor $\alpha = 0.5$ ofrece un equilibrio entre selección estricta de variables y retención de grupos de series correlacionadas.
-  * `h = 1`: Horizonte de pronóstico a un mes hacia adelante ($y_{t+1}$ en función de $s_t$), evaluando la capacidad predictiva adelantada sin contemporaneidad.
-  * `do.shrinkage = TRUE`: Activa el encogimiento de coeficientes hacia cero.
+* **Parámetros utilizados en `scripts/03_analisis_sentometrics.R`:**
+  * `model = "gaussian"`: Familia lineal gaussiana con penalización Elastic Net ($L_1$ y $L_2$; Zou y Hastie, 2005) vía `glmnet`.
+  * `type = "BIC"`: Calibración de los hiperparámetros $(\alpha^*, \lambda^*)$ mediante el Criterio de Información Bayesiano (BIC), más parsimonioso que CV con $N = 51$ meses efectivos.
+  * `alphas = c(0.2, 0.5, 0.8)`: Rejilla de búsqueda para el balance entre Ridge ($\alpha = 0$) y LASSO ($\alpha = 1$). El óptimo seleccionado por BIC resulta en $\alpha^* = 0.2$ (prioriza estabilidad ante series correlacionadas manteniendo selección de variables).
+  * `h = 1`: Horizonte de pronóstico a un mes hacia adelante ($y_{t+1}$ en función de $s_t$), evaluando capacidad predictiva adelantada sin contemporaneidad.
+  * `do.iter = FALSE`: Estimación conjunta sobre el panel completo (también se evalúa el comparativo contemporáneo $h = 0$).
 
-#### `sento_model(sentMeasures, y, ctr, x = NULL)`
-Estima el modelo regularizado utilizando la librería `glmnet` bajo el capó. Ajusta la variable dependiente $y$ (tasa mensual de hurtos a personas por 100.000 habitantes en una localidad) en función de las series de sentimiento generadas y posibles controles exógenos $x$. Devuelve un objeto `sento_model`.
+#### `sento_model(sento_measures, y, ctr, x = NULL)`
+Estima el modelo regularizado utilizando la librería `glmnet` bajo el capó. Ajusta la variable dependiente $y$ (tasa mensualizada de hurtos en el distrito por 100.000 habitantes) en función de las 364 series de sentimiento generadas y posibles controles exógenos $x$. Devuelve un objeto `sento_model`.
 
 * **Ejemplo en R:**
   ```r
   control_mod <- sentometrics::ctr_model(
-    model        = "elasticnet",
-    type         = "cv",
-    alphas       = c(0.2, 0.5, 0.8),
-    h            = 1,
-    do.shrinkage = TRUE
+    model       = "gaussian",
+    type        = "BIC",
+    alphas      = c(0.2, 0.5, 0.8),
+    h           = 1,
+    do.iter     = FALSE,
+    do.progress = FALSE
   )
   
   modelo_estimado <- sentometrics::sento_model(
-    sentMeasures = medidas_alineadas,
-    y            = serie_tasas_hurto,
-    ctr          = control_mod
+    sento_measures = medidas_sento,
+    y              = y_vector,
+    ctr            = control_mod
   )
   ```
 
@@ -253,4 +254,4 @@ Para evitar fallos de ejecución en el script orquestador `master.R` y en la apl
 
 ---
 
-> ⬅️ Volver al [índice general de documentación](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/README.md) | Volver al [README principal](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/README.md)
+> ⬅️ Volver al [índice general de documentación](../README.md) | Volver al [README principal](../../README.md)

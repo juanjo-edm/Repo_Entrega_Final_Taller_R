@@ -1,6 +1,6 @@
 # Procesamiento de Delitos de Alto Impacto (SDSCJ)
 
-Este módulo toma la capa cartográfica y estadística cruda de la Secretaría de Seguridad ([`data/raw/delitos/localidades_bogota_raw.geojson`](file:///data/raw/delitos/localidades_bogota_raw.geojson)), extrae las series anuales delictivas (2022–2026), dinamiza las variables a formato largo (*tidy data*) y genera el panel base de delitos por localidad.
+Este módulo toma la capa cartográfica y estadística cruda de la Secretaría de Seguridad ([`data/raw/delitos/localidades_bogota_raw.geojson`](../../../data/raw/delitos/localidades_bogota_raw.geojson)), extrae las series anuales delictivas (2022–2026), dinamiza las variables a formato largo (*tidy data*) y genera el panel base de delitos por localidad.
 
 ---
 

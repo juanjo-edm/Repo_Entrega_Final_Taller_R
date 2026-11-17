@@ -7,7 +7,7 @@ Esta carpeta concentra de manera exclusiva y estructurada **todo el código resp
 ## 1. Principio Fundamental de Arquitectura
 
 > [!IMPORTANT]
-> **Aislamiento Estricto de Descargas:** Ningún script por fuera de `scripts/01_ingesta/` tiene permitido realizar peticiones de red, llamadas a APIs externas o descargas de archivos (`download.file`, `GET`, etc.). Todos los módulos posteriores (`02_limpieza_indicadores.R`, `02_limpieza_texto_noticias.R`, `03_analisis_sentometrics.R`, etc.) consumen exclusivamente los datos ya materializados localmente en `data/raw/`.
+> **Aislamiento Estricto de Descargas:** Ningún script por fuera de `scripts/01_ingesta/` tiene permitido realizar peticiones de red, llamadas a APIs externas o descargas de archivos (`download.file`, `GET`, etc.). Todos los módulos posteriores (`02_procesamiento/01_delitos/procesamiento_delitos.R`, `02_procesamiento/02_poblacion/procesamiento_poblacion.R`, `02_procesamiento/03_noticias/procesamiento_noticias.R`, `03_analisis_sentometrics.R`, `04_clustering_kmeans.R`, etc.) consumen exclusivamente los datos ya materializados localmente en `data/raw/`.
 
 ---
 
@@ -56,9 +56,9 @@ flowchart LR
 
 | Submódulo | Fuente Oficial / Motor | Archivo de Salida en `data/raw/` | Formato | Cobertura Temporal |
 | :--- | :--- | :--- | :---: | :---: |
-| [**`01_delitos/`**](file:///scripts/01_ingesta/01_delitos/README.md) | Secretaría de Seguridad (SDSCJ / SIEDCO) | `delitos/localidades_bogota_raw.geojson` | GeoJSON vectorial | 2018–2026 (Corte a Septiembre) |
-| [**`02_poblacion/`**](file:///scripts/01_ingesta/02_poblacion/README.md) | Secretaría de Salud (SDS) | `poblacion/poblacion_localidades_raw.parquet` | Apache Parquet | 2005–2035 (Proyecciones oficiales) |
-| [**`03_noticias/`**](file:///scripts/01_ingesta/03_noticias/README.md) | Google News RSS (Prensa Nacional/Local) | `noticias/noticias_google_news_consolidado.parquet` | Apache Parquet / RDS | 2022-01-01 a 2026-09-30 (3.916 noticias) |
+| [**`01_delitos/`**](01_delitos/README.md) | Secretaría de Seguridad (SDSCJ / SIEDCO) | `delitos/localidades_bogota_raw.geojson` | GeoJSON vectorial | 2018–2026 (Corte a Septiembre) |
+| [**`02_poblacion/`**](02_poblacion/README.md) | Secretaría de Salud (SDS) | `poblacion/poblacion_localidades_raw.parquet` | Apache Parquet | 2005–2035 (Proyecciones oficiales) |
+| [**`03_noticias/`**](03_noticias/README.md) | Google News RSS (Prensa Nacional/Local) | `noticias/noticias_google_news_consolidado.parquet` | Apache Parquet / RDS | 2022-01-01 a 2026-09-30 (3.916 noticias) |
 
 ---
 

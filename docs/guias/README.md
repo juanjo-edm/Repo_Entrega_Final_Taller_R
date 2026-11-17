@@ -8,7 +8,7 @@ En esta carpeta se concentran las normas de desarrollo, pautas de reproducibilid
 
 | Archivo | Tema | Descripción |
 | :--- | :--- | :--- |
-| [**`estandares_programacion.md`**](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/guias/estandares_programacion.md) | **Estilo y Reproducibilidad en R** | Reglas obligatorias de programación: organización con índice interactivo en RStudio (`----`), rutas relativas con `{here}`, resolución explícita de conflictos de nombres con `{conflicted}`, pipe nativo `|>`, estilo Tidyverse y validación temprana con `stopifnot()`. |
+| [**`estandares_programacion.md`**](estandares_programacion.md) | **Estilo y Reproducibilidad en R** | Reglas obligatorias de programación: organización con índice interactivo en RStudio (`----`), rutas relativas con `{here}`, resolución explícita de conflictos de nombres con `{conflicted}`, pipe nativo `|>`, estilo Tidyverse y validación temprana con `stopifnot()`. |
 
 ---
 
@@ -21,4 +21,4 @@ En esta carpeta se concentran las normas de desarrollo, pautas de reproducibilid
 
 ---
 
-> ⬅️ Volver al [índice de documentación](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/docs/README.md) | Volver al [README principal](file:///Users/juanjoseecheverry/Library/Mobile%20Documents/com~apple~CloudDocs/Universidad/Maestria%20%28MECA%29/Primer%20semestre/Taller%20R/Repo_Entrega_Final_Taller_R/README.md)
+> ⬅️ Volver al [índice de documentación](../README.md) | Volver al [README principal](../../README.md)
