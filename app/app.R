@@ -199,6 +199,99 @@ resumir_panel <- function(anio, modalidad = "tasa_hurto_total") {
 # Pre-cálculo del panel promedio 2022-2026 (constante entre sesiones)
 datos_promedio_global <- resumir_panel("todos", "tasa_hurto_total")
 
+## 3.2b Pre-cálculo global de coordenadas 3D (tasas reales y Z-score) ----
+preparar_datos_clusters_3d <- function(df_clusters) {
+  df_base <- df_clusters |>
+    mutate(
+      z_pers  = as.numeric(scale(tasa_personas_prom)),
+      z_resid = as.numeric(scale(tasa_resid_prom)),
+      z_motos = as.numeric(scale(tasa_motos_prom)),
+      tooltip_loc = paste0(
+        "<b>", localidad, "</b><br>",
+        "Clúster: ", cluster_nombre, "<br>",
+        "Hurto personas: ", formato(tasa_personas_prom, 1), " / 100k hab. (Z = ", formato(z_pers, 2), ")<br>",
+        "Hurto residencias: ", formato(tasa_resid_prom, 1), " / 100k hab. (Z = ", formato(z_resid, 2), ")<br>",
+        "Hurto motos: ", formato(tasa_motos_prom, 1), " / 100k hab. (Z = ", formato(z_motos, 2), ")<br>",
+        "Silueta S(i): ", formato(silueta_localidad, 3)
+      )
+    )
+
+  centroides <- df_base |>
+    group_by(cluster_nombre) |>
+    summarise(
+      cx_tasa = mean(tasa_personas_prom),
+      cy_tasa = mean(tasa_resid_prom),
+      cz_tasa = mean(tasa_motos_prom),
+      cx_z    = mean(z_pers),
+      cy_z    = mean(z_resid),
+      cz_z    = mean(z_motos),
+      sil_med = mean(silueta_localidad, na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    mutate(
+      tooltip_cen = paste0(
+        "<b>★ Centroide μ_k: ", cluster_nombre, "</b><br>",
+        "Media personas: ", formato(cx_tasa, 1), " / 100k hab. (Z = ", formato(cx_z, 2), ")<br>",
+        "Media residencias: ", formato(cy_tasa, 1), " / 100k hab. (Z = ", formato(cy_z, 2), ")<br>",
+        "Media motos: ", formato(cz_tasa, 1), " / 100k hab. (Z = ", formato(cz_z, 2), ")<br>",
+        "Silueta media: ", formato(sil_med, 3)
+      )
+    )
+
+  puntos <- df_base |>
+    left_join(
+      centroides |> select(cluster_nombre, cx_tasa, cy_tasa, cz_tasa, cx_z, cy_z, cz_z),
+      by = "cluster_nombre"
+    )
+
+  segmentos <- bind_rows(lapply(seq_len(nrow(puntos)), function(i) {
+    fila <- puntos[i, ]
+    tibble(
+      x_tasa = c(fila$tasa_personas_prom, fila$cx_tasa, NA_real_),
+      y_tasa = c(fila$tasa_resid_prom,    fila$cy_tasa, NA_real_),
+      z_tasa = c(fila$tasa_motos_prom,    fila$cz_tasa, NA_real_),
+      x_z    = c(fila$z_pers,             fila$cx_z,    NA_real_),
+      y_z    = c(fila$z_resid,            fila$cy_z,    NA_real_),
+      z_z    = c(fila$z_motos,            fila$cz_z,    NA_real_),
+      cluster_nombre = fila$cluster_nombre
+    )
+  }))
+
+  empaquetar_escala <- function(sufijo) {
+    col_p <- if (sufijo == "z") c("z_pers", "z_resid", "z_motos") else c("tasa_personas_prom", "tasa_resid_prom", "tasa_motos_prom")
+    pts_sub <- tibble(
+      x = puntos[[col_p[1]]], y = puntos[[col_p[2]]], z = puntos[[col_p[3]]],
+      localidad = puntos$localidad, cluster_nombre = puntos$cluster_nombre,
+      tooltip_loc = puntos$tooltip_loc
+    )
+    cen_sub <- tibble(
+      x = centroides[[paste0("cx_", sufijo)]],
+      y = centroides[[paste0("cy_", sufijo)]],
+      z = centroides[[paste0("cz_", sufijo)]],
+      cluster_nombre = centroides$cluster_nombre,
+      tooltip_cen    = centroides$tooltip_cen
+    )
+    seg_sub <- tibble(
+      x = segmentos[[paste0("x_", sufijo)]],
+      y = segmentos[[paste0("y_", sufijo)]],
+      z = segmentos[[paste0("z_", sufijo)]],
+      cluster_nombre = segmentos$cluster_nombre
+    )
+    list(
+      puntos     = split(pts_sub, pts_sub$cluster_nombre),
+      centroides = split(cen_sub, cen_sub$cluster_nombre),
+      segmentos  = split(seg_sub, seg_sub$cluster_nombre)
+    )
+  }
+
+  list(
+    tasas  = empaquetar_escala("tasa"),
+    zscore = empaquetar_escala("z")
+  )
+}
+
+datos_clusters_3d <- preparar_datos_clusters_3d(clusters_perfiles)
+
 ## 3.3 Paleta de 4 niveles (cuartiles) para los mapas ----
 paleta_cuartiles <- function(valores, colores) {
   rango <- range(valores, na.rm = TRUE)
@@ -277,6 +370,14 @@ ui <- page_navbar(
       }
       .leaflet-tile-pane {
         filter: invert(100%) hue-rotate(180deg) brightness(85%) contrast(90%) saturate(25%);
+      }
+      .header-3d-switches .form-check,
+      .header-3d-switches .shiny-input-container {
+        margin-bottom: 0 !important;
+      }
+      .header-3d-switches .form-check-label {
+        font-size: 0.875rem;
+        color: #C5CDD8;
       }
     "))
   ),
@@ -477,17 +578,56 @@ ui <- page_navbar(
   nav_panel(
     title = "Clusters", value = "clusters",
     h2("Tres Bogotás según su hurto"),
-    p("Agrupamos las 19 localidades con K-means según sus tres tasas de hurto. Pasa el cursor sobre el mapa para ver el coeficiente de silueta de cada localidad o haz clic en un grupo para iluminarlo.",
+    p("Agrupamos las 19 localidades con K-means según sus tres tasas de hurto. Pasa el cursor sobre el mapa o el cubo 3D para ver los detalles de cada localidad, o haz clic en un grupo para iluminarlo.",
       style = paste0("color:", gris_texto)),
-    radioButtons("grupo_resaltado", "Resaltar en el mapa",
+    radioButtons("grupo_resaltado", "Resaltar en el mapa y en 3D",
                  choices = c("Todos", names(colores_cluster)), inline = TRUE),
     layout_columns(
       col_widths = c(6, 6),
       card(
+        full_screen = TRUE,
         card_header("Mapa de grupos · pasa el cursor para ver el coeficiente de silueta o haz clic para iluminar"),
         leafletOutput("mapa_clusters", height = "520px")
       ),
       uiOutput("tarjetas_clusters")
+    ),
+    card(
+      id = "card_clusters_3d",
+      full_screen = TRUE,
+      card_header(
+        class = "d-flex justify-content-between align-items-center flex-wrap gap-2 header-3d-switches",
+        div(
+          class = "d-flex align-items-center gap-2",
+          span("Espacio tridimensional de clústeres K-Means (K* = 3)"),
+          tooltip(
+            tags$span(
+              style = paste0(
+                "display:inline-flex; align-items:center; justify-content:center; ",
+                "width:18px; height:18px; border-radius:50%; border:1px solid ", gris_texto,
+                "; color:", gris_texto, "; font-size:11px; font-weight:700; cursor:help;"
+              ),
+              tabindex = "0",
+              role = "img",
+              `aria-label` = "Ayuda sobre el gráfico tridimensional de clústeres",
+              "?"
+            ),
+            "Cada esfera representa una localidad unida por su radio al diamante del centroide μ_k. Arrastra para rotar el cubo, usa la rueda para hacer zoom o haz clic en una esfera/diamante para resaltar su grupo."
+          )
+        ),
+        div(
+          class = "d-flex align-items-center flex-wrap gap-3",
+          input_switch("mostrar_nombres_3d", "Mostrar nombres", value = TRUE),
+          input_switch("escala_z_3d", "Escala Z-score", value = FALSE)
+        )
+      ),
+      card_body(
+        min_height = "560px",
+        plotlyOutput("grafico_clusters_3d", height = "580px")
+      ),
+      card_footer(
+        style = paste0("color:", gris_texto, "; font-size: 12px;"),
+        "Esferas: 19 localidades · Diamantes: centroides μ_k · Líneas: radios intra-clúster. Cambia a Escala Z-score para ver el espacio estandarizado exacto en el que opera K-means."
+      )
     )
   ),
 
@@ -1116,10 +1256,152 @@ server <- function(input, output, session) {
 
     tagList(
       tarjetas,
-      p("Tasas promedio del grupo, por 100.000 habitantes al año. Haz clic en una tarjeta o en el mapa para iluminar el clúster.",
+      p("Tasas promedio del grupo, por 100.000 habitantes al año. Haz clic en una tarjeta, en el mapa o en el cubo 3D para iluminar el clúster.",
         style = paste0("color:", gris_texto, "; font-size: 12px"))
     )
   })
+
+  # Clic en esfera o centroide del cubo 3D: alterna el resaltado del clúster
+  observeEvent(event_data("plotly_click", source = "clusters_3d"), {
+    clic <- event_data("plotly_click", source = "clusters_3d")
+    req(!is.null(clic), !is.null(clic$customdata), length(clic$customdata) == 1)
+    grupo_clic <- as.character(clic$customdata)
+    if (grupo_clic %in% names(colores_cluster)) {
+      nuevo_grupo <- ifelse(input$grupo_resaltado == grupo_clic, "Todos", grupo_clic)
+      updateRadioButtons(session, "grupo_resaltado", selected = nuevo_grupo)
+    }
+  })
+
+  output$grafico_clusters_3d <- renderPlotly({
+    req(input$grupo_resaltado)
+    usar_z      <- isTRUE(input$escala_z_3d)
+    ver_nombres <- isTRUE(input$mostrar_nombres_3d)
+    grupo_sel   <- input$grupo_resaltado
+    datos_esc   <- datos_clusters_3d[[if (usar_z) "zscore" else "tasas"]]
+
+    fig <- plot_ly(source = "clusters_3d")
+
+    for (k in names(colores_cluster)) {
+      es_activo <- (grupo_sel == "Todos" || grupo_sel == k)
+      col_k     <- if (grupo_sel == k) unname(colores_cluster_iluminado[k]) else unname(colores_cluster[k])
+      op_pts    <- if (es_activo) 0.94 else 0.16
+      op_lin    <- if (es_activo) 0.48 else 0.08
+      op_cen    <- if (es_activo) 1.00 else 0.18
+      tam_pts   <- if (grupo_sel == k) 8.5 else 7
+      tam_cen   <- if (grupo_sel == k) 12.5 else 10.5
+      col_txt   <- if (es_activo) "#E9EDF2" else "rgba(154, 164, 178, 0.22)"
+
+      sub_pts <- datos_esc$puntos[[k]]
+      sub_seg <- datos_esc$segmentos[[k]]
+      sub_cen <- datos_esc$centroides[[k]]
+
+      args_pts <- list(
+        p           = fig,
+        x           = sub_pts$x,
+        y           = sub_pts$y,
+        z           = sub_pts$z,
+        name        = k,
+        legendgroup = k,
+        showlegend  = TRUE,
+        type        = "scatter3d",
+        mode        = if (ver_nombres) "markers+text" else "markers",
+        customdata  = sub_pts$cluster_nombre,
+        hovertext   = sub_pts$tooltip_loc,
+        hoverinfo   = "text",
+        marker      = list(
+          size    = tam_pts,
+          color   = col_k,
+          opacity = op_pts,
+          line    = list(color = fondo, width = 1.2)
+        )
+      )
+      if (ver_nombres) {
+        args_pts$text         <- sub_pts$localidad
+        args_pts$textposition <- "top center"
+        args_pts$textfont     <- list(size = 10, color = col_txt, family = "Archivo")
+      }
+
+      fig <- do.call(add_trace, args_pts) |>
+        add_trace(
+          x           = sub_seg$x,
+          y           = sub_seg$y,
+          z           = sub_seg$z,
+          name        = k,
+          legendgroup = k,
+          showlegend  = FALSE,
+          type        = "scatter3d",
+          mode        = "lines",
+          line        = list(color = col_k, width = if (grupo_sel == k) 3 else 2),
+          opacity     = op_lin,
+          hoverinfo   = "none"
+        ) |>
+        add_trace(
+          x           = I(sub_cen$x),
+          y           = I(sub_cen$y),
+          z           = I(sub_cen$z),
+          name        = paste0("Centroide: ", k),
+          legendgroup = k,
+          showlegend  = FALSE,
+          type        = "scatter3d",
+          mode        = "markers",
+          customdata  = I(sub_cen$cluster_nombre),
+          hovertext   = I(sub_cen$tooltip_cen),
+          hoverinfo   = "text",
+          marker      = list(
+            size    = tam_cen,
+            symbol  = "diamond",
+            color   = col_k,
+            opacity = op_cen,
+            line    = list(color = "#FFFFFF", width = 1.6)
+          )
+        )
+    }
+
+    tit_x <- if (usar_z) "Z-score: Hurto personas"    else "Hurto personas (tasa/100k)"
+    tit_y <- if (usar_z) "Z-score: Hurto residencias" else "Hurto residencias (tasa/100k)"
+    tit_z <- if (usar_z) "Z-score: Hurto motos"       else "Hurto motos (tasa/100k)"
+
+    eje_oscuro <- function(titulo_eje) {
+      list(
+        title           = list(text = titulo_eje, font = list(size = 11.5, color = "#E9EDF2")),
+        tickfont        = list(size = 9.5, color = gris_texto),
+        showbackground  = TRUE,
+        backgroundcolor = "#13171E",
+        gridcolor       = borde,
+        zerolinecolor   = "#3E4756"
+      )
+    }
+
+    fig |>
+      layout(
+        paper_bgcolor = "rgba(0,0,0,0)",
+        plot_bgcolor  = "rgba(0,0,0,0)",
+        font          = list(color = "#E9EDF2", family = "Archivo"),
+        uirevision    = if (usar_z) "zscore" else "tasas",
+        margin        = list(l = 10, r = 10, b = 35, t = 15),
+        scene         = list(
+          aspectmode = "cube",
+          xaxis      = eje_oscuro(tit_x),
+          yaxis      = eje_oscuro(tit_y),
+          zaxis      = eje_oscuro(tit_z),
+          camera     = list(eye = list(x = 1.45, y = -1.45, z = 0.75))
+        ),
+        legend = list(
+          orientation = "h",
+          x           = 0.5,
+          xanchor     = "center",
+          y           = -0.04,
+          font        = list(color = "#E9EDF2", size = 12)
+        )
+      ) |>
+      config(
+        displayModeBar = "hover",
+        displaylogo    = FALSE,
+        modeBarButtonsToRemove = list("toImage", "sendDataToCloud")
+      ) |>
+      event_register("plotly_click")
+  }) |>
+    bindCache(input$grupo_resaltado, input$mostrar_nombres_3d, input$escala_z_3d)
 
   ## 6.5 Pestaña 5: Sentometrics y Elastic Net ----
 

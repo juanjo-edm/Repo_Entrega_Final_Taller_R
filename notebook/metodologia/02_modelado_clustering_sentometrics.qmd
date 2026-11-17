@@ -239,7 +239,11 @@ library(ggrepel)
 library(plotly)
 library(scales)
 library(knitr)
+library(purrr)
+library(recipes)
+library(broom)
 library(cluster)
+library(mclust)
 library(syuzhet)
 library(sentometrics)
 library(glmnet)
@@ -247,12 +251,16 @@ library(sf)
 library(cowplot)
 
 ## 1.3 Resolución explícita de conflictos entre paquetes ({conflicted}) ----
-# Evita que funciones homónimas de stats, data.table o lubridate oculten a dplyr/plotly
+# Evita que funciones homónimas de stats, data.table, mclust o recipes oculten a dplyr/purrr/plotly
 conflict_prefer("filter",   "dplyr",     quiet = TRUE)
 conflict_prefer("lag",      "dplyr",     quiet = TRUE)
 conflict_prefer("select",   "dplyr",     quiet = TRUE)
+conflict_prefer("count",    "dplyr",     quiet = TRUE)
 conflict_prefer("first",    "dplyr",     quiet = TRUE)
 conflict_prefer("between",  "dplyr",     quiet = TRUE)
+conflict_prefer("map",      "purrr",     quiet = TRUE)
+conflict_prefer("discard",  "purrr",     quiet = TRUE)
+conflict_prefer("fixed",    "stringr",   quiet = TRUE)
 conflict_prefer("year",     "lubridate", quiet = TRUE)
 conflict_prefer("month",    "lubridate", quiet = TRUE)
 conflict_prefer("layout",   "plotly",    quiet = TRUE)
@@ -546,7 +554,7 @@ ggplot(ranking_localidades, aes(x = reorder(localidad, tasa_media_total), y = ta
 
 # Agrupamiento territorial de criminalidad con $K$-Means {#sec-kmeans}
 
-En esta sección replicamos íntegramente `scripts/04_clustering_kmeans.R`. El objetivo es pasar de un ranking unidimensional a una tipología territorial que reconozca en qué modalidades delictivas se especializa cada zona de la ciudad.
+Un ranking ordenado por tasa total mezcla bajo un mismo número territorios con problemas delictivos distintos. Para distinguir en qué modalidades se especializa cada zona de Bogotá, esta sección reproduce en vivo `scripts/04_clustering_kmeans.R`, desde la estandarización con `{recipes}` y la búsqueda de $K^*$ hasta las pruebas de sensibilidad con algoritmos y métricas alternativas.
 
 ## Intuición del algoritmo $K$-Means y preparación de variables
 
@@ -590,7 +598,7 @@ Para resolver esta optimización, `kmeans()` repite cuatro pasos:
 
 ## Selección del número óptimo de clústeres ($K^*$)
 
-Como el número de grupos $K$ se fija de antemano, evaluamos $K \in \{2, 3, 4, 5\}$ mediante dos criterios complementarios:
+Como el número de grupos $K$ se fija de antemano, evaluamos $K \in \{2, 3, 4, 5\}$ mediante tres criterios complementarios:
 
 - **Varianza explicada ($BSS / TSS$):** mide qué porcentaje de la heterogeneidad total entre las 19 localidades ($TSS$) se explica por las diferencias entre clústeres ($BSS = TSS - WSS$).
 - **Ancho de silueta (*Silhouette Width*):** para cada localidad $i$, compara qué tan cerca está de sus compañeras de grupo ($a(i)$, distancia media intra-clúster) frente a qué tan lejos está del grupo vecino más cercano ($b(i)$, distancia media al clúster ajeno más próximo):
@@ -599,14 +607,16 @@ $$
 S(i) = \frac{b(i) - a(i)}{\max\{a(i), b(i)\}} \in [-1, 1]
 $$ {#eq-silueta}
 
-Un valor $S(i)$ cercano a $+1$ indica que la localidad encaja bien en su grupo y está bien separada del resto; cercano a $0$ indica frontera entre dos perfiles; y negativo advierte que, en una o más dimensiones, la localidad se aproxima a un grupo vecino. Elegimos el $K^*$ que maximiza la silueta promedio $\bar{S}(K)$.
+- **Estadístico Gap (`clusGap`):** contrasta mediante 100 simulaciones *bootstrap* la dispersión intra-clúster observada frente a una referencia nula uniforme sin estructura de grupos.
+
+Un valor $S(i)$ cercano a $+1$ indica que la localidad encaja bien en su grupo y está separada del resto; cercano a $0$ indica frontera entre dos perfiles; y negativo advierte que, en al menos una dimensión, la localidad queda próxima a otro grupo. Elegimos el $K^*$ que maximiza la silueta promedio $\bar{S}(K)$.
 
 ```{r}
 #| label: tbl-diagnostico-kmeans
-#| tbl-cap: "Diagnóstico de K-Means para K entre 2 y 5 mediante coeficiente de silueta e inercia interna"
+#| tbl-cap: "Diagnóstico de K-Means para K entre 2 y 5 mediante silueta, inercia interna, varianza explicada y estadístico Gap"
 # 3. Réplica de scripts/04_clustering_kmeans.R ----
 
-## 3.1 Agregación multianual por localidad y normalización Z-score ----
+## 3.1 Agregación multianual y receta base Z-score ({recipes}) ----
 matriz_localidad <- panel_delitos |>
   group_by(codigo_localidad, localidad) |>
   summarise(
@@ -618,40 +628,48 @@ matriz_localidad <- panel_delitos |>
     .groups = "drop"
   )
 
-# Convertimos las 3 tasas delictivas en matriz numérica etiquetada por localidad
-mat_clustering <- matriz_localidad |>
-  select(tasa_personas_prom, tasa_resid_prom, tasa_motos_prom) |>
-  as.matrix()
-rownames(mat_clustering) <- matriz_localidad$localidad
+# Excluimos tasa_total_prom para evitar doble conteo y colinealidad en el clustering
+receta_base <- recipes::recipe(
+  ~ tasa_personas_prom + tasa_resid_prom + tasa_motos_prom,
+  data = matriz_localidad
+) |>
+  recipes::step_normalize(recipes::all_numeric_predictors())
 
-# scale() aplica (X - media) / desv_est por columna para equilibrar escalas
-matriz_scale <- scale(mat_clustering)
+receta_base_prep <- recipes::prep(receta_base, training = matriz_localidad)
+matriz_scale     <- recipes::bake(receta_base_prep, new_data = NULL) |> as.matrix()
+rownames(matriz_scale) <- matriz_localidad$localidad
 
 # Verificamos numéricamente que las 3 columnas tengan media 0 y desv. est. 1
 stopifnot(all(abs(colMeans(matriz_scale)) < 1e-10))
 stopifnot(all(abs(apply(matriz_scale, 2, sd) - 1) < 1e-10))
 
-## 3.2 Evaluación diagnóstica de K entre 2 y 5 con 50 arranques aleatorios ----
-dist_euclidea <- dist(matriz_scale)
+## 3.2 Barrido diagnóstico (K = 2 a 5) con purrr, broom::glance() y clusGap() ----
+dist_euclidea <- dist(matriz_scale, method = "euclidean")
 
-diagnostico_k <- tibble(
-  k             = 2:5,
-  silueta_media = numeric(4),
-  wss           = numeric(4),
-  bss_tss_pct   = numeric(4)
+set.seed(20261014)
+gap_kmeans <- cluster::clusGap(
+  matriz_scale,
+  FUNcluster = function(x, k) kmeans(x, centers = k, nstart = 50),
+  K.max      = 5L,
+  B          = 100L,
+  verbose    = FALSE
 )
 
-for (i in seq_along(2:5)) {
-  k_val <- (2:5)[i]
-  # Fijamos la semilla antes de cada K para garantizar reproducibilidad exacta
-  set.seed(20261014)
-  km_temp  <- kmeans(matriz_scale, centers = k_val, nstart = 50)
-  sil_temp <- silhouette(km_temp$cluster, dist_euclidea)
-
-  diagnostico_k$silueta_media[i] <- round(mean(sil_temp[, 3]), 4)
-  diagnostico_k$wss[i]           <- round(km_temp$tot.withinss, 4)
-  diagnostico_k$bss_tss_pct[i]   <- round((km_temp$betweenss / km_temp$totss) * 100, 2)
-}
+diagnostico_k <- tibble(k = 2:5) |>
+  mutate(
+    modelo = purrr::map(k, function(k_val) {
+      set.seed(20261014)
+      kmeans(matriz_scale, centers = k_val, nstart = 50)
+    }),
+    silueta_media = purrr::map_dbl(modelo, function(km) {
+      sil <- cluster::silhouette(km$cluster, dist_euclidea)
+      round(mean(sil[, 3]), 4)
+    }),
+    wss         = purrr::map_dbl(modelo, ~ round(broom::glance(.x)$tot.withinss, 4)),
+    bss_tss_pct = purrr::map_dbl(modelo, ~ round((.x$betweenss / .x$totss) * 100, 2)),
+    gap         = round(gap_kmeans$Tab[2:5, "gap"], 4)
+  ) |>
+  select(k, silueta_media, wss, bss_tss_pct, gap)
 
 # Selección automática del óptimo global según la máxima silueta promedio
 k_optimo <- diagnostico_k$k[which.max(diagnostico_k$silueta_media)]
@@ -659,21 +677,22 @@ stopifnot(k_optimo == 3L)
 
 knitr::kable(
   diagnostico_k,
-  digits    = c(0, 4, 2, 2),
+  digits    = c(0, 4, 2, 2, 4),
   col.names = c(
-    "Número de clústeres (K)",
+    "Clústeres (K)",
     "Silueta promedio",
     "WSS (inercia interna)",
-    "Varianza explicada (BSS/TSS %)"
+    "Varianza explicada (%)",
+    "Gap (B = 100)"
   )
 )
 ```
 
 Como muestra la @tbl-diagnostico-kmeans y se grafica en la @fig-diagnostico-silueta, la silueta promedio alcanza su máximo en **$K^* = 3$** ($\bar{S} = `r max(diagnostico_k$silueta_media)`$), reduciendo la inercia interna ($WSS$) a `r diagnostico_k$wss[diagnostico_k$k == 3]` y capturando el **`r diagnostico_k$bss_tss_pct[diagnostico_k$k == 3]`%** de la varianza tridimensional:
 
-- **¿Qué significa una silueta promedio de `0,5416`?** En la escala $[-1, 1]$, valores entre `0,51` y `0,70` indican una **estructura sólida y bien definida**: en promedio, cada localidad está más de dos veces más cerca de su propio grupo que del perfil vecino más cercano.
-- **¿Qué mide `WSS = 13,58` (`74,85%` de varianza explicada)?** Partiendo de una dispersión total de $TSS = 3 \times 18 = 54{,}00$ ($K=1$), agrupar en $K=3$ reduce la suma de errores cuadráticos internos a `13,58`, reteniendo el `74,85%` de la heterogeneidad delictiva entre localidades.
-- **¿Por qué descartamos $K=4$ o $K=5$?** Al aumentar $K$, el $WSS$ siempre cae (`8,15` y `5,90`), pero la silueta se deteriora (`0,4786` y `0,3792`) porque los grupos adicionales quedan demasiado próximos entre sí y pierden separación real.
+- **Silueta promedio de `0,5416`:** en la escala $[-1, 1]$, valores superiores a `0,50` indican grupos bien definidos. En promedio, cada localidad queda mucho más cerca de su propio centroide que del grupo vecino más próximo.
+- **Inercia `WSS = 13,58` (`74,85%` de varianza explicada):** partiendo de una dispersión total de $TSS = 3 \times 18 = 54{,}00$ ($K=1$), particionar en $K=3$ retiene tres cuartas partes de la heterogeneidad delictiva entre localidades.
+- **Por qué se descartan $K=4$ y $K=5$:** aunque $WSS$ disminuye (`8,15` y `5,90`), la silueta promedio cae a `0,4786` y `0,3792` porque los subgrupos adicionales quedan demasiado próximos entre sí.
 
 ```{r}
 #| label: fig-diagnostico-silueta
@@ -706,19 +725,21 @@ ggplot(diagnostico_k, aes(x = k, y = silueta_media)) +
 
 ## Estimación final y etiquetado determinístico de perfiles ($K^* = 3$)
 
-Un detalle técnico importante en `kmeans()` es que los números enteros asignados a los clústeres (`1`, `2`, `3`) cambian de orden según el arranque aleatorio. Para que **Clúster 1** sea siempre el perfil céntrico, **Clúster 2** el automotor y **Clúster 3** el residencial, en lugar de asignar etiquetas a mano según el orden de salida, las identificamos directamente por la geometría de sus centroides en `km_final$centers`: primero aislamos el grupo con mayor tasa estandarizada de hurto a motocicletas (`id_comercial`), luego entre los dos restantes elegimos el de mayor hurto a personas (`id_centro`) y el tercero queda como perfil residencial (`id_residencial`).
+Los identificadores numéricos que devuelve `kmeans()` (`1`, `2`, `3`) pueden permutar según el arranque aleatorio. Para fijar siempre **Clúster 1** en el perfil céntrico, **Clúster 2** en el automotor y **Clúster 3** en el residencial, extraemos los centroides con `broom::tidy(km_final)` y los ordenamos por sus tasas promedio: el centroide con mayor tasa estandarizada de hurto a motocicletas pasa a `id_comercial`; entre los dos restantes, el de mayor hurto a personas recibe `id_centro`; y el tercero queda como `id_residencial`.
 
 ```{r}
 #| label: tbl-perfiles-cluster
 #| tbl-cap: "Perfiles delictivos promedio por clúster territorial (tasas anuales por 100.000 habitantes)"
 ## 3.4 Ajuste del modelo final K* = 3 e identificación determinística por centroides ----
 set.seed(20261014)
-km_final  <- kmeans(matriz_scale, centers = k_optimo, nstart = 50)
-sil_final <- silhouette(km_final$cluster, dist_euclidea)
+km_base   <- kmeans(matriz_scale, centers = k_optimo, nstart = 50)
+sil_base  <- cluster::silhouette(km_base$cluster, dist_euclidea)
+km_final  <- km_base
+sil_final <- sil_base
 
 # Identificamos cada perfil según la posición económica de su centroide estandarizado
-centroides_df <- as_tibble(km_final$centers) |>
-  mutate(cluster_raw = row_number())
+centroides_df <- broom::tidy(km_final) |>
+  mutate(cluster_raw = as.integer(as.character(cluster)))
 
 id_comercial <- centroides_df |>
   slice_max(tasa_motos_prom, n = 1) |>
@@ -782,11 +803,11 @@ knitr::kable(
 )
 ```
 
-Los tres perfiles revelan una clara especialización urbana:
+Los tres perfiles separan patrones urbanos distintos:
 
-- **Clúster 1: Céntrico e Institucional (5 localidades):** La Candelaria, Chapinero, Santa Fe, Teusaquillo y Barrios Unidos concentran las tasas más altas de hurto a personas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[1], 1))` por 100.000 hab.) y hurto a residencias (`r round(perfiles_resumen$tasa_media_residencias[1], 1)`), impulsadas por la población flotante diaria sobre una base residencial acotada.
-- **Clúster 2: Comercial y Automotor (2 localidades):** Los Mártires y Antonio Nariño presentan el pico extremo en hurto de motocicletas (`r round(perfiles_resumen$tasa_media_motos[2], 1)` por 100.000 hab.), más del doble que los otros grupos, asociado a corredores de comercio mayorista, talleres y autopartes. Un matiz interesante es que Antonio Nariño registra una silueta individual negativa (`r df_clusters$silueta_localidad[df_clusters$localidad == "Antonio Nariño"]`), pues comparte la especialidad motera de Los Mártires (`127,8`) pero con una tasa de hurto a personas mucho más moderada (`3.065,9` frente a `8.389,9`), ubicándose geométricamente en la frontera entre perfiles.
-- **Clúster 3: Residencial y Periférico (12 localidades):** Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa y Usme mantienen tasas relativas moderadas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[3], 1))` en personas) debido a sus grandes denominadores demográficos.
+- **Clúster 1: Céntrico e Institucional (5 localidades):** La Candelaria, Chapinero, Santa Fe, Teusaquillo y Barrios Unidos concentran las tasas más altas de hurto a personas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[1], 1))` por 100.000 hab.) y hurto a residencias (`r round(perfiles_resumen$tasa_media_residencias[1], 1)`), impulsadas por la población flotante diaria sobre una base residente reducida.
+- **Clúster 2: Comercial y Automotor (2 localidades):** Los Mártires y Antonio Nariño registran el nivel más alto en hurto de motocicletas (`r round(perfiles_resumen$tasa_media_motos[2], 1)` por 100.000 hab.), más del doble que los otros dos grupos, en coincidencia con corredores comerciales y de autopartes. Antonio Nariño obtiene una silueta individual negativa (`r df_clusters$silueta_localidad[df_clusters$localidad == "Antonio Nariño"]`), porque comparte la especialidad motera de Los Mártires (`127,8`) pero con una tasa de hurto a personas menor (`3.065,9` frente a `8.389,9`), ubicándose geométricamente en la frontera entre perfiles.
+- **Clúster 3: Residencial y Periférico (12 localidades):** Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa y Usme presentan tasas relativas moderadas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[3], 1))` en personas) por su mayor población residente.
 
 ## Visualización tridimensional y bidimensional de los clústeres
 
@@ -1075,45 +1096,215 @@ ggplot(
   theme(legend.position = "bottom", plot.title = element_text(face = "bold", size = 13))
 ```
 
-## Validación metodológica y sensibilidad (`recipes`, PCA, distancias y modelos)
+## Validación metodológica y sensibilidad en vivo (`{recipes}`, PCA, distancias, modelos y periodo)
 
-En `scripts/04_clustering_kmeans.R` complementamos el modelo base con una batería de sensibilidad estilo *tidymodels* (`{recipes}` + `{broom}` + `{cluster}` + `{mclust}`) para comprobar que la tipología de $K^*=3$ no sea un artefacto del escalamiento, de la distancia euclidiana o del algoritmo elegido:
+Antes de fijar $K^* = 3$ bajo estandarización *Z-score* y distancia euclidiana, ejecutamos en memoria toda la batería de iteraciones y sensibilidad de `scripts/04_clustering_kmeans.R` sobre tres frentes:
 
-1. **Preprocesamiento alternativo y PCA 2D (`@tbl-sensibilidad-escalamientos`):** contrastamos la receta base `Z-score` frente a `Min-Max [0, 1]`, `Robusto (Mediana/IQR)`, `Log(1 + x) + Z-score` y `PCA 2D` (`PC1 + PC2` retienen el `96,38%` de la varianza total). Con el **Índice de Rand Ajustado ($\text{ARI}$)** verificamos que `Z-score`, `Robusto` y `PCA 2D` producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$), por lo que preferimos `Z-score` al conservar la interpretabilidad directa en las tres tasas originales.
-2. **Contraste de algoritmos y distancias (`@tbl-comparacion-modelos`):** comparamos `K-Means` frente a **PAM** (medoides), **AGNES (`Ward.D2`)** (jerárquico) y **GMM** (mezclas gaussianas con distancia de Mahalanobis), bajo distancia **Euclidiana** y **Manhattan**, además del estadístico **Gap** con 100 réplicas *bootstrap* (`gap_k3 = 0,1545`). `K-Means` obtiene la silueta más alta (`0,5416`); **PAM** y **AGNES** coinciden en **18 de 19 localidades** ($\text{ARI} = 0{,}8484$), moviendo únicamente a **Antonio Nariño** (el único caso frontera del modelo base, con silueta `-0,2116`).
-3. **Sensibilidad temporal al corte `2026`:** al ser $N=19$ localidades, el perfil *Comercial y Automotor* ($n=2$) es sensible a la inclusión del año incompleto `2026` (`CMMES: Ene-Sep`): en `2022–2026` y `2023–2026`, Los Mártires y Antonio Nariño se agrupan juntos ($K^*=3$, $\bar{S}=0{,}5416$ y $0{,}5520$); al restringir a `2022–2025`, Antonio Nariño migra y Los Mártires queda aislado (`13 / 5 / 1`, $\bar{S}=0{,}5062$).
+1. **Escalamiento y reducción dimensional ({recipes} y PCA 2D, @tbl-sensibilidad-escalamientos):** definimos cuatro recetas alternativas a la receta base (`Min-Max [0, 1]` con `step_range()`, escalamiento robusto por mediana e IQR con `step_mutate()`, compresión `log(1 + x)` seguida de *Z-score* y proyección `PCA 2D` con `step_pca(num_comp = 2)`). Medimos la concordancia frente al modelo base mediante el Índice de Rand Ajustado ($\text{ARI} \in [-1, 1]$).
+2. **Métricas de distancia y algoritmos alternativos (@tbl-comparacion-modelos y @tbl-asignaciones-modelos):** contrastamos `K-Means` frente a medoides (**PAM**), agrupamiento jerárquico aglomerativo (**AGNES `Ward.D2`**) y modelos de mezclas gaussianas (**GMM** con distancia de Mahalanobis vía algoritmo EM), alternando distancia **Euclidiana** y **Manhattan ($L_1$)**.
+3. **Estabilidad frente al corte parcial de 2026 (@tbl-sensibilidad-temporal):** repetimos la receta base y `kmeans()` sobre `2022-2026` (con `2026` a septiembre), `2023-2026` y solo años completos `2022-2025` para verificar si el cierre parcial desplaza localidades fronterizas.
 
 ```{r}
 #| label: tbl-sensibilidad-escalamientos
-#| tbl-cap: "Sensibilidad de K-Means (K = 3) a diferentes escalamientos (recipes) y PCA 2D"
+#| tbl-cap: "Sensibilidad de K-Means (K = 3) a recetas de preprocesamiento ({recipes}) y PCA 2D"
+## 3.8 Batería de sensibilidad estilo tidymodels (recipes, broom, cluster, mclust) ----
+receta_base_formula <- ~ tasa_personas_prom + tasa_resid_prom + tasa_motos_prom
 
-sens_esc <- readr::read_csv(
-  here::here("output", "tables", "tabla_sensibilidad_escalamientos_pca.csv"),
-  show_col_types = FALSE
+hornear_matriz <- function(receta, datos) {
+  receta |>
+    recipes::prep(training = datos) |>
+    recipes::bake(new_data = NULL) |>
+    as.matrix()
+}
+
+# Recetas alternativas declaradas sobre las 3 tasas promedio
+receta_minmax <- recipes::recipe(receta_base_formula, data = matriz_localidad) |>
+  recipes::step_range(recipes::all_numeric_predictors(), min = 0, max = 1)
+
+# step_mutate() en recipes requiere nombrar las columnas explícitamente (no evalúa across())
+receta_robusta <- recipes::recipe(receta_base_formula, data = matriz_localidad) |>
+  recipes::step_mutate(
+    tasa_personas_prom = (tasa_personas_prom - median(tasa_personas_prom)) / IQR(tasa_personas_prom),
+    tasa_resid_prom    = (tasa_resid_prom    - median(tasa_resid_prom))    / IQR(tasa_resid_prom),
+    tasa_motos_prom    = (tasa_motos_prom    - median(tasa_motos_prom))    / IQR(tasa_motos_prom)
+  )
+
+receta_log_z <- recipes::recipe(receta_base_formula, data = matriz_localidad) |>
+  recipes::step_log(recipes::all_numeric_predictors(), offset = 1) |>
+  recipes::step_normalize(recipes::all_numeric_predictors())
+
+receta_pca2 <- recipes::recipe(receta_base_formula, data = matriz_localidad) |>
+  recipes::step_normalize(recipes::all_numeric_predictors()) |>
+  recipes::step_pca(recipes::all_numeric_predictors(), num_comp = 2)
+
+pca_tasas <- prcomp(matriz_scale, center = FALSE, scale. = FALSE)
+var_pca   <- summary(pca_tasas)$importance
+
+evaluar_receta_kmeans <- function(receta, nombre_espacio) {
+  mat_espacio <- hornear_matriz(receta, matriz_localidad)
+  set.seed(20261014)
+  km_esp  <- kmeans(mat_espacio, centers = 3L, nstart = 50)
+  sil_esp <- cluster::silhouette(km_esp$cluster, dist(mat_espacio))
+
+  tibble(
+    espacio         = nombre_espacio,
+    silueta_media   = round(mean(sil_esp[, 3]), 4),
+    n_silueta_neg   = sum(sil_esp[, 3] < 0),
+    wss             = round(broom::glance(km_esp)$tot.withinss, 4),
+    ari_vs_base     = round(mclust::adjustedRandIndex(km_esp$cluster, km_base$cluster), 4),
+    pca_var_pc1     = round(var_pca[2, 1], 4),
+    pca_var_pc2     = round(var_pca[2, 2], 4),
+    pca_var_acum_2d = round(var_pca[3, 2], 4)
+  )
+}
+
+catalogo_recetas <- list(
+  "Z-score (base)"              = receta_base,
+  "Min-Max [0, 1]"              = receta_minmax,
+  "Robusto (Mediana / IQR)"     = receta_robusta,
+  "Log(1 + x) + Z-score"        = receta_log_z,
+  "PCA (PC1 + PC2 = 96,4% var)" = receta_pca2
 )
 
+tabla_sensibilidad_escalamientos <- purrr::imap_dfr(catalogo_recetas, evaluar_receta_kmeans)
+
 knitr::kable(
-  sens_esc,
+  tabla_sensibilidad_escalamientos,
   digits    = 4,
   col.names = c("Espacio", "Silueta", "Neg.", "WSS", "ARI base", "Var. PC1", "Var. PC2", "Acum. 2D")
 )
 ```
 
+En la @tbl-sensibilidad-escalamientos, `Z-score`, `Robusto (Mediana / IQR)` y `PCA 2D` (`96,38 %` de varianza acumulada en `PC1 + PC2`) producen exactamente la misma asignación ($\text{ARI} = 1{,}0000$). Conservamos `Z-score` sobre las tres tasas porque mantiene una lectura directa en tasas de hurto a personas, residencias y motocicletas sin transformar a ejes latentes ni comprimir escalas con `log(1 + x)` (que reduce el $\text{ARI}$ a `0,3725` al atenuar la separación extrema del centro).
+
 ```{r}
 #| label: tbl-comparacion-modelos
-#| tbl-cap: "Contraste de modelos (K-Means, PAM, AGNES Ward y GMM) y distancias (Euclidiana vs. Manhattan) para K = 3"
+#| tbl-cap: "Contraste en vivo de algoritmos (K-Means, PAM, AGNES Ward y GMM) y distancias (Euclidiana vs. Manhattan) para K = 3"
+## 3.9 Contraste de algoritmos y distancias (Euclidiana vs. Manhattan) ----
+dist_manhattan <- dist(matriz_scale, method = "manhattan")
 
-comp_mod <- readr::read_csv(
-  here::here("output", "tables", "tabla_comparacion_modelos_distancias.csv"),
-  show_col_types = FALSE
+pam_euc <- cluster::pam(dist_euclidea,  k = 3L)
+pam_man <- cluster::pam(dist_manhattan, k = 3L)
+hc_euc  <- cutree(hclust(dist_euclidea,  method = "ward.D2"), k = 3L)
+hc_man  <- cutree(hclust(dist_manhattan, method = "ward.D2"), k = 3L)
+
+set.seed(20261014)
+gmm_fit <- mclust::Mclust(matriz_scale, G = 3L, verbose = FALSE)
+
+evaluar_particion <- function(clusters_vec, dist_ref, nombre_modelo, metric_dist) {
+  sil_obj  <- cluster::silhouette(clusters_vec, dist_ref)
+  tamanios <- paste(sort(as.integer(table(clusters_vec)), decreasing = TRUE), collapse = " / ")
+
+  tibble(
+    modelo         = nombre_modelo,
+    distancia      = metric_dist,
+    silueta_media  = round(mean(sil_obj[, 3]), 4),
+    n_silueta_neg  = sum(sil_obj[, 3] < 0),
+    tamanios_grupo = tamanios,
+    ari_vs_kmeans  = round(mclust::adjustedRandIndex(clusters_vec, km_base$cluster), 4),
+    gap_k3         = round(gap_kmeans$Tab[3, "gap"], 4)
+  )
+}
+
+tabla_comparacion_modelos <- bind_rows(
+  evaluar_particion(km_base$cluster,        dist_euclidea,  "K-Means (base)",      "Euclidiana"),
+  evaluar_particion(pam_euc$clustering,     dist_euclidea,  "PAM (Medoides)",      "Euclidiana"),
+  evaluar_particion(pam_man$clustering,     dist_manhattan, "PAM (Medoides)",      "Manhattan"),
+  evaluar_particion(hc_euc,                 dist_euclidea,  "AGNES (Ward.D2)",     "Euclidiana"),
+  evaluar_particion(hc_man,                 dist_manhattan, "AGNES (Ward.D2)",     "Manhattan"),
+  evaluar_particion(gmm_fit$classification, dist_euclidea,  "GMM (Mezcla Gauss.)", "Mahalanobis / EM")
 )
 
 knitr::kable(
-  comp_mod,
+  tabla_comparacion_modelos,
   digits    = 4,
   col.names = c("Modelo", "Distancia", "Silueta", "Neg.", "Tamaños", "ARI vs. K-Means", "Gap (K=3)")
 )
 ```
+
+Como muestra la @tbl-comparacion-modelos, `K-Means` logra la silueta media más alta (`0,5416`). Tanto `PAM` Euclidiano como `AGNES (Ward.D2)` (Euclidiano y Manhattan) replican la asignación en **18 de las 19 localidades** ($\text{ARI} = 0{,}8484$), separando únicamente a **Antonio Nariño** hacia el grupo residencial y dejando a Los Mártires solo en su grupo (`13 / 5 / 1`). La @tbl-asignaciones-modelos permite auditar esa coincidencia localidad por localidad (los enteros `1`, `2`, `3` reflejan el código numérico interno que asigna cada algoritmo al correr, mientras que la equivalencia exacta entre particiones se mide en el $\text{ARI}$).
+
+```{r}
+#| label: tbl-asignaciones-modelos
+#| tbl-cap: "Auditoría por localidad de las particiones obtenidas bajo 7 especificaciones (los enteros 1, 2 y 3 corresponden a las etiquetas internas de cada algoritmo)"
+## 3.10 Auditoría comparativa por localidad en las 7 especificaciones ----
+matriz_pca2 <- hornear_matriz(receta_pca2, matriz_localidad)
+set.seed(20261014)
+km_pca2 <- kmeans(matriz_pca2, centers = 3L, nstart = 50)
+
+tabla_asignaciones_modelos <- matriz_localidad |>
+  transmute(
+    codigo_localidad = codigo_localidad,
+    localidad        = localidad,
+    kmeans_base      = km_final$cluster,
+    pca2_kmeans      = km_pca2$cluster,
+    pam_euclidiana   = pam_euc$clustering,
+    pam_manhattan    = pam_man$clustering,
+    agnes_euclidiana = hc_euc,
+    agnes_manhattan  = hc_man,
+    gmm_3            = gmm_fit$classification
+  ) |>
+  left_join(
+    df_clusters |> select(codigo_localidad, cluster_nombre, silueta_localidad),
+    by = "codigo_localidad"
+  )
+
+knitr::kable(
+  tabla_asignaciones_modelos |> select(-codigo_localidad),
+  digits    = 4,
+  col.names = c(
+    "Localidad", "KM", "PCA2", "PAM-E", "PAM-M", "AG-E", "AG-M", "GMM",
+    "Clúster final", "S(i)"
+  )
+)
+```
+
+```{r}
+#| label: tbl-sensibilidad-temporal
+#| tbl-cap: "Sensibilidad temporal del agrupamiento K-Means (K = 3, receta Z-score) según la inclusión de 2026 (corte septiembre)"
+## 3.11 Sensibilidad temporal al corte parcial 2026 ----
+evaluar_ventana_kmeans <- function(anios, etiqueta) {
+  df_v <- panel_delitos |>
+    filter(año %in% anios) |>
+    group_by(codigo_localidad, localidad) |>
+    summarise(
+      tasa_personas_prom = mean(tasa_hurto_personas, na.rm = TRUE),
+      tasa_resid_prom    = mean(tasa_hurto_residencias, na.rm = TRUE),
+      tasa_motos_prom    = mean(tasa_hurto_motos, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  mat_v <- hornear_matriz(receta_base, df_v)
+  set.seed(20261014)
+  km_v  <- kmeans(mat_v, centers = 3L, nstart = 50)
+  sil_v <- cluster::silhouette(km_v$cluster, dist(mat_v))
+
+  mismo_grupo_an_lm <- km_v$cluster[df_v$localidad == "Antonio Nariño"] ==
+    km_v$cluster[df_v$localidad == "Los Mártires"]
+
+  tibble(
+    ventana        = etiqueta,
+    silueta_media  = round(mean(sil_v[, 3]), 4),
+    n_silueta_neg  = sum(sil_v[, 3] < 0),
+    tamanios_grupo = paste(sort(as.integer(table(km_v$cluster)), decreasing = TRUE), collapse = " / "),
+    antonio_con_lm = ifelse(mismo_grupo_an_lm, "Sí (junto a Los Mártires)", "No (migra al residencial)")
+  )
+}
+
+tabla_sensibilidad_temporal <- bind_rows(
+  evaluar_ventana_kmeans(2022:2026, "2022-2026 (corte sep. 2026)"),
+  evaluar_ventana_kmeans(2023:2026, "2023-2026 (excluye 2022)"),
+  evaluar_ventana_kmeans(2022:2025, "2022-2025 (solo años completos)")
+)
+
+knitr::kable(
+  tabla_sensibilidad_temporal,
+  digits    = 4,
+  col.names = c("Ventana temporal", "Silueta media", "Siluetas < 0", "Tamaños", "Antonio Nariño")
+)
+```
+
+Como resume la @tbl-sensibilidad-temporal, con $N = 19$ localidades la membresía del grupo *Céntrico e Institucional* ($n = 5$) permanece intacta en las tres ventanas, mientras que la ubicación de **Antonio Nariño** junto a Los Mártires en `2022-2026` y `2023-2026` ($K^* = 3$, $\bar{S} = 0{,}5416$ y $0{,}5520$) depende de incluir los nueve meses disponibles de `2026`; al restringir a años completos (`2022-2025`), Antonio Nariño pasa al grupo residencial (`13 / 5 / 1`, $\bar{S} = 0{,}5062$).
 
 # Diagnóstico del corpus y análisis de sentimiento con `sentometrics` {#sec-sentometrics}
 
