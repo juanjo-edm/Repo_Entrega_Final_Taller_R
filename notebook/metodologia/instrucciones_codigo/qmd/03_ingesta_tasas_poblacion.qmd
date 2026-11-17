@@ -50,6 +50,13 @@ format:
         \usepackage{microtype}
         \usepackage{charter}
         \usepackage{fvextra}
+        \usepackage{xcolor}
+        \usepackage{tikz}
+        \usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+        \definecolor{NavyBlue}{HTML}{1B365D}
+        \definecolor{TealSoft}{HTML}{CCFBF1}
+        \definecolor{TealEdge}{HTML}{0D9488}
+        \definecolor{GraySoft}{HTML}{F3F4F6}
         \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\},fontsize=\small}
         \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
         \DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}
@@ -62,6 +69,26 @@ format:
         \DeclareUnicodeCharacter{2248}{\ensuremath{\approx}}
         \DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
 ---
+
+# Mapa del flujo de población y tasas
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=0.55cm and 0.9cm,
+  every node/.style={font=\sffamily\footnotesize},
+  stepbox/.style={rectangle, rounded corners=4pt, draw=TealEdge, fill=TealSoft!60, thick, text width=11.5cm, align=center, inner sep=5pt},
+  filebox/.style={rectangle, rounded corners=2pt, draw=NavyBlue!70, fill=GraySoft, dashed, text width=11.0cm, align=center, inner sep=4pt},
+  arrow/.style={-{Stealth[length=2.6mm, width=1.8mm]}, thick, draw=NavyBlue}
+]
+\node[stepbox] (s1) {\textbf{1. Ingesta (\texttt{descarga\_poblacion\_sds.R})}: Consulta paginada a la API CKAN de Datos Abiertos Bogot\'a (o CSV directo de respaldo)};
+\node[filebox, below=of s1] (f1) {\textbf{Crudo}: \texttt{data/raw/poblacion/poblacion\_localidades\_raw.parquet} (131.502 filas $\times$ 8 cols)};
+\node[stepbox, below=of f1] (s2) {\textbf{2. Procesamiento (\texttt{procesamiento\_poblacion.R})}: Excluye total distrital (\texttt{0}), suma edades/sexos, homologa c\'odigos y cruza con \texttt{delitos\_localidad\_anual.parquet} (95 filas)};
+\node[filebox, below=of s2] (f2) {\textbf{Final}: \texttt{data/processed/02\_poblacion/panel\_delitos\_poblacion\_localidad.parquet} (95 filas: conteos + 4 tasas por 100.000 hab.)};
+\draw[arrow] (s1) -- (f1);
+\draw[arrow] (f1) -- (s2);
+\draw[arrow] (s2) -- (f2);
+\end{tikzpicture}
+\end{center}
 
 # Script de ingesta: `descarga_poblacion_sds.R`
 

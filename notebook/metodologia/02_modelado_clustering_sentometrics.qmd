@@ -60,7 +60,7 @@ execute:
   message: false
 ---
 
-# Configuración inicial, arquitectura y datos de partida {#sec-config}
+# 0. Configuración inicial y arquitectura {.unnumbered #sec-config}
 
 Este cuaderno funciona como la guía principal para estudiar y replicar paso a paso la metodología cuantitativa del proyecto sobre hurtos y cobertura mediática en Bogotá entre enero de 2022 y septiembre de 2026. Todo el análisis parte de los insumos ya limpios y homologados en `data/processed/` (junto con la capa cartográfica oficial en `data/raw/delitos/`) y ejecuta en vivo, dentro de la memoria de R, cada componente del modelado sin depender de internet, sin leer resultados intermedios precalculados y sin sobrescribir archivos del repositorio:
 
@@ -72,15 +72,16 @@ Este cuaderno funciona como la guía principal para estudiar y replicar paso a p
 
 ::: {.callout-note}
 ## Punto de partida y ejecución autocontenida
-Los scripts previos de descarga (`scripts/01_ingesta/`) y depuración (`scripts/02_procesamiento/`) ya dejaron listos dos archivos base: el panel anual de delitos y población (`panel_delitos_poblacion_localidad.parquet`) y el corpus depurado de noticias (`noticias_procesadas.parquet`). En este cuaderno descartamos al inicio cualquier columna de clúster o sentimiento que pudiera existir en disco dentro de ese archivo de noticias, de modo que cada cálculo posterior se ejecute desde cero en memoria.
+Los scripts previos de descarga (`scripts/01_ingesta/`) y depuración (`scripts/02_procesamiento/`) ya dejaron listos dos archivos base: el panel anual de delitos y población (`panel_delitos_poblacion_localidad.parquet`) y el corpus depurado de noticias (`noticias_procesadas.parquet`). La documentación línea por línea de estos flujos de ingesta, procesamiento y clustering se encuentra en `notebook/metodologia/instrucciones_codigo/`. En este cuaderno descartamos al inicio cualquier columna de clúster o sentimiento que pudiera existir en disco dentro de ese archivo de noticias, de modo que cada cálculo posterior se ejecute desde cero en memoria.
 :::
 
-## Diagrama de arquitectura del flujo analítico
+## Diagrama de arquitectura del flujo analítico {.unnumbered}
 
 La @fig-arquitectura resume cómo los datos procesados alimentan los tres scripts analíticos replicados en este documento y cómo sus salidas convergen hacia la capa espacial y la aplicación Shiny.
 
 ```{dot}
 //| label: fig-arquitectura
+//| echo: false
 //| fig-cap: "Flujo del modelado territorial, descriptivos, sentometrics y visualización en R Shiny a partir de los datos procesados"
 //| fig-width: 7.5
 //| fig-height: 4.5
@@ -149,7 +150,7 @@ digraph pipeline {
     {
       rank=same;
       m_km [
-        label="04_clustering_kmeans.R (Sección 3)\nZ-score + K-Means (K* = 3) + silueta",
+        label="04_clustering_kmeans.R (Sección 3)\nrecipes + K-Means (K* = 3) + Gap + sensibilidad",
         fillcolor="#ffffff",
         color="#15803d"
       ];
@@ -208,7 +209,7 @@ digraph pipeline {
 }
 ```
 
-## Opciones globales, librerías y rutas relativas
+## Opciones globales, librerías y rutas relativas {.unnumbered}
 
 El bloque inicial reproduce las convenciones de todo el proyecto: desactivar la notación científica (`scipen = 999`), fijar la semilla global (`20261014`) para que tanto `K-Means` como cualquier rutina muestral o de optimización sean determinísticos, resolver ambigüedades entre paquetes con `{conflicted}` y construir rutas relativas portables mediante `{here}`.
 
@@ -269,6 +270,142 @@ stopifnot(
   file.exists(archivo_noticias_p),
   file.exists(archivo_geo_raw)
 )
+```
+
+# Datos de partida: fundamento teórico, lógica de procesamiento y resumen de código {#sec-datos}
+
+Antes de estimar tasas, clústeres o modelos de sentimiento, esta sección explica **por qué elegimos y combinamos estas tres fuentes de datos** y sintetiza **toda la lógica de extracción, limpieza y estructuración** junto con un resumen del código ejecutado en `scripts/01_ingesta/` y `scripts/02_procesamiento/`. Las guías completas línea por línea residen en `notebook/metodologia/instrucciones_codigo/`.
+
+## Fundamento teórico: por qué combinamos estas tres fuentes
+
+El proyecto parte de una pregunta central de economía aplicada y seguridad urbana: **¿coincide la geografía objetiva del delito registrado con la atención y el sentimiento mediático en Bogotá?** Para responderla sin sesgos de medición necesitamos articular tres fuentes complementarias:
+
+1. **Delitos patrimoniales cotidianos en lugar de homicidios (SDSCJ / SIEDCO):** la literatura empírica para Bogotá demuestra que el miedo ciudadano al delito diverge de la tendencia de los homicidios y responde con mucha mayor fuerza a los delitos patrimoniales de exposición diaria (Restrepo & Moreno, 2007, *"Bogotá: ¿más crimen?, ¿más miedo?"*, *Desarrollo y Sociedad* 59, DOI: `10.13043/dys.59.5`; Encuesta de Percepción y Victimización de la CCB; ECSC del DANE). Por ello, dentro de los **11 Delitos de Alto Impacto (DAI)** priorizamos **hurto a personas**, **hurto a residencias** y **hurto a motocicletas**.
+2. **Proyecciones demográficas oficiales para pasar de volumen a riesgo (SDS):** usar conteos absolutos de denuncias confunde tamaño poblacional con intensidad delictiva (localidades cercanas al millón de habitantes como Suba o Kennedy lideran en volumen bruto, aunque su tasa por habitante sea moderada). Las proyecciones oficiales de la Secretaría Distrital de Salud permiten expresar cada delito como **tasa por cada 100.000 habitantes**, haciendo comparables a las **19 localidades urbanas** (y excluyendo a Sumapaz rural, `"20"`, por su escala de páramo no comparable).
+3. **Corpus propio de prensa local geolocalizada y clasificada por DAI (Google News RSS):** los índices generales de opinión pública no desagregan por localidad ni distinguen entre un hurto real, un accidente de tránsito o una noticia deportiva homónima (*Santa Fe* fútbol, *Bosa* Italia, *San Cristóbal* Venezuela). Construir un corpus mensual (`2022-01` a `2026-09`) con filtros de homonimia, limpieza NLP y clasificación en los **11 DAI** permite alinear exactamente la agenda mediática con el calendario oficial (`CMMES: Ene-Sep` para `2026`).
+
+## Delitos oficiales (SDSCJ / SIEDCO): ingesta espacial y panel largo
+
+- **Fuente y 11 Delitos de Alto Impacto (DAI):** la SDSCJ consolida 11 categorías oficiales a partir del SIEDCO (Policía Nacional) y Fiscalía en `dai_geojson.zip` (corte `2026` a septiembre, `CMMES: Ene-Sep`). Elegimos tres modalidades patrimoniales cotidianas (`hurto_personas`, `hurto_residencias`, `hurto_motos`) porque son las que más deterioran la percepción de seguridad urbana y explican por qué el temor al delito diverge de los homicidios (Restrepo & Moreno, 2007, *Desarrollo y Sociedad* 59; CCB EPV; DANE ECSC).
+- **Lógica de transformación:** `descarga_delitos_sdscj.R` descarga el ZIP a un directorio temporal, extrae el GeoJSON (`21` polígonos × `137` columnas en formato ancho: `CMHP22CONT`..`26CONT`, `CMHR`, `CMHM`) y lo guarda intacto. Luego `procesamiento_delitos.R` retira los polígonos (`st_drop_geometry()`), pivota las columnas anuales a formato largo (`extraer_modalidad()`), corrige tildes y `"La Candelaria"`, une las tres modalidades y excluye Sumapaz (`"20"`, rural) y `"99"` (`Sin Localización`) $\rightarrow$ `95` filas (`19` localidades × `5` años).
+
+```{r}
+#| label: resumen-codigo-delitos
+#| eval: false
+
+# 1) Retirar geometría y pasar de formato ancho (CMHP22CONT..26CONT) a largo
+df_delitos_raw <- sf::st_drop_geometry(sf::st_read(archivo_geojson, quiet = TRUE))
+
+extraer_modalidad <- function(df, prefijo, nombre_var) {
+  df |>
+    select(codigo_localidad = CMIULOCAL, localidad = CMNOMLOCAL, all_of(paste0(prefijo, 22:26, "CONT"))) |>
+    pivot_longer(starts_with(prefijo), names_to = "año", names_prefix = prefijo, values_to = nombre_var) |>
+    mutate(
+      año = as.integer(str_remove(año, "CONT")) + 2000L,
+      codigo_localidad = sprintf("%02d", as.integer(codigo_localidad)),
+      localidad = case_match(str_to_title(trimws(localidad)),
+        "Usaquen" ~ "Usaquén", "San Cristobal" ~ "San Cristóbal", "Engativa" ~ "Engativá",
+        "Fontibon" ~ "Fontibón", "Candelaria" ~ "La Candelaria", "Los Martires" ~ "Los Mártires",
+        "Antonio Narino" ~ "Antonio Nariño", "Ciudad Bolivar" ~ "Ciudad Bolívar", .default = str_to_title(trimws(localidad))
+      )
+    )
+}
+
+# 2) Unir 3 modalidades y excluir Sumapaz ("20") y "99" -> 95 filas
+panel_delitos <- extraer_modalidad(df_delitos_raw, "CMHP", "hurto_personas") |>
+  left_join(extraer_modalidad(df_delitos_raw, "CMHR", "hurto_residencias"), by = c("codigo_localidad", "localidad", "año")) |>
+  left_join(extraer_modalidad(df_delitos_raw, "CMHM", "hurto_motos"),       by = c("codigo_localidad", "localidad", "año")) |>
+  filter(!codigo_localidad %in% c("20", "99"))
+```
+
+## Población distrital (SDS): consulta API CKAN y cálculo de tasas
+
+- **Lógica de ingesta y cruce:** `descarga_poblacion_sds.R` consulta la API CKAN de Datos Abiertos Bogotá en bloques paginados de `10.000` filas (con respaldo CSV directo), descargando `131.502` registros por localidad, año, edad y sexo. Luego `procesamiento_poblacion.R` excluye el total distrital (`0` / `Bogotá`), filtra `2022–2026`, suma `poblacion` por `(codigo_localidad, año)` y cruza con `delitos_localidad_anual.parquet` para calcular las **4 tasas por cada 100.000 habitantes** (`hurto_personas`, `hurto_residencias`, `hurto_motos`, `hurto_total`).
+
+```{r}
+#| label: resumen-codigo-poblacion
+#| eval: false
+
+# 1) Agregación demográfica desde 131.502 filas (edad x sexo) a 95 filas (localidad x año)
+pob_anual <- pob_raw |>
+  filter(!codigo_localidad %in% c("0", "00"), between(año, 2022L, 2026L)) |>
+  group_by(codigo_localidad = sprintf("%02d", as.integer(codigo_localidad)), año) |>
+  summarise(poblacion = sum(poblacion, na.rm = TRUE), .groups = "drop")
+
+# 2) Cruce con delitos y cálculo de tasas por 100.000 habitantes
+panel_final <- delitos_anual |>
+  inner_join(pob_anual, by = c("codigo_localidad", "año")) |>
+  mutate(
+    tasa_hurto_personas    = (hurto_personas    / poblacion) * 100000,
+    tasa_hurto_residencias = (hurto_residencias / poblacion) * 100000,
+    tasa_hurto_motos       = (hurto_motos       / poblacion) * 100000,
+    tasa_hurto_total       = tasa_hurto_personas + tasa_hurto_residencias + tasa_hurto_motos
+  )
+```
+
+## Prensa digital (Google News RSS), limpieza NLP y clasificador 11 DAI
+
+- **Lógica de scraping RSS/XML (`scraping_google_news.R`):** en lugar de automatizar un navegador sujeto a CAPTCHAs, consulta el canal oficial RSS en una malla de `19` localidades × `57` meses (`2022-01` a `2026-09`) donde haya déficit (`< 4` notas), cruzando con `5` familias booleanas de los 11 DAI y exclusiones negativas contra homonimias (`-futbol` en Santa Fe, `-venezuela` en San Cristóbal/Ciudad Bolívar, `-universidad` en Antonio Nariño, `-italia` en Bosa). Parsea el XML con `xml2` (`parsear_rss()`), aplica **deduplicación dual** (por URL canónica sin `?utm_...` y por titular normalizado sin tildes/mayúsculas) y valida `confianza_geografica` por mención de barrios $\rightarrow$ **`3.916` noticias únicas**.
+- **Lógica NLP y clasificador jerárquico (`procesamiento_noticias.R`):** genera `localidad_slug` en *snake_case* sin guiones medios (ya que `sentometrics` reserva `--` como separador interno entre diccionario, característica y tiempo); aplica `limpiar_cuerpo_web()` en cadena con `purrr::reduce()` para remover HTML, *cookies* y bloques *"Lea también..."*; y clasifica en cascada **título $\rightarrow$ resumen $\rightarrow$ cuerpo** exigiendo cercanía de 4 palabras, *negative lookaheads* (`rob(?!(ust|ot...))`) y filtro de siniestros viales, homologando con `mapa_sdscj` (`2.588` DAI estrictos, `538` hurto s/i, `790` No DAI).
+
+```{r}
+#| label: resumen-codigo-noticias
+#| eval: false
+
+# 1) Malla incremental (19 localidades x 57 meses) + URL RSS + pmap() + deduplicación dual
+df_nuevas_rss <- expand_grid(localidad = catalogo_localidades$localidad, mes_inicio = meses_muestra) |>
+  left_join(conteo_actual, by = c("localidad", "mes_inicio")) |>
+  filter(coalesce(n, 0L) < 4L) |>
+  cross_join(familias_dai) |>
+  mutate(
+    cadena  = str_squish(paste(terminos, "Bogota", paste0('"', localidad, '"'), exclusiones,
+                               paste0("after:", mes_inicio - days(1)), paste0("before:", mes_inicio %m+% months(1)))),
+    url_rss = paste0("https://news.google.com/rss/search?q=", URLencode(cadena, reserved = TRUE), "&hl=es-419&gl=CO&ceid=CO:es-419"),
+    articulos = pmap(list(url_rss, localidad, mes_inicio, mes_inicio %m+% months(1)), parsear_rss)
+  ) |>
+  select(articulos) |> unnest(cols = articulos) |>
+  distinct(enlace, .keep_all = TRUE) |>
+  distinct(tolower(stri_trans_general(titulo, "Latin-ASCII")), .keep_all = TRUE)
+
+# 2) Slug sin '-' para sentometrics, limpieza web y cascada DAI (titulo -> resumen -> cuerpo)
+df_proc <- df_raw |>
+  mutate(
+    localidad_slug = localidad |> stri_trans_general("Latin-ASCII") |> str_to_lower() |>
+      str_remove("^la\\s+") |> str_replace_all("[\\s\\-]+", "_"),
+    cuerpo_limpio  = limpiar_cuerpo_web(cuerpo, resumen),
+    delito_sdscj   = recode(modalidad_dai, !!!mapa_sdscj)
+  )
+```
+
+## Resumen de insumos y trazabilidad de la transformación
+
+```{r}
+#| label: tbl-insumos-datos
+#| tbl-cap: "Inventario de insumos procesados y capa geográfica verificados al inicio del cuaderno"
+#| echo: false
+
+ins_del <- arrow::read_parquet(archivo_delitos_p)
+ins_not <- arrow::read_parquet(archivo_noticias_p)
+ins_geo <- sf::st_read(archivo_geo_raw, quiet = TRUE)
+
+tibble::tibble(
+  `Insumo (archivo en disco)` = c(
+    "Panel delitos y población (panel_delitos_poblacion_localidad.parquet)",
+    "Corpus de noticias NLP/DAI (noticias_procesadas.parquet)",
+    "Cartografía oficial SDSCJ (localidades_bogota_raw.geojson)"
+  ),
+  Dimensiones = c(
+    paste0(nrow(ins_del), " filas × ", ncol(ins_del), " cols"),
+    paste0(format(nrow(ins_not), big.mark = "."), " filas × ", ncol(ins_not), " cols"),
+    paste0(nrow(ins_geo), " polígonos × ", ncol(ins_geo), " cols")
+  ),
+  Cobertura = c(
+    "19 localidades urbanas (2022–2026)",
+    "2022-01 a 2026-09 (11 DAI + No DAI)",
+    "Polígonos oficiales Bogotá D.C."
+  )
+) |>
+  knitr::kable()
 ```
 
 # Modelado y diagnóstico de tasas de hurto por 100.000 habitantes {#sec-tasas}
@@ -532,7 +669,11 @@ knitr::kable(
 )
 ```
 
-Como muestra la @tbl-diagnostico-kmeans y se grafica en la @fig-diagnostico-silueta, la silueta promedio alcanza su máximo en **$K^* = 3$** ($\bar{S} = `r max(diagnostico_k$silueta_media)`$), reduciendo la inercia interna ($WSS$) a `r diagnostico_k$wss[diagnostico_k$k == 3]` y capturando el **`r diagnostico_k$bss_tss_pct[diagnostico_k$k == 3]`%** de la varianza tridimensional.
+Como muestra la @tbl-diagnostico-kmeans y se grafica en la @fig-diagnostico-silueta, la silueta promedio alcanza su máximo en **$K^* = 3$** ($\bar{S} = `r max(diagnostico_k$silueta_media)`$), reduciendo la inercia interna ($WSS$) a `r diagnostico_k$wss[diagnostico_k$k == 3]` y capturando el **`r diagnostico_k$bss_tss_pct[diagnostico_k$k == 3]`%** de la varianza tridimensional:
+
+- **¿Qué significa una silueta promedio de `0,5416`?** En la escala $[-1, 1]$, valores entre `0,51` y `0,70` indican una **estructura sólida y bien definida**: en promedio, cada localidad está más de dos veces más cerca de su propio grupo que del perfil vecino más cercano.
+- **¿Qué mide `WSS = 13,58` (`74,85%` de varianza explicada)?** Partiendo de una dispersión total de $TSS = 3 \times 18 = 54{,}00$ ($K=1$), agrupar en $K=3$ reduce la suma de errores cuadráticos internos a `13,58`, reteniendo el `74,85%` de la heterogeneidad delictiva entre localidades.
+- **¿Por qué descartamos $K=4$ o $K=5$?** Al aumentar $K$, el $WSS$ siempre cae (`8,15` y `5,90`), pero la silueta se deteriora (`0,4786` y `0,3792`) porque los grupos adicionales quedan demasiado próximos entre sí y pierden separación real.
 
 ```{r}
 #| label: fig-diagnostico-silueta
@@ -932,6 +1073,46 @@ ggplot(
   ) +
   theme_minimal(base_size = 11) +
   theme(legend.position = "bottom", plot.title = element_text(face = "bold", size = 13))
+```
+
+## Validación metodológica y sensibilidad (`recipes`, PCA, distancias y modelos)
+
+En `scripts/04_clustering_kmeans.R` complementamos el modelo base con una batería de sensibilidad estilo *tidymodels* (`{recipes}` + `{broom}` + `{cluster}` + `{mclust}`) para comprobar que la tipología de $K^*=3$ no sea un artefacto del escalamiento, de la distancia euclidiana o del algoritmo elegido:
+
+1. **Preprocesamiento alternativo y PCA 2D (`@tbl-sensibilidad-escalamientos`):** contrastamos la receta base `Z-score` frente a `Min-Max [0, 1]`, `Robusto (Mediana/IQR)`, `Log(1 + x) + Z-score` y `PCA 2D` (`PC1 + PC2` retienen el `96,38%` de la varianza total). Con el **Índice de Rand Ajustado ($\text{ARI}$)** verificamos que `Z-score`, `Robusto` y `PCA 2D` producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$), por lo que preferimos `Z-score` al conservar la interpretabilidad directa en las tres tasas originales.
+2. **Contraste de algoritmos y distancias (`@tbl-comparacion-modelos`):** comparamos `K-Means` frente a **PAM** (medoides), **AGNES (`Ward.D2`)** (jerárquico) y **GMM** (mezclas gaussianas con distancia de Mahalanobis), bajo distancia **Euclidiana** y **Manhattan**, además del estadístico **Gap** con 100 réplicas *bootstrap* (`gap_k3 = 0,1545`). `K-Means` obtiene la silueta más alta (`0,5416`); **PAM** y **AGNES** coinciden en **18 de 19 localidades** ($\text{ARI} = 0{,}8484$), moviendo únicamente a **Antonio Nariño** (el único caso frontera del modelo base, con silueta `-0,2116`).
+3. **Sensibilidad temporal al corte `2026`:** al ser $N=19$ localidades, el perfil *Comercial y Automotor* ($n=2$) es sensible a la inclusión del año incompleto `2026` (`CMMES: Ene-Sep`): en `2022–2026` y `2023–2026`, Los Mártires y Antonio Nariño se agrupan juntos ($K^*=3$, $\bar{S}=0{,}5416$ y $0{,}5520$); al restringir a `2022–2025`, Antonio Nariño migra y Los Mártires queda aislado (`13 / 5 / 1`, $\bar{S}=0{,}5062$).
+
+```{r}
+#| label: tbl-sensibilidad-escalamientos
+#| tbl-cap: "Sensibilidad de K-Means (K = 3) a diferentes escalamientos (recipes) y PCA 2D"
+
+sens_esc <- readr::read_csv(
+  here::here("output", "tables", "tabla_sensibilidad_escalamientos_pca.csv"),
+  show_col_types = FALSE
+)
+
+knitr::kable(
+  sens_esc,
+  digits    = 4,
+  col.names = c("Espacio", "Silueta", "Neg.", "WSS", "ARI base", "Var. PC1", "Var. PC2", "Acum. 2D")
+)
+```
+
+```{r}
+#| label: tbl-comparacion-modelos
+#| tbl-cap: "Contraste de modelos (K-Means, PAM, AGNES Ward y GMM) y distancias (Euclidiana vs. Manhattan) para K = 3"
+
+comp_mod <- readr::read_csv(
+  here::here("output", "tables", "tabla_comparacion_modelos_distancias.csv"),
+  show_col_types = FALSE
+)
+
+knitr::kable(
+  comp_mod,
+  digits    = 4,
+  col.names = c("Modelo", "Distancia", "Silueta", "Neg.", "Tamaños", "ARI vs. K-Means", "Gap (K=3)")
+)
 ```
 
 # Diagnóstico del corpus y análisis de sentimiento con `sentometrics` {#sec-sentometrics}

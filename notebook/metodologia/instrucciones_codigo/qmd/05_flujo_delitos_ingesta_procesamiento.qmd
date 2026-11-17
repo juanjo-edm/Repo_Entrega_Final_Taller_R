@@ -1,0 +1,465 @@
+---
+title: "Ingesta y Procesamiento de Delitos Oficiales (SDSCJ / SIEDCO) en Bogotá (2022–2026)"
+subtitle: "Taller de Programación en R — Maestría en Economía Aplicada (MECA)"
+author:
+  - "Juan José Echeverry — 202616233"
+  - "Miguelangel Palma — 202621481"
+  - "Sergio Alejandro López Valderrama — 202111932"
+  - "Gabriel Arturo Echeverry Castaño — 201016705"
+  - "Olga Lucía Ramírez Contreras — 202624900"
+  - "Juan Esteban Carvajal Cruz — 202614312"
+date: "2026-11-16"
+lang: es
+format:
+  pdf:
+    pdf-engine: pdflatex
+    documentclass: article
+    papersize: letter
+    fontsize: 10pt
+    linestretch: 1.15
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    colorlinks: true
+    geometry:
+      - top=25mm
+      - bottom=25mm
+      - left=20mm
+      - right=20mm
+    fig-width: 7.5
+    fig-height: 4.5
+    fig-pos: 'H'
+    include-in-header:
+      text: |
+        \usepackage{microtype}
+        \usepackage{charter}
+        \usepackage{fvextra}
+        \usepackage{xcolor}
+        \usepackage{float}
+        \floatplacement{figure}{H}
+        \makeatletter
+        \def\@minipagerestore{\setlength{\parskip}{5pt}}
+        \makeatother
+        \usepackage{tikz}
+        \usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+        \definecolor{NavyBlue}{HTML}{1B365D}
+        \definecolor{CrimeEdge}{HTML}{B45309}
+        \definecolor{CrimeSoft}{HTML}{FEF3C7}
+        \definecolor{GraySoft}{HTML}{F3F4F6}
+        \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\},fontsize=\scriptsize}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+        \DeclareUnicodeCharacter{2714}{\ensuremath{\checkmark}}
+        \DeclareUnicodeCharacter{2139}{i}
+        \DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+execute:
+  eval: true
+  echo: false
+  warning: false
+  message: false
+---
+
+Este documento explica línea por línea cómo funcionan `descarga_delitos_sdscj.R` y `procesamiento_delitos.R`, encargados de obtener y estructurar los registros oficiales de hurtos en las 19 localidades urbanas de Bogotá (2022–2026). Para leer las tablas que siguen: a la izquierda está el código tal como aparece en el archivo, con el número de línea original; a la derecha, qué hace (`L` indica las líneas explicadas), y las frases en cursiva al final resumen la idea sin tecnicismos.
+
+# ¿Qué son los Delitos de Alto Impacto (DAI) y por qué elegimos 3 modalidades?
+
+\begin{center}
+\begin{tikzpicture}[
+  node distance=0.5cm,
+  every node/.style={font=\sffamily\footnotesize},
+  stepbox/.style={rectangle, rounded corners=4pt, draw=CrimeEdge, fill=CrimeSoft!60, thick, text width=12.0cm, align=center, inner sep=5pt},
+  filebox/.style={rectangle, rounded corners=2pt, draw=NavyBlue!70, fill=GraySoft, dashed, text width=11.5cm, align=center, inner sep=4pt},
+  arrow/.style={-{Stealth[length=2.6mm, width=1.8mm]}, thick, draw=NavyBlue}
+]
+\node[stepbox] (s1) {\textbf{1. Ingesta (\texttt{descarga\_delitos\_sdscj.R})}: Descarga \texttt{dai\_geojson.zip} desde Datos Abiertos Bogot\'a y extrae el GeoJSON};
+\node[filebox, below=of s1] (f1) {\textbf{Crudo}: \texttt{data/raw/delitos/localidades\_bogota\_raw.geojson} (21 pol\'igonos, formato ancho)};
+\node[stepbox, below=of f1] (s2) {\textbf{2. Procesamiento (\texttt{procesamiento\_delitos.R})}: Quita geometr\'ia, pivota 2022--2026 (\texttt{CMHP/CMHR/CMHM}), corrige tildes y excluye Sumapaz};
+\node[filebox, below=of s2] (f2) {\textbf{Limpio}: \texttt{data/processed/01\_delitos/delitos\_localidad\_anual.parquet} (95 filas: 19 loc. $\times$ 5 a\~nos)};
+\draw[arrow] (s1) -- (f1);
+\draw[arrow] (f1) -- (s2);
+\draw[arrow] (s2) -- (f2);
+\end{tikzpicture}
+\end{center}
+
+- **Delitos de Alto Impacto (DAI) y 11 categorías oficiales:** son las conductas delictivas priorizadas por la política pública distrital por su impacto directo sobre la vida, integridad, libertad y patrimonio. La **SDSCJ** consolida **11 categorías** desde el **SIEDCO** (Policía Nacional) y Fiscalía en [Datos Abiertos Bogotá](https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c) (`dai_geojson.zip`, corte `CMMES: Ene-Sep`): Homicidio, Lesiones personales, Hurto a personas, Hurto a residencias, Hurto a comercio, Hurto a entidades financieras, Hurto de automotores, Hurto de motocicletas, Extorsión, Delitos sexuales y Violencia intrafamiliar.
+- **Por qué modelamos 3 modalidades patrimoniales (`hurto_personas`, `hurto_residencias`, `hurto_motos`):** son los delitos cotidianos de mayor exposición ciudadana que más deterioran la percepción de inseguridad en Bogotá, explicando por qué el miedo al delito diverge de las cifras de homicidios (Restrepo & Moreno, 2007, *"Bogotá: ¿más crimen?, ¿más miedo?"*, *Desarrollo y Sociedad* 59, DOI: `10.13043/dys.59.5`; CCB EPV; DANE ECSC).
+- **GeoJSON espacial y `st_drop_geometry()`:** el archivo oficial viene como capa geográfica (21 polígonos × 137 columnas). Como aquí solo necesitamos los conteos por localidad y año, retiramos la geometría con `sf::st_drop_geometry()` para acelerar la manipulación tabular, conservando los polígonos en disco para los mapas posteriores (`04_clustering_kmeans.R`).
+- **Formato ancho vs. largo (`pivot_longer`):** la SDSCJ nombra las columnas combinando prefijo de delito, año a dos dígitos y sufijo `CONT` (`CMHP22CONT`..`26CONT` para Hurto a Personas, `CMHR` para Residencias, `CMHM` para Motos). Al pivotar a formato largo y unir las 3 modalidades obtenemos un panel limpio de **19 localidades urbanas × 5 años (`95` filas)**, excluyendo Sumapaz (`"20"`, rural) y `"99"` (`Sin Localización`).
+
+---
+
+# Script de ingesta: `descarga_delitos_sdscj.R`
+
+Este script descarga el paquete ZIP oficial de Datos Abiertos Bogotá, extrae el archivo `.geojson` y lo guarda sin modificar en `data/raw/delitos/localidades_bogota_raw.geojson`. Su ruta es `scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R`.
+
+## Encabezado y configuración
+
+:::: {layout="[54, -3, 43]" layout-valign="top"}
+::: {}
+
+```{.r .numberLines startFrom="2"}
+# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
+# SCRIPT: scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R
+# ROL: Ingesta Oficial de Delitos de Alto Impacto y Cartografía (SDSCJ)
+# FUENTE: Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) /
+#         SIEDCO (Policía Nacional) — Datos Abiertos Bogotá:
+#         https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c
+# PRODUCE: data/raw/delitos/localidades_bogota_raw.geojson
+# ==============================================================================
+
+# 1. Configuración y Dependencias ----
+
+## 1.1 Opciones globales y semilla ----
+options(scipen = 999)
+set.seed(20261014)
+
+## 1.2 Carga de librerías y resolución de conflictos ----
+library(here)
+library(conflicted)
+library(sf)
+library(dplyr)
+library(httr)
+
+conflict_prefer("filter", "dplyr", quiet = TRUE)
+conflict_prefer("lag",    "dplyr", quiet = TRUE)
+conflict_prefer("select", "dplyr", quiet = TRUE)
+
+## 1.3 Rutas relativas de almacenamiento ----
+ruta_raw_delitos <- here::here("data", "raw", "delitos")
+archivo_salida   <- file.path(ruta_raw_delitos, "localidades_bogota_raw.geojson")
+
+if (!dir.exists(ruta_raw_delitos)) {
+  dir.create(ruta_raw_delitos, recursive = TRUE, showWarnings = FALSE)
+}
+```
+
+:::
+
+::: {}
+
+- **L2–9**: Cabecera con la fuente oficial SDSCJ/SIEDCO y la ruta de salida.
+
+- **L14–15**: Desactiva la notación científica y fija la semilla del proyecto (`20261014`).
+
+- **L18–26**: Carga `{sf}` (mapas GeoJSON), `{httr}` (descarga web), `{dplyr}` y `{here}`, resolviendo conflictos a favor de `dplyr`.
+
+- **L29–34**: Define la carpeta `data/raw/delitos/` y la crea si no existe. *Dejamos listas las librerías y la carpeta destino antes de conectarnos.*
+
+:::
+::::
+
+## Descarga del ZIP, extracción y verificación
+
+:::: {layout="[54, -3, 43]" layout-valign="top"}
+::: {}
+
+```{.r .numberLines startFrom="36"}
+# 2. Descarga de Capa Oficial SDSCJ ----
+
+## 2.1 Definición de la función de descarga y descompresión ----
+url_zip_sdscj <- "https://datosabiertos.bogota.gov.co/dataset/7b270013-42ca-436b-9c1e-3bcb7d280c6b/resource/aba0e25d-d407-45f4-9a98-327493b538bd/download/dai_geojson.zip"
+
+descargar_delitos <- function() {
+  tmp_zip <- tempfile(fileext = ".zip")
+  on.exit(unlink(tmp_zip), add = TRUE)
+
+  resp <- httr::GET(url_zip_sdscj, httr::write_disk(tmp_zip, overwrite = TRUE), httr::timeout(120))
+  if (httr::status_code(resp) != 200) {
+    stop("Error al conectar con Datos Abiertos Bogotá (HTTP ", httr::status_code(resp), ").")
+  }
+
+  tmp_dir <- tempfile()
+  dir.create(tmp_dir)
+  on.exit(unlink(tmp_dir, recursive = TRUE), add = TRUE)
+
+  unzip(tmp_zip, exdir = tmp_dir)
+  archivos_geo <- list.files(tmp_dir, pattern = "\\.geojson$", full.names = TRUE)
+  if (length(archivos_geo) == 0) {
+    stop("No se encontró ningún archivo GeoJSON dentro del paquete ZIP descargado.")
+  }
+
+  delitos_sf <- sf::st_read(archivos_geo[1], quiet = TRUE)
+  sf::st_write(delitos_sf, archivo_salida, delete_dsn = TRUE, quiet = TRUE)
+  message("✔ Archivo guardado correctamente en: ", archivo_salida)
+}
+```
+
+:::
+
+::: {}
+
+- **L42–43**: Crea un archivo temporal para el `.zip` y programa su borrado automático al salir de la función (`on.exit`).
+
+- **L45–48**: Descarga el `.zip` a disco con `httr::GET()` (timeout 120 s) y exige código HTTP `200` (éxito).
+
+- **L50–58**: Descomprime en carpeta temporal, ubica el `.geojson` interno con `list.files()`, lo lee con `sf::st_read()` y lo guarda limpio en `archivo_salida`. *Bajamos el ZIP, sacamos el mapa con los conteos y borramos los temporales.*
+
+:::
+::::
+
+:::: {layout="[54, -3, 43]" layout-valign="top"}
+::: {}
+
+```{.r .numberLines startFrom="65"}
+## 2.2 Ejecución controlada con verificación de existencia ----
+message(">>> Iniciando descarga de Delitos de Alto Impacto (SDSCJ)...")
+
+if (!file.exists(archivo_salida)) {
+  tryCatch({
+    descargar_delitos()
+  }, error = function(e) {
+    stop("Fallo en la descarga de delitos SDSCJ: ", conditionMessage(e))
+  })
+} else {
+  message("ℹ Archivo ya existe en: ", archivo_salida, ". Omitiendo descarga remota.")
+}
+
+# 3. Verificación de Integridad y Diagnóstico ----
+
+## 3.1 Comprobación de atributos temporales 2026 y geometrías ----
+stopifnot(file.exists(archivo_salida))
+delitos_check <- sf::st_read(archivo_salida, quiet = TRUE)
+
+cols_2026 <- grep("26CONT", names(delitos_check), value = TRUE)
+stopifnot(length(cols_2026) > 0)
+stopifnot("CMHP26CONT" %in% names(delitos_check))
+stopifnot(nrow(delitos_check) >= 20)
+
+## 3.2 Reporte de auditoría en consola ----
+tamanio_mb <- round(file.info(archivo_salida)$size / (1024^2), 2)
+message("✔ Integridad verificada: ", nrow(delitos_check), " geometrías, corte temporal con ", length(cols_2026), " variables de 2026 (", tamanio_mb, " MB).")
+```
+
+:::
+
+::: {}
+
+- **L68–76**: Si el `.geojson` ya existe en disco, salta la descarga remota para poder ejecutar el proyecto sin internet.
+
+- **L81–87**: Verifica que el archivo exista, tenga columnas de `2026` (`"26CONT"`, incluida `CMHP26CONT`) y al menos `20` geometrías.
+
+- **L90–91**: Reporta en consola el número de geometrías, variables de 2026 y peso en MB. *Si ya bajamos el archivo antes, no lo volvemos a pedir.*
+
+:::
+::::
+
+```{r}
+#| label: tbl-preview-delitos-raw
+#| tbl-cap: "Vista previa del GeoJSON crudo sin geometría (formato ancho: 21 filas × 137 cols)"
+
+del_raw <- sf::st_read(
+  here::here("data", "raw", "delitos", "localidades_bogota_raw.geojson"),
+  quiet = TRUE
+) |>
+  sf::st_drop_geometry() |>
+  dplyr::select(
+    Cod = CMIULOCAL,
+    Localidad = CMNOMLOCAL,
+    HP_22 = CMHP22CONT,
+    HP_23 = CMHP23CONT,
+    HR_22 = CMHR22CONT,
+    HM_22 = CMHM22CONT
+  ) |>
+  dplyr::slice_head(n = 4)
+
+knitr::kable(del_raw)
+```
+
+---
+
+# Script de procesamiento: `procesamiento_delitos.R`
+
+Este script toma `localidades_bogota_raw.geojson`, quita los polígonos, pasa los conteos anuales de formato ancho a largo, homologa nombres con tildes, excluye Sumapaz y exporta `data/processed/01_delitos/delitos_localidad_anual.parquet` (`95` filas × `6` columnas).
+
+## Encabezado, carga y eliminación de geometría
+
+:::: {layout="[54, -3, 43]" layout-valign="top"}
+::: {}
+
+```{.r .numberLines startFrom="2"}
+# PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
+# SCRIPT: scripts/02_procesamiento/01_delitos/procesamiento_delitos.R
+# ROL: Procesamiento y Estructuración de Delitos Oficiales SDSCJ (2022-2026)
+# FUENTE: Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) /
+#         SIEDCO (Policía Nacional) — Datos Abiertos Bogotá:
+#         https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c
+# ENTRA: data/raw/delitos/localidades_bogota_raw.geojson
+# PRODUCE: data/processed/01_delitos/delitos_localidad_anual.parquet
+# ==============================================================================
+
+# 1. Configuración y Dependencias ----
+options(scipen = 999)
+set.seed(20261014)
+
+library(here)
+library(conflicted)
+library(arrow)
+library(readr)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(sf)
+
+conflict_prefer("filter", "dplyr", quiet = TRUE)
+conflict_prefer("lag",    "dplyr", quiet = TRUE)
+conflict_prefer("select", "dplyr", quiet = TRUE)
+
+ruta_raw_delitos  <- here::here("data", "raw", "delitos")
+ruta_proc_delitos <- here::here("data", "processed", "01_delitos")
+archivo_geojson   <- file.path(ruta_raw_delitos, "localidades_bogota_raw.geojson")
+archivo_salida    <- file.path(ruta_proc_delitos, "delitos_localidad_anual.parquet")
+
+if (!dir.exists(ruta_proc_delitos)) {
+  dir.create(ruta_proc_delitos, recursive = TRUE, showWarnings = FALSE)
+}
+
+# 2. Carga y Validación de Datos Crudos ----
+if (!file.exists(archivo_geojson)) {
+  stop("No se encontró '", archivo_geojson, "'. Ejecute primero: source('scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R')")
+}
+delitos_sf <- sf::st_read(archivo_geojson, quiet = TRUE)
+df_delitos_raw <- sf::st_drop_geometry(delitos_sf)
+```
+
+:::
+
+::: {}
+
+- **L2–41**: Carga `{arrow}`, `{tidyr}`, `{stringr}` y `{sf}`, y define las rutas de entrada (`.geojson`) y salida (`.parquet`).
+
+- **L45–49**: Verifica que exista el GeoJSON crudo, lo lee con `sf::st_read()` y usa `sf::st_drop_geometry()` para quitar los polígonos del mapa y quedarse únicamente con la tabla de atributos. *Sacamos el dibujo del mapa para trabajar rápido sobre los números.*
+
+:::
+::::
+
+## Transformación de tabla ancha a larga (`extraer_modalidad()`)
+
+La tabla cruda trae columnas codificadas como `CMHP22CONT`..`26CONT` (**H**urto a **P**ersonas), `CMHR` (**R**esidencias) y `CMHM` (**M**otocicletas).
+
+:::: {layout="[54, -3, 43]" layout-valign="top"}
+::: {}
+
+```{.r .numberLines startFrom="51"}
+# 3. Extracción y Normalización de Modalidades Delictivas ----
+
+## 3.1 Función vectorizada para dinamizar variables anuales ----
+extraer_modalidad <- function(df, prefijo, nombre_var) {
+  anios <- 22:26
+  cols <- paste0(prefijo, anios, "CONT")
+  df |>
+    select(codigo_localidad = CMIULOCAL, localidad = CMNOMLOCAL, all_of(cols)) |>
+    pivot_longer(
+      cols = starts_with(prefijo),
+      names_to = "año",
+      names_prefix = prefijo,
+      values_to = nombre_var
+    ) |>
+    mutate(
+      año = as.integer(str_remove(año, "CONT")) + 2000,
+      codigo_localidad = sprintf("%02d", as.integer(codigo_localidad)),
+      localidad = str_to_title(trimws(localidad)),
+      localidad = case_when(
+        localidad == "Usaquen" ~ "Usaquén",
+        localidad == "San Cristobal" ~ "San Cristóbal",
+        localidad == "Engativa" ~ "Engativá",
+        localidad == "Fontibon" ~ "Fontibón",
+        localidad == "Candelaria" ~ "La Candelaria",
+        localidad == "Los Martires" ~ "Los Mártires",
+        localidad == "Antonio Narino" ~ "Antonio Nariño",
+        localidad == "Ciudad Bolivar" ~ "Ciudad Bolívar",
+        TRUE ~ localidad
+      )
+    )
+}
+```
+
+:::
+
+::: {}
+
+- **L55–56**: Arma el vector de las 5 columnas anuales (`22:26` + `"CONT"`).
+
+- **L58–64**: `pivot_longer()` apila los 5 años en una columna `año` y quita el prefijo (`"CMHP"`) dejando `"22CONT"`.
+
+- **L66–67**: Convierte `"22CONT"` en `2022` y formatea el código a 2 dígitos (`"01"`..`"19"`).
+
+- **L68–79**: Pasa los nombres de mayúsculas a formato título y corrige tildes y `"La Candelaria"` para que crucen exactamente con población y noticias. *Convertimos columnas horizontales de años en una fila por localidad y año.*
+
+:::
+::::
+
+```{r}
+#| label: tbl-preview-delitos-pivot
+#| tbl-cap: "Vista previa intermedia tras pivot_longer() y homologación de tildes (ejemplo: Fontibón)"
+
+del_piv <- arrow::read_parquet(
+  here::here("data", "processed", "01_delitos", "delitos_localidad_anual.parquet")
+) |>
+  dplyr::filter(localidad == "Fontibón") |>
+  dplyr::select(codigo_localidad, localidad, año, hurto_personas)
+
+knitr::kable(del_piv)
+```
+
+## Unión de modalidades, filtro de Sumapaz y exportación
+
+:::: {layout="[54, -3, 43]" layout-valign="top"}
+::: {}
+
+```{.r .numberLines startFrom="83"}
+## 3.2 Extracción de hurtos a personas, residencias y motos ----
+df_personas    <- extraer_modalidad(df_delitos_raw, "CMHP", "hurto_personas")
+df_residencias <- extraer_modalidad(df_delitos_raw, "CMHR", "hurto_residencias")
+df_motos       <- extraer_modalidad(df_delitos_raw, "CMHM", "hurto_motos")
+
+# 4. Consolidación del Panel de Delitos ----
+
+## 4.1 Fusión de modalidades y filtro de localidades urbanas ----
+panel_delitos <- df_personas |>
+  left_join(df_residencias, by = c("codigo_localidad", "localidad", "año")) |>
+  left_join(df_motos, by = c("codigo_localidad", "localidad", "año")) |>
+  filter(!codigo_localidad %in% c("20", "99"))
+
+# 5. Exportación a Apache Parquet ----
+arrow::write_parquet(panel_delitos, archivo_salida)
+message("✔ Panel de delitos anual guardado en: ", archivo_salida)
+```
+
+:::
+
+::: {}
+
+- **L89–91**: Llama `extraer_modalidad()` una vez por cada modalidad (`CMHP`, `CMHR`, `CMHM`).
+
+- **L96–99**: Une las tres tablas por `(codigo_localidad, localidad, año)` y excluye Sumapaz (`"20"`, netamente rural) y `"99"` (sin localización).
+
+- **L102–103**: Guarda las `95` filas resultantes en Parquet. *Dejamos una tabla limpia de 19 localidades urbanas por 5 años lista para calcular tasas.*
+
+:::
+::::
+
+```{r}
+#| label: tbl-preview-delitos-proc
+#| tbl-cap: "Vista previa del panel final consolidado (delitos_localidad_anual.parquet: 95 filas × 6 cols)"
+
+del_proc <- arrow::read_parquet(
+  here::here("data", "processed", "01_delitos", "delitos_localidad_anual.parquet")
+) |>
+  dplyr::filter(localidad == "Fontibón")
+
+knitr::kable(del_proc)
+```
+
+# Seguimiento de la tabla de delitos y ejecución
+
+| N.° | Etapa | Qué se le hace | Tamaño resultante |
+| :---: | :--- | :--- | :--- |
+| 1 | Ingesta (GeoJSON SDSCJ) | Descarga ZIP y extrae capa espacial sin modificar | 21 geometrías (formato ancho) |
+| 2 | `st_drop_geometry()` + `pivot_longer()` | Quita polígonos y apila 5 años por modalidad | 105 filas por modalidad |
+| 3 | Unión + filtro urbano | Une las 3 modalidades y excluye códigos `"20"` y `"99"` | **95 filas** × **6 columnas** |
+
+: Transformación de la tabla de delitos en cada etapa
+
+- **Cómo ejecutarlo** (vía `source(here::here(...))` o desde `master.R`):
+  1. Ingesta: `scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R`
+  2. Procesamiento: `scripts/02_procesamiento/01_delitos/procesamiento_delitos.R`
+- **Nota:** las cifras de `2026` tienen corte a septiembre (`CMMES: Ene-Sep`), por lo que el conteo anual de 2026 representa tres trimestres.
