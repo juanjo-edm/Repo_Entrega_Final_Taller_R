@@ -1,7 +1,7 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # ARCHIVO: app/app.R
-# ROL: App Shiny "Dos lecturas de Bogotá" (versión en R del boceto de diseño)
+# ROL: App Shiny "Bogo-Atrack" (Observatorio de hurto y sentimiento mediático)
 # AUTORA: Olga Lucía Ramírez — Grupo 10 (Juan José Echeverry, Sergio López,
 #         Miguelangel Palma, Gabriel Echeverry, Juan Esteban Carvajal)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
@@ -354,8 +354,23 @@ tema_dos_lecturas <- bs_theme(
 # 5. Interfaz de Usuario (UI) ----
 
 ui <- page_navbar(
-  id       = "pestanas",
-  title    = "Dos lecturas de Bogotá",
+  id           = "pestanas",
+  window_title = "Bogo-Atrack · Observatorio de hurto y sentimiento mediático",
+  title        = tags$div(
+    class = "d-flex flex-column",
+    style = paste0(
+      "line-height: 1.15; padding: 2px 20px 2px 0; ",
+      "margin-right: 6px; border-right: 1px solid ", borde, ";"
+    ),
+    tags$span(
+      "Bogo-Atrack",
+      style = "font-weight: 800; font-size: 1.08rem; letter-spacing: -0.01em;"
+    ),
+    tags$span(
+      "Observatorio de hurto y sentimiento mediático",
+      style = paste0("font-size: 0.68rem; font-weight: 400; color:", gris_texto, ";")
+    )
+  ),
   theme    = tema_dos_lecturas,
   fillable = FALSE,
   header   = tags$head(
@@ -411,14 +426,13 @@ ui <- page_navbar(
     layout_columns(
       col_widths = c(8, 4),
       card(
-        card_header("¿Dónde se concentra el hurto? · clic en una localidad para ver su ficha"),
+        card_header(textOutput("titulo_mapa_panorama", inline = TRUE)),
         leafletOutput("mapa_panorama", height = "480px")
       ),
       card(
-        card_header("Las 5 tasas más altas"),
+        card_header(textOutput("titulo_top5_panorama", inline = TRUE)),
         plotlyOutput("grafico_top5", height = "300px"),
-        p("Ojo: la tasa usa población residente. El centro recibe cada día trabajadores
-           y visitantes de toda la ciudad, así que su tasa se infla.",
+        p(textOutput("nota_top5_panorama", inline = TRUE),
           style = paste0("color:", gris_texto, "; font-size: 13px"))
       )
     )
@@ -783,28 +797,69 @@ server <- function(input, output, session) {
     paste0(formato(mean(datos_panorama()$prop_negativas, na.rm = TRUE), 1), " %")
   })
 
-  output$mapa_panorama <- renderLeaflet({
-    capa <- geo_localidades |>
-      select(codigo_localidad, geometry) |>
-      inner_join(datos_panorama(), by = "codigo_localidad")
-
+  capa_panorama <- reactive({
+    df           <- datos_panorama()
     etiqueta_mod <- names(modalidades)[modalidades == input$modalidad]
 
     if (input$capa_mapa == "hurto") {
-      valores <- capa[[input$modalidad]]
-      pal     <- paleta_cuartiles(valores, c("#33281A", "#6E4A1C", "#B0731F", ambar))
-      titulo  <- paste0("Tasa (", etiqueta_mod, ") / 100k hab.")
+      columna     <- input$modalidad
+      valores     <- df[[columna]]
+      colores_pal <- c("#33281A", "#6E4A1C", "#B0731F", ambar)
       digitos_lbl <- ifelse(input$modalidad %in% c("tasa_hurto_personas", "tasa_hurto_total"), 0, 1)
+      titulo_ley  <- paste0("Tasa (", etiqueta_mod, ") / 100k hab.")
+      titulo_mapa <- "¿Dónde se concentra el hurto? · clic en una localidad para ver su ficha"
+      titulo_top5 <- paste0("Las 5 tasas más altas (", etiqueta_mod, ")")
+      eje_x_top5  <- "Tasa por 100.000 hab."
+      nota_top5   <- "Ojo: la tasa usa población residente. El centro recibe cada día trabajadores y visitantes de toda la ciudad, así que su tasa se infla."
+      sufijo_txt  <- ""
     } else {
-      valores <- capa[[input$medida]]
-      pal     <- paleta_cuartiles(valores, c("#1B2638", "#2C3D5C", "#4F74B3", azul))
-      titulo  <- paste0(names(medidas_prensa)[medidas_prensa == input$medida], " (", etiqueta_mod, ")")
-      digitos_lbl <- case_when(
+      columna      <- input$medida
+      valores      <- df[[columna]]
+      colores_pal  <- c("#1B2638", "#2C3D5C", "#4F74B3", azul)
+      etiqueta_med <- names(medidas_prensa)[medidas_prensa == input$medida]
+      digitos_lbl  <- case_when(
         input$medida == "noticias_conteo"      ~ 0,
         input$medida == "sentimiento_promedio" ~ 3,
         TRUE                                   ~ 1
       )
+      titulo_ley  <- paste0(etiqueta_med, " (", etiqueta_mod, ")")
+      titulo_mapa <- paste0("Cobertura de prensa: ", etiqueta_med, " (", etiqueta_mod, ") · clic en una localidad para ver su ficha")
+      titulo_top5 <- case_when(
+        input$medida == "prop_negativas"       ~ paste0("Las 5 con mayor % negativo (", etiqueta_mod, ")"),
+        input$medida == "sentimiento_promedio" ~ paste0("Las 5 con sentimiento más alto (", etiqueta_mod, ")"),
+        TRUE                                   ~ paste0("Las 5 con más noticias (", etiqueta_mod, ")")
+      )
+      eje_x_top5  <- etiqueta_med
+      nota_top5   <- "Las localidades siguen los mismos tonos azules del mapa (el tono más claro marca los valores más altos). En subgrupos con pocas notas, 1 o 2 noticias mueven fuerte el porcentaje o el promedio."
+      sufijo_txt  <- ifelse(input$medida == "prop_negativas", " %", "")
     }
+
+    list(
+      columna        = columna,
+      paleta         = paleta_cuartiles(valores, colores_pal),
+      colores_pal    = colores_pal,
+      digitos        = digitos_lbl,
+      titulo_leyenda = titulo_ley,
+      titulo_mapa    = titulo_mapa,
+      titulo_top5    = titulo_top5,
+      eje_x_top5     = eje_x_top5,
+      nota_top5      = nota_top5,
+      sufijo_txt     = sufijo_txt
+    )
+  })
+
+  output$titulo_mapa_panorama <- renderText({ capa_panorama()$titulo_mapa })
+  output$titulo_top5_panorama <- renderText({ capa_panorama()$titulo_top5 })
+  output$nota_top5_panorama   <- renderText({ capa_panorama()$nota_top5 })
+
+  output$mapa_panorama <- renderLeaflet({
+    cfg  <- capa_panorama()
+    capa <- geo_localidades |>
+      select(codigo_localidad, geometry) |>
+      inner_join(datos_panorama(), by = "codigo_localidad")
+
+    valores <- capa[[cfg$columna]]
+    pal     <- cfg$paleta
 
     leaflet(capa) |>
       agregar_mapa_base() |>
@@ -814,11 +869,11 @@ server <- function(input, output, session) {
         fillOpacity = 0.85,
         color       = fondo,
         weight      = 1.5,
-        label       = paste0(capa$localidad, ": ", formato(valores, digitos_lbl)),
+        label       = paste0(capa$localidad, ": ", formato(valores, cfg$digitos), cfg$sufijo_txt),
         highlightOptions = highlightOptions(weight = 3, color = "#E9EDF2",
                                             bringToFront = TRUE)
       ) |>
-      addLegend(pal = pal, values = valores, title = titulo,
+      addLegend(pal = pal, values = valores, title = cfg$titulo_leyenda,
                 position = "bottomright", opacity = 0.9)
   })
 
@@ -829,16 +884,34 @@ server <- function(input, output, session) {
   })
 
   output$grafico_top5 <- renderPlotly({
+    cfg  <- capa_panorama()
     top5 <- datos_panorama() |>
-      mutate(valor = .data[[input$modalidad]]) |>
-      slice_max(valor, n = 5) |>
+      mutate(valor = .data[[cfg$columna]]) |>
+      arrange(desc(valor), desc(noticias_conteo), localidad) |>
+      slice_head(n = 5) |>
       arrange(valor)
 
-    plot_ly(top5, x = ~valor, y = ~localidad, type = "bar", orientation = "h",
-            marker = list(color = ambar),
-            text = ~formato(valor), textposition = "outside", hoverinfo = "none") |>
-      layout(yaxis = list(categoryorder = "array", categoryarray = top5$localidad)) |>
-      estilo_plotly("Tasa por 100.000 hab.", "")
+    r_x <- range(c(0, top5$valor), na.rm = TRUE)
+    amplitud <- diff(r_x)
+    if (!is.finite(amplitud) || amplitud == 0) amplitud <- 1
+    izq_pad <- if (r_x[1] < 0) r_x[1] - amplitud * 0.30 else 0
+    der_pad <- if (r_x[2] > 0) r_x[2] + amplitud * 0.25 else amplitud * 0.08
+
+    plot_ly(
+      top5,
+      x = ~valor, y = ~localidad, type = "bar", orientation = "h",
+      marker = list(color = cfg$paleta(top5$valor), opacity = 0.88),
+      text = ~paste0(formato(valor, cfg$digitos), cfg$sufijo_txt),
+      textposition = "outside",
+      cliponaxis = FALSE,
+      hoverinfo = "none"
+    ) |>
+      layout(
+        margin = list(r = 16),
+        xaxis  = list(range = c(izq_pad, der_pad)),
+        yaxis  = list(categoryorder = "array", categoryarray = top5$localidad)
+      ) |>
+      estilo_plotly(cfg$eje_x_top5, "")
   })
 
   ## 6.2 Pestaña 2: Mi localidad ----

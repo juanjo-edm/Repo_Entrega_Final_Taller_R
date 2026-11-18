@@ -248,6 +248,14 @@ Para construir una tipología territorial comparable entre localidades de distin
 
 Elegimos estas tres modalidades (`hurto_personas`, `hurto_residencias`, `hurto_motos`) porque son los delitos patrimoniales cotidianos que más afectan la **percepción de inseguridad ciudadana** en Bogotá, explicando por qué el miedo al delito diverge de las cifras de homicidios (Restrepo & Moreno, 2007, *"Bogotá: ¿más crimen?, ¿más miedo?"*, *Desarrollo y Sociedad* 59, DOI: `10.13043/dys.59.5`; Encuesta de Percepción y Victimización de la CCB; ECSC del DANE).
 
+### Por qué se agrupan tasas anuales y no tasas mensuales
+
+Aunque `panel_delitos_poblacion_mensual.parquet` tiene `1.083` registros (`19` localidades × `57` meses), `04_clustering_kmeans.R` agrega a tasas promedio anuales por tres motivos concretos:
+
+1. **Etiquetas territoriales fijas para `sentometrics` y cartografía:** el clúster opera como covariable estructural fija (`c_centro`, `c_comercial`, `c_residencial`) por localidad. Si se agruparan las `1.083` filas mensuales, `10` de las `19` localidades saltarían de clúster entre meses por estacionalidad o meses con cero registros (`20` meses con cero hurtos de motos y `4` con cero hurtos a residencias).
+2. **Escala demográfica anual y estabilidad intertemporal:** la SDS reporta proyecciones anuales de población y las tasas criminales estándar son anuales (`3.069,9`, `112,4` y `73,5` anuales frente a `269,3`, `9,9` y `6,4` mensuales). Como muestra la `@tbl-sens`, excluir `2022` o el corte parcial de `2026` conserva la misma partición `13 / 5 / 1`.
+3. **Equivalencia matemática bajo `Z-score`:** promediar los `57` meses por localidad genera correlaciones iguales a `1,0000`, la misma silueta (`0,5211`) y el mismo agrupamiento ($\text{ARI} = 1{,}0000$) que los promedios anuales, porque `Z-score` elimina factores constantes de escala. La serie mensual completa se reserva para `03_analisis_sentometrics.R` (modelo Elastic Net con $N = 51$ pares mensuales $y_{t+1}$).
+
 ![Tasa promedio anual de hurto total por cada 100.000 habitantes por localidad (2022--2026)](../../../../output/figures/kmeans_ranking_tasa_total.png){#fig-ranking width="85%"}
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
@@ -507,7 +515,7 @@ knitr::kable(
 )
 ```
 
-- **Por qué elegimos `Z-score`:** `Z-score` (`0,5211`), `Min-Max [0, 1]` (`0,5611`) y `PCA 2D` (`96,89%` de varianza, `0,5540`) producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$, `0` siluetas negativas). Preferimos `Z-score` sobre `PCA` porque conserva la interpretabilidad directa en las tres tasas originales sin cambiar una sola localidad.
+- **Por qué elegimos `Z-score` frente al resto de escalamientos:** en la `@tbl-sens-escalamientos`, `Z-score` (`0,5211`, $\text{WSS} = 13{,}6532$), `Min-Max [0, 1]` (`0,5614`, $\text{WSS} = 1{,}0106$) y `PCA 2D` (`0,5539`, $\text{WSS} = 11{,}9830$, `96,89 %` de varianza en `PC1 + PC2`) asignan exactamente las mismas `19` localidades ($\text{ARI} = 1{,}0000$, `0` siluetas negativas). La silueta numérica mayor de `Min-Max [0, 1]` y `PCA 2D` proviene de que la función evalúa cada silueta dentro de la matriz de distancias propia de su transformación, por lo que esas cifras corresponden a escalas distintas. Conservamos `Z-score` porque evita depender de los extremos muestrales de `Min-Max [0, 1]`, retiene el `100 %` de la varianza sin perder el `3,11 %` de `PC3` ni abstraer las tres tasas en ejes latentes, y supera con claridad a `Robusto (Mediana / IQR)` (`0,4562`, `1` silueta negativa, $\text{ARI} = 0{,}8484$) y a `Log(1 + x) + Z-score` (`0,4442`, $\text{ARI} = 0{,}3380$), que atenúa la distancia hacia los focos de mayor criminalidad.
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}

@@ -187,7 +187,7 @@ digraph pipeline {
         color="#c2410c"
       ];
       v_shiny [
-        label="05_export_insumos_shiny.R  ->  app/app.R\nTablero interactivo 'Dos lecturas de Bogotá'",
+        label="05_export_insumos_shiny.R  ->  app/app.R\nTablero interactivo 'Bogo-Atrack'",
         fillcolor="#ffffff",
         color="#c2410c",
         style="rounded,filled,dashed"
@@ -568,6 +568,14 @@ Cada localidad $i$ se representa mediante el vector tridimensional de sus tasas 
 $$
 \mathbf{x}_i = \left( \text{Hurto a personas}_i, \; \text{Hurto a residencias}_i, \; \text{Hurto a motocicletas}_i \right) \in \mathbb{R}^3
 $$
+
+### Por qué agrupamos tasas anuales promedio y no tasas mensuales
+
+Aunque el panel base `panel_delitos_mensual` contiene `1.083` registros mensuales (`19` localidades por `57` meses), el agrupamiento con $K$-Means se calcula sobre las `19` tasas anuales promedio por tres razones metodológicas y empíricas:
+
+1. **Estabilidad de la tipología territorial como covariable fija (`19` localidades frente a `1.083` filas mensuales):** el propósito de $K$-Means es asignar a cada localidad una etiqueta estructural única (*Céntrico e Institucional*, *Comercial y Automotor* o *Residencial y Periférico*) que alimenta los mapas y entra en `sentometrics` mediante tres indicadores fijos (`c_centro`, `c_comercial`, `c_residencial`). Si se agruparan las `1.083` observaciones `localidad × mes` por separado, una misma localidad cambiaría de clúster de un mes a otro por fluctuaciones estacionales o meses aislados con cero denuncias (en el panel hay `20` meses con cero hurtos de motocicletas y `4` con cero hurtos a residencias); de hecho, al correr $K$-Means sobre el panel mensual completo, `10` de las `19` localidades cambian de grupo entre meses.
+2. **Coherencia con el denominador demográfico anual y las escalas criminológicas estándar:** la Secretaría Distrital de Salud publica proyecciones de población por año, y la comparación entre territorios en seguridad urbana se expresa en denuncias anuales por cada `100.000` habitantes. Promediar los años mantiene los centroides en una escala directa y comparable (`3.069,9`, `112,4` y `73,5` anuales, frente a `269,3`, `9,9` y `6,4` mensuales). Además, la @tbl-sensibilidad-temporal confirma que excluir el cierre parcial de `2026` o `2022` conserva exactamente la misma partición `13 / 5 / 1`.
+3. **Invariancia matemática bajo `Z-score` y separación de tareas frente a Elastic Net:** promediar directamente los `57` meses por localidad arroja correlaciones iguales a `1,0000` en las tres modalidades, exactamente el mismo ancho de silueta (`0,5211`) y una partición idéntica ($\text{ARI} = 1{,}0000$), porque la estandarización `Z-score` absorbe factores de escala constantes. La frecuencia mensual completa de `SIEDCO.csv` se reserva para la @sec-elasticnet, donde `sento_model` explota la dinámica mes a mes ($N = 51$ pares consecutivos $y_{t+1}$).
 
 ### Por qué estandarizar con $Z$-score antes de medir distancias
 
@@ -1100,7 +1108,7 @@ ggplot(
 
 Antes de fijar $K^* = 3$ bajo estandarización *Z-score* y distancia euclidiana, ejecutamos en memoria toda la batería de iteraciones y sensibilidad de `scripts/04_clustering_kmeans.R` sobre tres frentes:
 
-1. **Preprocesamiento alternativo y PCA 2D (`@tbl-sensibilidad-escalamientos`):** contrastamos la receta base `Z-score` frente a `Min-Max [0, 1]`, `Robusto (Mediana/IQR)`, `Log(1 + x) + Z-score` y `PCA 2D` (`PC1 + PC2` retienen el `96,9%` de la varianza total). Con el **Índice de Rand Ajustado ($\text{ARI}$)** verificamos que `Z-score`, `Min-Max [0, 1]` y `PCA 2D` producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$, con `0` siluetas negativas), por lo que preferimos `Z-score` al conservar la interpretabilidad directa en las tres tasas originales.
+1. **Preprocesamiento alternativo y PCA 2D (`@tbl-sensibilidad-escalamientos`):** contrastamos la receta base `Z-score` frente a `Min-Max [0, 1]`, `Robusto (Mediana/IQR)`, `Log(1 + x) + Z-score` y `PCA 2D` (`PC1 + PC2` retienen el `96,9 %` de la varianza total). Con el **Índice de Rand Ajustado ($\text{ARI}$)** verificamos que `Z-score`, `Min-Max [0, 1]` y `PCA 2D` producen exactamente la misma partición ($\text{ARI} = 1{,}0000$, con `0` siluetas negativas), y conservamos `Z-score` por su lectura directa en las tres tasas originales.
 2. **Contraste de algoritmos y distancias (`@tbl-comparacion-modelos`):** comparamos `K-Means` frente a **PAM** (medoides), **AGNES (`Ward.D2`)** (jerárquico) y **GMM** (mezclas gaussianas con distancia de Mahalanobis), bajo distancia **Euclidiana** y **Manhattan**, además del estadístico **Gap** con 100 réplicas *bootstrap*. `K-Means` ($\bar{S}=0{,}5211$, `0` siluetas negativas) y **AGNES (`Ward.D2`)** (tanto Euclidiana como Manhattan, $\bar{S}=0{,}540$) producen **exactamente la misma partición** `13 / 5 / 1` ($\text{ARI} = 1{,}0000$).
 3. **Estabilidad con `SIEDCO.csv`:** al usar los microdatos mensuales reales de `SIEDCO.csv` (corrigiendo la distorsión del año 2022 que presentaba el GeoJSON agregado), la partición `13 / 5 / 1` deja a **Los Mártires** como perfil comercial único y ubica a **Antonio Nariño** en el perfil residencial sin ninguna localidad con silueta negativa.
 
@@ -1163,7 +1171,7 @@ catalogo_recetas <- list(
   "Min-Max [0, 1]"              = receta_minmax,
   "Robusto (Mediana / IQR)"     = receta_robusta,
   "Log(1 + x) + Z-score"        = receta_log_z,
-  "PCA (PC1 + PC2 = 96,4% var)" = receta_pca2
+  "PCA (PC1 + PC2 = 96,9% var)" = receta_pca2
 )
 
 tabla_sensibilidad_escalamientos <- purrr::imap_dfr(catalogo_recetas, evaluar_receta_kmeans)
@@ -1175,7 +1183,14 @@ knitr::kable(
 )
 ```
 
-En la @tbl-sensibilidad-escalamientos, `Z-score`, `Min-Max [0, 1]` y `PCA 2D` (`r round(var_pca[3, 2] * 100, 2)`% de varianza acumulada en `PC1 + PC2`) producen exactamente la misma asignación ($\text{ARI} = 1{,}0000$, con cero siluetas negativas). Conservamos `Z-score` sobre las tres tasas porque mantiene una lectura directa en tasas de hurto a personas, residencias y motocicletas sin transformar a ejes latentes ni comprimir escalas con `log(1 + x)` (cuyo $\text{ARI}$ cae frente al centro al atenuar las brechas extremas).
+En la @tbl-sensibilidad-escalamientos, `Z-score`, `Min-Max [0, 1]` y `PCA 2D` (`r round(var_pca[3, 2] * 100, 2)` % de varianza acumulada en `PC1 + PC2`) asignan exactamente las mismas `19` localidades ($\text{ARI} = 1{,}0000$, partición `13 / 5 / 1` con cero siluetas negativas). Aunque `Min-Max [0, 1]` (`0,5614`) y `PCA 2D` (`0,5539`) arrojan siluetas numéricamente mayores y menor inercia interna (`1,0106` y `11,9830`) que `Z-score` (`0,5211` y `13,6532`), esa variación ocurre porque `evaluar_receta_kmeans()` mide la silueta y la inercia dentro de la matriz de distancias propia de cada transformación (`dist(mat_espacio)`). Al cambiar la métrica de fondo, los valores absolutos dejan de ser comparables entre filas, y lo determinante es que las tres recetas producen la misma clasificación territorial.
+
+Conservamos `Z-score (base)` frente a las cuatro alternativas de la tabla por criterios de interpretabilidad y estabilidad numérica:
+
+- `Min-Max [0, 1]` encoge todas las tasas al rango `[0, 1]` y vuelve dependiente la escala completa del valor mínimo y máximo de la muestra (concentrado en Los Mártires). Como entrega el mismo agrupamiento ($\text{ARI} = 1{,}0000$), `Z-score` permite leer cada centroide en desviaciones estándar respecto al promedio distrital sin anclarse a los extremos de la muestra.
+- `PCA 2D` descarta un `3,11 %` de varianza (`PC3`) y reemplaza las tasas por combinaciones lineales ortogonales sin cambiar ni una sola localidad ($\text{ARI} = 1{,}0000$). `Z-score` evita pasar por ejes latentes y mantiene visibles los aportes separados de personas, residencias y motocicletas.
+- `Robusto (Mediana / IQR)` baja la silueta media a `0,4562`, eleva la inercia a `15,5923`, introduce una localidad con silueta negativa y altera el reparto de grupos ($\text{ARI} = 0,8484$).
+- `Log(1 + x) + Z-score` comprime la distancia entre las localidades de mayor carga delictiva y el resto de la ciudad; la silueta cae a `0,4442`, la inercia aumenta a `15,2780` y la partición resultante se aparta de las brechas reales entre perfiles ($\text{ARI} = 0,3380$).
 
 ```{r}
 #| label: tbl-comparacion-modelos
@@ -3394,7 +3409,7 @@ Al cruzar las tres comparaciones de la @tbl-correlacion-modalidades con las figu
    * Un estudio de ProBogotá Región (2023) documenta que cerca del `90 %` de los viajes en motocicleta se origina en estratos 1, 2 y 3 de la periferia, con recorridos promedio de `10,4` km (`50` minutos) hacia zonas de empleo, donde la moto suple rutas troncales y funciona como vehículo de trabajo o reparto.
    * Reportes de la SDSCJ y la Policía Metropolitana de Bogotá (MEBOG) indican que cerca de 7 de cada 10 hurtos de motocicletas se cometen por «halado» sobre vehículos estacionados en vía pública, bahías o frentes de casas sin parqueadero vigilado. Eso deja más expuesto el parque residencial en barrios populares de la periferia y alimenta ventas clandestinas de repuestos en zonas comerciales céntricas.
 
-## Integración hacia el tablero R Shiny ("Dos lecturas de Bogotá")
+## Integración hacia el tablero R Shiny ("Bogo-Atrack")
 
 Para que `app/app.R` responda sin retrasos y sin leer archivos GeoJSON ni estimar modelos en cada visita de usuario, `scripts/03_analisis_sentometrics.R` consolida toda la corrida de `sentometrics` en `data/processed/sentometrics_pipeline.rds` y `scripts/05_export_insumos_shiny.R` empaqueta esos resultados junto con el panel consolidado, los clústeres `K-Means` y los polígonos en WGS84 en un único archivo binario para el tablero (`data/processed/datos_consolidados_shiny.rds`). Al abrirse la aplicación, *Panorama* dibuja los polígonos y permite alternar indicadores, *Clusters* incluye el mapa territorial y el gráfico tridimensional interactivo de las 19 localidades en `plotly`, *Sentometrics* explora las `r fmt_es_6(ncol(medidas_sento$measures) - 1, 0)` series mensuales sobre las `r fmt_es_6(quanteda::ndoc(corpus_sento), 0)` noticias objetivo y cada clic actualiza las gráficas y titulares extremos (`peakdocs`).
 

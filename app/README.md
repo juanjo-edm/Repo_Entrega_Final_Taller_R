@@ -1,6 +1,7 @@
-# Aplicación Interactiva R Shiny (`app/`) — "Dos lecturas de Bogotá"
+# Aplicación Interactiva R Shiny (`app/`) — "Bogo-Atrack"
 
 **Proyecto:** Hurtos y sentimiento mediático en Bogotá (2022–2026)  
+**Subtítulo en tablero:** *Observatorio de hurto y sentimiento mediático*  
 **Programa:** Maestría en Economía Aplicada (MECA) — *Taller de Programación en R*  
 **Autores:** Olga Lucía Ramírez, Juan José Echeverry, Sergio López, Miguelangel Palma, Gabriel Echeverry, Juan Esteban Carvajal (Grupo 10)  
 
@@ -8,7 +9,7 @@
 
 ## Propósito y Diseño Visual
 
-Esta carpeta contiene la aplicación interactiva **R Shiny** (**"Dos lecturas de Bogotá"**), construida con `{bslib}` (Bootstrap 5 en tema oscuro `#0E1116`), `{leaflet}` (OpenStreetMap con filtro oscuro libre de API key), `{plotly}` y `{DT}`.
+Esta carpeta contiene la aplicación interactiva **R Shiny** (**"Bogo-Atrack"** · *Observatorio de hurto y sentimiento mediático*), construida con `{bslib}` (Bootstrap 5 en tema oscuro `#0E1116`), `{leaflet}` (OpenStreetMap con filtro oscuro libre de API key), `{plotly}` y `{DT}`.
 
 La interfaz contrasta dos lecturas de la seguridad urbana en las 19 localidades de Bogotá:
 - **Ámbar (`#F0A43A`)**: lo que dicen las **denuncias oficiales** (tasas de hurto por 100.000 habitantes de la SDSCJ / SIEDCO y proyecciones poblacionales SDS).
@@ -21,7 +22,7 @@ La interfaz contrasta dos lecturas de la seguridad urbana en las 19 localidades 
 ```text
 app/
 ├── README.md        # Documentación de arquitectura y guía de ejecución
-├── app.R            # Aplicación Shiny completa ("Dos lecturas de Bogotá")
+├── app.R            # Aplicación Shiny completa ("Bogo-Atrack")
 └── www/             # Recursos estáticos (hoja de estilos custom.css)
 ```
 
@@ -40,7 +41,7 @@ La aplicación **no ejecuta procesos pesados de scraping ni recalcula matrices l
 
 1. **`Panorama`**:
    - Filtros por modalidad de hurto (*Total*, *Personas*, *Residencias*, *Motocicletas*), año (*Promedio 2022–2026* o año específico) y capa del mapa (*Denuncias* en ámbar vs. *Prensa* en azul). Al elegir una modalidad específica distinta de *Total*, tanto las denuncias como las métricas de prensa (*noticias*, *sentimiento medio* y *% negativas*) se filtran dinámicamente para esa modalidad.
-   - 4 tarjetas KPI (`value_box`), mapa coroplético interactivo en `{leaflet}` (con clic directo para saltar a la ficha de la localidad) y ranking de las 5 tasas más altas.
+   - 4 tarjetas KPI (`value_box`), mapa coroplético interactivo en `{leaflet}` (con clic directo para saltar a la ficha de la localidad) y ranking Top 5 sincronizado con la capa y paleta activas (tasas en ámbar o prensa en azul).
 2. **`Mi localidad`**:
    - Ficha individual de cualquiera de las 19 localidades urbanas con su puesto en el ranking distrital, 4 tarjetas KPI por modalidad (*Hurto total*, *Hurto a personas*, *Hurto a residencias* y *Hurto de motocicletas*), evolución anual comparada frente al promedio de Bogotá (filtrable por las 4 modalidades), composición del tono de prensa por año y tabla interactiva (`{DT}`) con las 5 noticias más negativas y las 5 más positivas con enlaces directos.
 3. **`Hurto vs. prensa`**:
