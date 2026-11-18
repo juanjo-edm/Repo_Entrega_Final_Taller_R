@@ -37,7 +37,7 @@ Los documentos evaluativos de Primera Entrega (`01_entrega_1_propuesta_eda.*`, `
 quarto render output/entregas/01_primera_entrega/01_entrega_1_propuesta_eda.qmd --to pdf
 
 # Compilar plantilla del Documento Final (máx. 5 páginas + Anexos):
-quarto render output/entregas/04_documento_final/plantilla_documento_final.qmd --to pdf
+quarto render output/entregas/04_documento_final/documento_final_grupo_3.qmd --to pdf
 ```
 
 ---

@@ -45,8 +45,8 @@ flowchart LR
 | :--- | :--- | :--- |
 | [**`01_primera_entrega/`**](01_primera_entrega/) | **Semana 11 (24 oct · 10 %)** | `01_entrega_1_propuesta_eda.qmd`/`.html`/`.pdf`, `01_propuesta_retroalimentada_evaluador.pdf` y `01_respuestas_evaluador_entrega_1.qmd`/`.pdf`. |
 | [**`02_coevaluacion_grupo_1/`**](02_coevaluacion_grupo_1/) | **Sesión 1 (mié 18 nov, 6:25 p. m.)** | [`guia_coevaluacion_grupo_1.md`](02_coevaluacion_grupo_1/guia_coevaluacion_grupo_1.md) y [`plantilla_coevaluacion_grupo_1.docx`](02_coevaluacion_grupo_1/plantilla_coevaluacion_grupo_1.docx). |
-| [**`03_presentacion_plenaria/`**](03_presentacion_plenaria/) | **Sesión 2 (mié 25 nov, 6:25 p. m.)** | [`plantilla_presentacion_grupo_3.pptx`](03_presentacion_plenaria/plantilla_presentacion_grupo_3.pptx) (base 10 diapositivas + notas con reparto de 15 min). |
-| [**`04_documento_final/`**](04_documento_final/) | **Semana 16 (Documento + Script + Shiny)** | [`plantilla_documento_final.qmd`](04_documento_final/plantilla_documento_final.qmd), [`plantilla_documento_final.pdf`](04_documento_final/plantilla_documento_final.pdf) y [`plantilla_documento_final.docx`](04_documento_final/plantilla_documento_final.docx). |
+| [**`03_presentacion_plenaria/`**](03_presentacion_plenaria/) | **Sesión 2 (mié 25 nov, 6:25 p. m.)** | [`presentacion_grupo_3.pptx`](03_presentacion_plenaria/presentacion_grupo_3.pptx) y respaldo [`presentacion_grupo_3.pdf`](03_presentacion_plenaria/presentacion_grupo_3.pdf) (10 diapositivas + notas con reparto de 15 min). |
+| [**`04_documento_final/`**](04_documento_final/) | **Semana 16 (Documento + Script + Shiny)** | [`documento_final_grupo_3.qmd`](04_documento_final/documento_final_grupo_3.qmd), [`documento_final_grupo_3.pdf`](04_documento_final/documento_final_grupo_3.pdf) y [`documento_final_grupo_3.docx`](04_documento_final/documento_final_grupo_3.docx). |
 
 ---
 
@@ -72,7 +72,7 @@ flowchart LR
 - [ ] **Envío obligatorio 24 horas antes (fecha límite: martes 24 de noviembre a las 7:30 p. m.):**
   * **A quién enviar:** al equipo pedagógico (**Camilo Ramírez** y equipo docente / **Santiago Neira**) y a **todos los integrantes del Grupo 1** (Martha Alexandra Becerra, Duván Javier Farfán, Daniela Lucía Patiño, Camilo Antonio Quintero, Esteban Rodríguez y Diego Sánchez).
   * **Consecuencia por retraso:** no enviar 24 h antes conlleva una **penalización del 30 %** en la nota de presentación y co-evaluación.
-- [ ] **Formato y contenido de diapositivas:** completar [`plantilla_presentacion_grupo_3.pptx`](03_presentacion_plenaria/plantilla_presentacion_grupo_3.pptx) (exportable también a PDF de respaldo) cubriendo las 7 secciones exigidas:
+- [x] **Formato y contenido de diapositivas:** completo en [`presentacion_grupo_3.pptx`](03_presentacion_plenaria/presentacion_grupo_3.pptx) y respaldo [`presentacion_grupo_3.pdf`](03_presentacion_plenaria/presentacion_grupo_3.pdf) cubriendo las 7 secciones exigidas:
   1. Diapositiva estratégica de resumen al inicio.
   2. Pregunta problema e hipótesis.
   3. Motivación económica y social (**15 %**).
@@ -93,7 +93,7 @@ flowchart LR
 
 ### 4. Documento Final + Script Replicable + Shiny App *(Semana 16 — Entrega escrita por Bloque Neón)*
 
-- [ ] **Documento escrito (máximo 5 páginas de cuerpo principal sin contar Anexos):** completar [`plantilla_documento_final.qmd`](04_documento_final/plantilla_documento_final.qmd) (para compilar a PDF vía Quarto) o [`plantilla_documento_final.docx`](04_documento_final/plantilla_documento_final.docx) (si se edita en Word). Debe incluir exactamente:
+- [x] **Documento escrito (máximo 5 páginas de cuerpo principal sin contar Anexos):** listo en [`documento_final_grupo_3.qmd`](04_documento_final/documento_final_grupo_3.qmd), [`documento_final_grupo_3.pdf`](04_documento_final/documento_final_grupo_3.pdf) y [`documento_final_grupo_3.docx`](04_documento_final/documento_final_grupo_3.docx). Incluye:
   1. **Introducción** (pregunta, hipótesis y motivación económica — **15 %**).
   2. **Datos** (fuentes, procesamiento, justificación y EDA autocontenido — **10 % + 15 %**).
   3. **Metodología** (K-Means + `sentometrics` + Elastic Net con justificación de elecciones y alternativas — **20 %**).

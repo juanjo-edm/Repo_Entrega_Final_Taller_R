@@ -195,7 +195,7 @@ source(here::here("scripts", "master.R"))
 quarto render output/entregas/01_primera_entrega/01_entrega_1_propuesta_eda.qmd --to pdf
 
 # Plantilla Documento Final (PDF máx. 5 págs + Anexos):
-quarto render output/entregas/04_documento_final/plantilla_documento_final.qmd --to pdf
+quarto render output/entregas/04_documento_final/documento_final_grupo_3.qmd --to pdf
 
 # Cuaderno metodológico integral (HTML y PDF):
 quarto render notebook/metodologia/02_modelado_clustering_sentometrics.qmd --to html
