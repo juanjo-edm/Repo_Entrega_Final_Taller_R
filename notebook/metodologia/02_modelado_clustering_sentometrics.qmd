@@ -260,7 +260,7 @@ conflict_prefer("layout",   "plotly",    quiet = TRUE)
 ## 1.4 Definición y validación de rutas de entrada ----
 ruta_proc <- here::here("data", "processed")
 
-archivo_delitos_p  <- file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_localidad.parquet")
+archivo_delitos_p  <- file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_mensual.parquet")
 archivo_noticias_p <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
 archivo_geo_raw    <- here::here("data", "raw", "delitos", "localidades_bogota_raw.geojson")
 
@@ -284,43 +284,29 @@ El proyecto parte de una pregunta central de economía aplicada y seguridad urba
 2. **Proyecciones demográficas oficiales para pasar de volumen a riesgo (SDS):** usar conteos absolutos de denuncias confunde tamaño poblacional con intensidad delictiva (localidades cercanas al millón de habitantes como Suba o Kennedy lideran en volumen bruto, aunque su tasa por habitante sea moderada). Las proyecciones oficiales de la Secretaría Distrital de Salud permiten expresar cada delito como **tasa por cada 100.000 habitantes**, haciendo comparables a las **19 localidades urbanas** (y excluyendo a Sumapaz rural, `"20"`, por su escala de páramo no comparable).
 3. **Corpus propio de prensa local geolocalizada y clasificada por DAI (Google News RSS):** los índices generales de opinión pública no desagregan por localidad ni distinguen entre un hurto real, un accidente de tránsito o una noticia deportiva homónima (*Santa Fe* fútbol, *Bosa* Italia, *San Cristóbal* Venezuela). Construir un corpus mensual (`2022-01` a `2026-09`) con filtros de homonimia, limpieza NLP y clasificación en los **11 DAI** permite alinear exactamente la agenda mediática con el calendario oficial (`CMMES: Ene-Sep` para `2026`).
 
-## Delitos oficiales (SDSCJ / SIEDCO): ingesta espacial y panel largo
+## Delitos oficiales (Observatorio SCJ / SIEDCO): microdatos y panel mensual
 
-- **Fuente y 11 Delitos de Alto Impacto (DAI):** la SDSCJ consolida 11 categorías oficiales a partir del SIEDCO (Policía Nacional) y Fiscalía en `dai_geojson.zip` (corte `2026` a septiembre, `CMMES: Ene-Sep`). Elegimos tres modalidades patrimoniales cotidianas (`hurto_personas`, `hurto_residencias`, `hurto_motos`) porque son las que más deterioran la percepción de seguridad urbana y explican por qué el temor al delito diverge de los homicidios (Restrepo & Moreno, 2007, *Desarrollo y Sociedad* 59; CCB EPV; DANE ECSC).
-- **Lógica de transformación:** `descarga_delitos_sdscj.R` descarga el ZIP a un directorio temporal, extrae el GeoJSON (`21` polígonos × `137` columnas en formato ancho: `CMHP22CONT`..`26CONT`, `CMHR`, `CMHM`) y lo guarda intacto. Luego `procesamiento_delitos.R` retira los polígonos (`st_drop_geometry()`), pivota las columnas anuales a formato largo (`extraer_modalidad()`), corrige tildes y `"La Candelaria"`, une las tres modalidades y excluye Sumapaz (`"20"`, rural) y `"99"` (`Sin Localización`) $\rightarrow$ `95` filas (`19` localidades × `5` años).
+- **Fuente y 3 modalidades patrimoniales:** descargamos directamente los microdatos oficiales de delitos del Observatorio de Seguridad, Convivencia y Justicia (`https://oaiee.scj.gov.co/DatosDescarga/SIEDCO.csv`, `376.185` registros con corte a septiembre de `2026`). Entre los 12 hechos de alto impacto elegimos las tres modalidades patrimoniales cotidianas (`hurto_personas`, `hurto_residencias`, `hurto_motos`) porque son las que más deterioran la percepción de seguridad urbana y explican por qué el temor al delito diverge de los homicidios (Restrepo & Moreno, 2007, *Desarrollo y Sociedad* 59; CCB EPV; DANE ECSC). Conservamos `localidades_bogota_raw.geojson` únicamente como capa de polígonos para la cartografía.
+- **Lógica de transformación:** `procesamiento_delitos.R` lee `SIEDCO.csv`, filtra `2022–2026` (hasta septiembre `2026`), excluye Sumapaz (`20`, rural) y `99` (`Sin Localización`), homologa tildes de las `19` localidades urbanas, cruza sobre la malla completa `19 × 57` meses y pivota las modalidades a columnas $\rightarrow$ **`delitos_localidad_mensual.parquet` (`1.083` filas × `8` cols)**.
 
 ```{r}
 #| label: resumen-codigo-delitos
 #| eval: false
 
-# 1) Retirar geometría y pasar de formato ancho (CMHP22CONT..26CONT) a largo
-df_delitos_raw <- sf::st_drop_geometry(sf::st_read(archivo_geojson, quiet = TRUE))
+# 1) Lectura rápida de microdatos SIEDCO.csv y filtro urbano (2022-sep. 2026)
+siedco_raw <- data.table::fread(archivo_siedco, sep = ";", encoding = "UTF-8",
+  select = c("ANIO", "MES", "HECHO", "LOCALIDAD", "COD_LOCALIDAD", "CANTIDAD")) |>
+  filter(ANIO %in% 2022:2026, COD_LOCALIDAD %in% 1:19, HECHO %in% names(modalidades_objetivo))
 
-extraer_modalidad <- function(df, prefijo, nombre_var) {
-  df |>
-    select(codigo_localidad = CMIULOCAL, localidad = CMNOMLOCAL, all_of(paste0(prefijo, 22:26, "CONT"))) |>
-    pivot_longer(starts_with(prefijo), names_to = "año", names_prefix = prefijo, values_to = nombre_var) |>
-    mutate(
-      año = as.integer(str_remove(año, "CONT")) + 2000L,
-      codigo_localidad = sprintf("%02d", as.integer(codigo_localidad)),
-      localidad = case_match(str_to_title(trimws(localidad)),
-        "Usaquen" ~ "Usaquén", "San Cristobal" ~ "San Cristóbal", "Engativa" ~ "Engativá",
-        "Fontibon" ~ "Fontibón", "Candelaria" ~ "La Candelaria", "Los Martires" ~ "Los Mártires",
-        "Antonio Narino" ~ "Antonio Nariño", "Ciudad Bolivar" ~ "Ciudad Bolívar", .default = str_to_title(trimws(localidad))
-      )
-    )
-}
-
-# 2) Unir 3 modalidades y excluir Sumapaz ("20") y "99" -> 95 filas
-panel_delitos <- extraer_modalidad(df_delitos_raw, "CMHP", "hurto_personas") |>
-  left_join(extraer_modalidad(df_delitos_raw, "CMHR", "hurto_residencias"), by = c("codigo_localidad", "localidad", "año")) |>
-  left_join(extraer_modalidad(df_delitos_raw, "CMHM", "hurto_motos"),       by = c("codigo_localidad", "localidad", "año")) |>
-  filter(!codigo_localidad %in% c("20", "99"))
+# 2) Malla completa 19 localidades x 57 meses (1.083 filas)
+panel_delitos_mensual <- malla_mensual |>
+  left_join(conteos_mensuales, by = c("codigo_localidad", "fecha_mes")) |>
+  mutate(across(c(hurto_personas, hurto_residencias, hurto_motos), ~ coalesce(as.integer(.x), 0L)))
 ```
 
-## Población distrital (SDS): consulta API CKAN y cálculo de tasas
+## Población distrital (SDS): consulta API CKAN y cálculo de tasas mensuales
 
-- **Lógica de ingesta y cruce:** `descarga_poblacion_sds.R` consulta la API CKAN de Datos Abiertos Bogotá en bloques paginados de `10.000` filas (con respaldo CSV directo), descargando `131.502` registros por localidad, año, edad y sexo. Luego `procesamiento_poblacion.R` excluye el total distrital (`0` / `Bogotá`), filtra `2022–2026`, suma `poblacion` por `(codigo_localidad, año)` y cruza con `delitos_localidad_anual.parquet` para calcular las **4 tasas por cada 100.000 habitantes** (`hurto_personas`, `hurto_residencias`, `hurto_motos`, `hurto_total`).
+- **Lógica de ingesta y cruce:** `descarga_poblacion_sds.R` consulta la API CKAN de Datos Abiertos Bogotá en bloques paginados de `10.000` filas (con respaldo CSV directo), descargando `131.502` registros por localidad, año, edad y sexo. Luego `procesamiento_poblacion.R` excluye el total distrital (`0`), filtra `2022–2026`, suma `poblacion` por `(codigo_localidad, año)` y cruza con el panel mensual de delitos para calcular las **4 tasas mensuales por cada 100.000 habitantes**, produciendo **`panel_delitos_poblacion_mensual.parquet` (`1.083` filas × `12` cols)**.
 
 ```{r}
 #| label: resumen-codigo-poblacion
@@ -384,23 +370,23 @@ df_proc <- df_raw |>
 #| tbl-cap: "Inventario de insumos procesados y capa geográfica verificados al inicio del cuaderno"
 #| echo: false
 
-ins_del <- arrow::read_parquet(archivo_delitos_p)
-ins_not <- arrow::read_parquet(archivo_noticias_p)
-ins_geo <- sf::st_read(archivo_geo_raw, quiet = TRUE)
+ins_del_mes <- arrow::read_parquet(archivo_delitos_p)
+ins_not     <- arrow::read_parquet(archivo_noticias_p)
+ins_geo     <- sf::st_read(archivo_geo_raw, quiet = TRUE)
 
 tibble::tibble(
   `Insumo (archivo en disco)` = c(
-    "Panel delitos y población (panel_delitos_poblacion_localidad.parquet)",
+    "Panel mensual delitos y población (panel_delitos_poblacion_mensual.parquet)",
     "Corpus de noticias NLP/DAI (noticias_procesadas.parquet)",
     "Cartografía oficial SDSCJ (localidades_bogota_raw.geojson)"
   ),
   Dimensiones = c(
-    paste0(nrow(ins_del), " filas × ", ncol(ins_del), " cols"),
+    paste0(format(nrow(ins_del_mes), big.mark = "."), " filas × ", ncol(ins_del_mes), " cols"),
     paste0(format(nrow(ins_not), big.mark = "."), " filas × ", ncol(ins_not), " cols"),
     paste0(nrow(ins_geo), " polígonos × ", ncol(ins_geo), " cols")
   ),
   Cobertura = c(
-    "19 localidades urbanas (2022–2026)",
+    "19 loc. × 57 meses (2022-01 a 2026-09)",
     "2022-01 a 2026-09 (11 DAI + No DAI)",
     "Polígonos oficiales Bogotá D.C."
   )
@@ -437,7 +423,21 @@ Importamos el panel oficial de delitos y población (19 localidades por 5 años,
 # 2. Carga de insumos base y tasas estandarizadas ----
 
 ## 2.1 Lectura de paneles y limpieza preventiva de columnas derivadas ----
-panel_delitos <- arrow::read_parquet(archivo_delitos_p)
+panel_delitos_mensual <- arrow::read_parquet(archivo_delitos_p)
+
+panel_delitos <- panel_delitos_mensual |>
+  group_by(codigo_localidad, localidad, año) |>
+  summarise(
+    hurto_personas         = sum(hurto_personas, na.rm = TRUE),
+    hurto_residencias      = sum(hurto_residencias, na.rm = TRUE),
+    hurto_motos            = sum(hurto_motos, na.rm = TRUE),
+    poblacion              = dplyr::first(poblacion),
+    tasa_hurto_personas    = round((hurto_personas / poblacion) * 100000, 2),
+    tasa_hurto_residencias = round((hurto_residencias / poblacion) * 100000, 2),
+    tasa_hurto_motos       = round((hurto_motos / poblacion) * 100000, 2),
+    tasa_hurto_total       = round(((hurto_personas + hurto_residencias + hurto_motos) / poblacion) * 100000, 2),
+    .groups                = "drop"
+  )
 
 # Removemos columnas downstream para que el cuaderno recalcule clustering y sentimiento desde cero
 df_noticias_base <- arrow::read_parquet(archivo_noticias_p) |>
@@ -671,9 +671,9 @@ knitr::kable(
 
 Como muestra la @tbl-diagnostico-kmeans y se grafica en la @fig-diagnostico-silueta, la silueta promedio alcanza su máximo en **$K^* = 3$** ($\bar{S} = `r max(diagnostico_k$silueta_media)`$), reduciendo la inercia interna ($WSS$) a `r diagnostico_k$wss[diagnostico_k$k == 3]` y capturando el **`r diagnostico_k$bss_tss_pct[diagnostico_k$k == 3]`%** de la varianza tridimensional:
 
-- **¿Qué significa una silueta promedio de `0,5416`?** En la escala $[-1, 1]$, valores entre `0,51` y `0,70` indican una **estructura sólida y bien definida**: en promedio, cada localidad está más de dos veces más cerca de su propio grupo que del perfil vecino más cercano.
-- **¿Qué mide `WSS = 13,58` (`74,85%` de varianza explicada)?** Partiendo de una dispersión total de $TSS = 3 \times 18 = 54{,}00$ ($K=1$), agrupar en $K=3$ reduce la suma de errores cuadráticos internos a `13,58`, reteniendo el `74,85%` de la heterogeneidad delictiva entre localidades.
-- **¿Por qué descartamos $K=4$ o $K=5$?** Al aumentar $K$, el $WSS$ siempre cae (`8,15` y `5,90`), pero la silueta se deteriora (`0,4786` y `0,3792`) porque los grupos adicionales quedan demasiado próximos entre sí y pierden separación real.
+- **¿Qué significa una silueta promedio de `r max(diagnostico_k$silueta_media)`?** En la escala $[-1, 1]$, valores superiores a `0,50` indican una **estructura sólida y bien definida**: en promedio, cada localidad está más de dos veces más cerca de su propio grupo que del perfil vecino más cercano, y con `SIEDCO.csv` se obtienen **cero siluetas negativas** (todas las localidades quedan bien clasificadas).
+- **¿Qué mide `WSS = `r diagnostico_k$wss[diagnostico_k$k == 3]`` (`r diagnostico_k$bss_tss_pct[diagnostico_k$k == 3]`% de varianza explicada)?** Partiendo de una dispersión total de $TSS = 3 \times 18 = 54{,}00$ ($K=1$), agrupar en $K=3$ reduce la suma de errores cuadráticos internos a `r diagnostico_k$wss[diagnostico_k$k == 3]`, reteniendo casi tres cuartas partes de la heterogeneidad delictiva entre localidades.
+- **¿Por qué descartamos $K=4$ o $K=5$?** Al aumentar $K$, el $WSS$ siempre cae, pero la silueta promedio disminuye porque los grupos adicionales quedan demasiado próximos entre sí y pierden separación real.
 
 ```{r}
 #| label: fig-diagnostico-silueta
@@ -784,9 +784,9 @@ knitr::kable(
 
 Los tres perfiles revelan una clara especialización urbana:
 
-- **Clúster 1: Céntrico e Institucional (5 localidades):** La Candelaria, Chapinero, Santa Fe, Teusaquillo y Barrios Unidos concentran las tasas más altas de hurto a personas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[1], 1))` por 100.000 hab.) y hurto a residencias (`r round(perfiles_resumen$tasa_media_residencias[1], 1)`), impulsadas por la población flotante diaria sobre una base residencial acotada.
-- **Clúster 2: Comercial y Automotor (2 localidades):** Los Mártires y Antonio Nariño presentan el pico extremo en hurto de motocicletas (`r round(perfiles_resumen$tasa_media_motos[2], 1)` por 100.000 hab.), más del doble que los otros grupos, asociado a corredores de comercio mayorista, talleres y autopartes. Un matiz interesante es que Antonio Nariño registra una silueta individual negativa (`r df_clusters$silueta_localidad[df_clusters$localidad == "Antonio Nariño"]`), pues comparte la especialidad motera de Los Mártires (`127,8`) pero con una tasa de hurto a personas mucho más moderada (`3.065,9` frente a `8.389,9`), ubicándose geométricamente en la frontera entre perfiles.
-- **Clúster 3: Residencial y Periférico (12 localidades):** Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa y Usme mantienen tasas relativas moderadas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[3], 1))` en personas) debido a sus grandes denominadores demográficos.
+- **Clúster 1: Céntrico e Institucional (`r perfiles_resumen$num_localidades[1]` localidades):** La Candelaria, Chapinero, Santa Fe, Teusaquillo y Barrios Unidos concentran tasas muy altas de hurto a personas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[1], 1))` por 100.000 hab.) y hurto a residencias (`r round(perfiles_resumen$tasa_media_residencias[1], 1)`), impulsadas por la población flotante diaria sobre una base residencial acotada.
+- **Clúster 2: Comercial y Automotor (`r perfiles_resumen$num_localidades[2]` localidad):** Los Mártires se aísla como caso extremo en las tres dimensiones, con `r scales::comma(round(perfiles_resumen$tasa_media_personas[2], 1))` en personas y un pico de `r round(perfiles_resumen$tasa_media_motos[2], 1)` en hurto a motocicletas (casi tres veces el promedio de los otros perfiles), asociado a su corredor de comercio mayorista, talleres y autopartes.
+- **Clúster 3: Residencial y Periférico (`r perfiles_resumen$num_localidades[3]` localidades):** Antonio Nariño, Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa y Usme mantienen tasas relativas moderadas (`r scales::comma(round(perfiles_resumen$tasa_media_personas[3], 1))` en personas) debido a sus grandes denominadores demográficos.
 
 ## Visualización tridimensional y bidimensional de los clústeres
 
@@ -1079,9 +1079,9 @@ ggplot(
 
 En `scripts/04_clustering_kmeans.R` complementamos el modelo base con una batería de sensibilidad estilo *tidymodels* (`{recipes}` + `{broom}` + `{cluster}` + `{mclust}`) para comprobar que la tipología de $K^*=3$ no sea un artefacto del escalamiento, de la distancia euclidiana o del algoritmo elegido:
 
-1. **Preprocesamiento alternativo y PCA 2D (`@tbl-sensibilidad-escalamientos`):** contrastamos la receta base `Z-score` frente a `Min-Max [0, 1]`, `Robusto (Mediana/IQR)`, `Log(1 + x) + Z-score` y `PCA 2D` (`PC1 + PC2` retienen el `96,38%` de la varianza total). Con el **Índice de Rand Ajustado ($\text{ARI}$)** verificamos que `Z-score`, `Robusto` y `PCA 2D` producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$), por lo que preferimos `Z-score` al conservar la interpretabilidad directa en las tres tasas originales.
-2. **Contraste de algoritmos y distancias (`@tbl-comparacion-modelos`):** comparamos `K-Means` frente a **PAM** (medoides), **AGNES (`Ward.D2`)** (jerárquico) y **GMM** (mezclas gaussianas con distancia de Mahalanobis), bajo distancia **Euclidiana** y **Manhattan**, además del estadístico **Gap** con 100 réplicas *bootstrap* (`gap_k3 = 0,1545`). `K-Means` obtiene la silueta más alta (`0,5416`); **PAM** y **AGNES** coinciden en **18 de 19 localidades** ($\text{ARI} = 0{,}8484$), moviendo únicamente a **Antonio Nariño** (el único caso frontera del modelo base, con silueta `-0,2116`).
-3. **Sensibilidad temporal al corte `2026`:** al ser $N=19$ localidades, el perfil *Comercial y Automotor* ($n=2$) es sensible a la inclusión del año incompleto `2026` (`CMMES: Ene-Sep`): en `2022–2026` y `2023–2026`, Los Mártires y Antonio Nariño se agrupan juntos ($K^*=3$, $\bar{S}=0{,}5416$ y $0{,}5520$); al restringir a `2022–2025`, Antonio Nariño migra y Los Mártires queda aislado (`13 / 5 / 1`, $\bar{S}=0{,}5062$).
+1. **Preprocesamiento alternativo y PCA 2D (`@tbl-sensibilidad-escalamientos`):** contrastamos la receta base `Z-score` frente a `Min-Max [0, 1]`, `Robusto (Mediana/IQR)`, `Log(1 + x) + Z-score` y `PCA 2D` (`PC1 + PC2` retienen el `96,9%` de la varianza total). Con el **Índice de Rand Ajustado ($\text{ARI}$)** verificamos que `Z-score`, `Min-Max [0, 1]` y `PCA 2D` producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$, con `0` siluetas negativas), por lo que preferimos `Z-score` al conservar la interpretabilidad directa en las tres tasas originales.
+2. **Contraste de algoritmos y distancias (`@tbl-comparacion-modelos`):** comparamos `K-Means` frente a **PAM** (medoides), **AGNES (`Ward.D2`)** (jerárquico) y **GMM** (mezclas gaussianas con distancia de Mahalanobis), bajo distancia **Euclidiana** y **Manhattan**, además del estadístico **Gap** con 100 réplicas *bootstrap*. `K-Means` ($\bar{S}=0{,}5211$, `0` siluetas negativas) y **AGNES (`Ward.D2`)** (tanto Euclidiana como Manhattan, $\bar{S}=0{,}540$) producen **exactamente la misma partición** `13 / 5 / 1` ($\text{ARI} = 1{,}0000$).
+3. **Estabilidad con `SIEDCO.csv`:** al usar los microdatos mensuales reales de `SIEDCO.csv` (corrigiendo la distorsión del año 2022 que presentaba el GeoJSON agregado), la partición `13 / 5 / 1` deja a **Los Mártires** como perfil comercial único y ubica a **Antonio Nariño** en el perfil residencial sin ninguna localidad con silueta negativa.
 
 ```{r}
 #| label: tbl-sensibilidad-escalamientos

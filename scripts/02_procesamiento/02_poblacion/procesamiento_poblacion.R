@@ -3,8 +3,8 @@
 # SCRIPT: scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R
 # ROL: Procesamiento Demográfico y Cálculo de Tasas de Criminalidad (SDS)
 # ENTRA: data/raw/poblacion/poblacion_localidades_raw.parquet
-#        data/processed/01_delitos/delitos_localidad_anual.parquet
-# PRODUCE: data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet
+#        data/processed/01_delitos/delitos_localidad_mensual.parquet
+# PRODUCE: data/processed/02_poblacion/panel_delitos_poblacion_mensual.parquet
 # ==============================================================================
 
 # 1. Configuración y Dependencias ----
@@ -30,9 +30,9 @@ ruta_raw_pob      <- here::here("data", "raw", "poblacion")
 ruta_proc_delitos <- here::here("data", "processed", "01_delitos")
 ruta_proc_pob     <- here::here("data", "processed", "02_poblacion")
 
-archivo_pob_raw   <- file.path(ruta_raw_pob, "poblacion_localidades_raw.parquet")
-archivo_delitos   <- file.path(ruta_proc_delitos, "delitos_localidad_anual.parquet")
-archivo_salida    <- file.path(ruta_proc_pob, "panel_delitos_poblacion_localidad.parquet")
+archivo_pob_raw       <- file.path(ruta_raw_pob, "poblacion_localidades_raw.parquet")
+archivo_delitos_mes   <- file.path(ruta_proc_delitos, "delitos_localidad_mensual.parquet")
+archivo_salida_mes    <- file.path(ruta_proc_pob, "panel_delitos_poblacion_mensual.parquet")
 
 if (!dir.exists(ruta_proc_pob)) {
   dir.create(ruta_proc_pob, recursive = TRUE, showWarnings = FALSE)
@@ -44,12 +44,17 @@ if (!dir.exists(ruta_proc_pob)) {
 if (!file.exists(archivo_pob_raw)) {
   stop("No se encontró '", archivo_pob_raw, "'. Ejecute primero: source('scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R')")
 }
-if (!file.exists(archivo_delitos)) {
-  stop("No se encontró '", archivo_delitos, "'. Ejecute primero: source('scripts/02_procesamiento/01_delitos/procesamiento_delitos.R')")
+if (!file.exists(archivo_delitos_mes)) {
+  stop("Falta '", archivo_delitos_mes, "'. Ejecute primero: source('scripts/02_procesamiento/01_delitos/procesamiento_delitos.R')")
 }
 
-df_pob_raw    <- arrow::read_parquet(archivo_pob_raw)
-panel_delitos <- arrow::read_parquet(archivo_delitos)
+leer_parquet_seguro <- function(ruta) {
+  tam <- file.info(ruta)$size
+  arrow::read_parquet(readBin(ruta, what = "raw", n = tam + 1024L))
+}
+
+df_pob_raw            <- leer_parquet_seguro(archivo_pob_raw)
+panel_delitos_mensual <- leer_parquet_seguro(archivo_delitos_mes)
 
 # 3. Procesamiento y Limpieza Demográfica ----
 
@@ -82,8 +87,8 @@ poblacion_anual <- df_pob_raw |>
 
 # 4. Integración de Población y Cálculo de Tasas ----
 
-## 4.1 Fusión de delitos con población proyectada ----
-panel_indicadores <- panel_delitos |>
+## 4.1 Fusión de delitos mensuales con población proyectada ----
+panel_indicadores_mensual <- panel_delitos_mensual |>
   left_join(poblacion_anual |> select(codigo_localidad, año, poblacion), by = c("codigo_localidad", "año")) |>
   mutate(
     tasa_hurto_personas    = round((hurto_personas / poblacion) * 100000, 2),
@@ -94,11 +99,11 @@ panel_indicadores <- panel_delitos |>
 
 # 5. Control de Calidad y Almacenamiento ----
 
-## 5.1 Comprobación de integridad del panel (19 localidades x 5 años = 95 obs) ----
-stopifnot(nrow(panel_indicadores) == 95)
-stopifnot(length(unique(panel_indicadores$codigo_localidad)) == 19)
-stopifnot(all(!is.na(panel_indicadores$tasa_hurto_personas)))
+## 5.1 Comprobación de integridad (19 localidades x 57 meses = 1.083 obs) ----
+stopifnot(nrow(panel_indicadores_mensual) == 1083L)
+stopifnot(length(unique(panel_indicadores_mensual$codigo_localidad)) == 19L)
+stopifnot(all(!is.na(panel_indicadores_mensual$tasa_hurto_personas)))
 
 ## 5.2 Exportación a Apache Parquet ----
-arrow::write_parquet(panel_indicadores, archivo_salida)
-message("✔ Panel de delitos y población guardado exitosamente en: ", archivo_salida)
+arrow::write_parquet(panel_indicadores_mensual, archivo_salida_mes)
+message("✔ Panel mensual de delitos y población guardado en: ", archivo_salida_mes, " (", nrow(panel_indicadores_mensual), " filas)")

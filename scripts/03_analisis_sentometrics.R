@@ -44,7 +44,7 @@ conflict_prefer("first",  "dplyr", quiet = TRUE)
 ## 1.3 Rutas relativas ----
 ruta_proc          <- here::here("data", "processed")
 archivo_noticias   <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
-archivo_delitos    <- file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_localidad.parquet")
+archivo_delitos    <- file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_mensual.parquet")
 archivo_clusters   <- file.path(ruta_proc, "clusters_localidades_kmeans.parquet")
 
 stopifnot(file.exists(archivo_noticias))
@@ -54,7 +54,19 @@ stopifnot(file.exists(archivo_delitos))
 
 ## 2.1 Carga de noticias depuradas y clústeres K-Means ----
 df_noticias <- arrow::read_parquet(archivo_noticias)
-panel_delitos <- arrow::read_parquet(archivo_delitos)
+panel_delitos <- arrow::read_parquet(archivo_delitos) |>
+  group_by(codigo_localidad, localidad, año) |>
+  summarise(
+    hurto_personas         = sum(hurto_personas, na.rm = TRUE),
+    hurto_residencias      = sum(hurto_residencias, na.rm = TRUE),
+    hurto_motos            = sum(hurto_motos, na.rm = TRUE),
+    poblacion              = first(poblacion),
+    tasa_hurto_personas    = round((hurto_personas / poblacion) * 100000, 2),
+    tasa_hurto_residencias = round((hurto_residencias / poblacion) * 100000, 2),
+    tasa_hurto_motos       = round((hurto_motos / poblacion) * 100000, 2),
+    tasa_hurto_total       = round(((hurto_personas + hurto_residencias + hurto_motos) / poblacion) * 100000, 2),
+    .groups                = "drop"
+  )
 
 if (!file.exists(archivo_clusters)) {
   source(here::here("scripts", "04_clustering_kmeans.R"), local = new.env())

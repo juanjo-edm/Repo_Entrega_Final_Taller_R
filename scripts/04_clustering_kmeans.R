@@ -8,6 +8,11 @@
 #          output/tables/tabla_sensibilidad_escalamientos_pca.csv
 #          output/tables/tabla_comparacion_modelos_distancias.csv
 #          output/tables/tabla_asignaciones_modelos_localidad.csv
+#          output/figures/kmeans_ranking_tasa_total.png
+#          output/figures/kmeans_zscore_distribuciones.png
+#          output/figures/kmeans_silueta_promedio.png
+#          output/figures/kmeans_dispersion_clusters.png
+#          output/figures/kmeans_mapa_clusters.png
 # ==============================================================================
 
 # 1. Configuración y Dependencias ----
@@ -28,6 +33,10 @@ library(recipes)    # Preprocesamiento declarativo estilo tidymodels
 library(broom)      # Extracción ordenada (tidy/glance) de modelos
 library(cluster)    # PAM, siluetas y estadístico Gap
 library(mclust)     # Mezclas Gaussianas (GMM) y Adjusted Rand Index (ARI)
+library(ggplot2)    # Visualización diagnóstica y mapas
+library(scales)     # Formato numérico en ejes
+library(ggrepel)    # Etiquetas sin solapamiento en dispersión
+library(sf)         # Lectura de polígonos GeoJSON de localidades
 
 ## 1.3 Resolución explícita de conflictos ({conflicted}) ----
 conflict_prefer("filter", "dplyr", quiet = TRUE)
@@ -36,11 +45,15 @@ conflict_prefer("select", "dplyr", quiet = TRUE)
 conflict_prefer("map",    "purrr", quiet = TRUE)
 
 ## 1.4 Definición de rutas relativas ({here}) ----
-ruta_datos_clean   <- here("data", "processed")
-ruta_salida_tablas <- here("output", "tables")
+ruta_datos_clean    <- here("data", "processed")
+ruta_salida_tablas  <- here("output", "tables")
+ruta_salida_figuras <- here("output", "figures")
 
 if (!dir.exists(ruta_salida_tablas)) {
   dir.create(ruta_salida_tablas, recursive = TRUE, showWarnings = FALSE)
+}
+if (!dir.exists(ruta_salida_figuras)) {
+  dir.create(ruta_salida_figuras, recursive = TRUE, showWarnings = FALSE)
 }
 
 # 2. Preparación de Datos y Receta Principal (recipes) ----
@@ -56,18 +69,27 @@ if (!dir.exists(ruta_salida_tablas)) {
 archivo_panel <- file.path(
   ruta_datos_clean,
   "02_poblacion",
-  "panel_delitos_poblacion_localidad.parquet"
+  "panel_delitos_poblacion_mensual.parquet"
 )
-panel_delitos <- read_parquet(archivo_panel)
+panel_delitos_mensual <- read_parquet(archivo_panel)
 
-matriz_localidad <- panel_delitos |>
+matriz_localidad <- panel_delitos_mensual |>
+  group_by(codigo_localidad, localidad, año) |>
+  summarise(
+    tasa_personas_anual = sum(tasa_hurto_personas, na.rm = TRUE),
+    tasa_resid_anual    = sum(tasa_hurto_residencias, na.rm = TRUE),
+    tasa_motos_anual    = sum(tasa_hurto_motos, na.rm = TRUE),
+    tasa_total_anual    = sum(tasa_hurto_total, na.rm = TRUE),
+    poblacion_anual     = dplyr::first(poblacion),
+    .groups = "drop"
+  ) |>
   group_by(codigo_localidad, localidad) |>
   summarise(
-    tasa_personas_prom = mean(tasa_hurto_personas, na.rm = TRUE),
-    tasa_resid_prom    = mean(tasa_hurto_residencias, na.rm = TRUE),
-    tasa_motos_prom    = mean(tasa_hurto_motos, na.rm = TRUE),
-    tasa_total_prom    = mean(tasa_hurto_total, na.rm = TRUE),
-    poblacion_prom     = mean(poblacion, na.rm = TRUE),
+    tasa_personas_prom = mean(tasa_personas_anual, na.rm = TRUE),
+    tasa_resid_prom    = mean(tasa_resid_anual, na.rm = TRUE),
+    tasa_motos_prom    = mean(tasa_motos_anual, na.rm = TRUE),
+    tasa_total_prom    = mean(tasa_total_anual, na.rm = TRUE),
+    poblacion_prom     = mean(poblacion_anual, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -202,7 +224,7 @@ catalogo_recetas <- list(
   "Min-Max [0, 1]"              = receta_minmax,
   "Robusto (Mediana / IQR)"     = receta_robusta,
   "Log(1 + x) + Z-score"        = receta_log_z,
-  "PCA (PC1 + PC2 = 96,4% var)" = receta_pca2
+  "PCA (PC1 + PC2 = 96,9% var)" = receta_pca2
 )
 
 tabla_sensibilidad_escalamientos <- imap_dfr(catalogo_recetas, evaluar_receta_kmeans)
@@ -248,8 +270,8 @@ tabla_comparacion_modelos <- bind_rows(
 )
 
 # 5. Ajuste Definitivo, Etiquetado Determinístico y Auditoría ----
-# Confirmada la estabilidad del agrupamiento (ARI >= 0.78 frente a PAM/AGNES/GMM
-# y ARI = 1.00 frente a PCA 2D), consolidamos el modelo K-Means (Z-score, K* = 3).
+# Confirmada la estabilidad del agrupamiento (ARI = 1.00 frente a AGNES,
+# Min-Max y PCA 2D), consolidamos el modelo K-Means (Z-score, K* = 3).
 
 ## 5.1 Etiquetado determinístico de centroides (broom::tidy) ----
 # Como K-Means asigna índices numéricos arbitrarios (1, 2, 3) que pueden
@@ -336,3 +358,141 @@ write_csv(tabla_asignaciones_modelos,       file.path(ruta_salida_tablas, "tabla
 message("✔ Asignaciones de clustering guardadas en: ", archivo_salida_clusters)
 message("✔ Tabla de perfiles exportada en: ", archivo_tabla_clusters)
 message("✔ Tablas de sensibilidad (recipes, PCA, distancias y modelos) guardadas en: ", ruta_salida_tablas)
+
+# 7. Exportación de Figuras Diagnósticas y Mapas (output/figures/) ----
+paleta_clusters <- c(
+  "Céntrico e Institucional" = "#D97706",
+  "Comercial y Automotor"    = "#B91C1C",
+  "Residencial y Periférico" = "#1B365D"
+)
+
+## 7.1 Ranking de tasa promedio total por localidad ----
+p_ranking <- df_clusters |>
+  mutate(localidad_ord = reorder(localidad, tasa_total_prom)) |>
+  ggplot(aes(x = localidad_ord, y = tasa_total_prom, fill = cluster_nombre)) +
+  geom_col(width = 0.78) +
+  geom_text(
+    aes(label = number(tasa_total_prom, big.mark = ".", decimal.mark = ",", accuracy = 1)),
+    hjust = -0.1, size = 3, color = "#1F2937"
+  ) +
+  coord_flip() +
+  scale_fill_manual(values = paleta_clusters, name = "Perfil territorial") +
+  scale_y_continuous(
+    labels = label_number(big.mark = ".", decimal.mark = ","),
+    expand = expansion(mult = c(0, 0.14))
+  ) +
+  labs(
+    title = "Tasa promedio anual de hurto total por localidad (2022–sept. 2026)",
+    subtitle = "Tasas por cada 100.000 habitantes (SIEDCO mensual consolidado)",
+    x = NULL, y = "Tasa promedio anual por 100.000 hab."
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom", plot.title = element_text(face = "bold"))
+
+ggsave(file.path(ruta_salida_figuras, "kmeans_ranking_tasa_total.png"),
+       p_ranking, width = 8.5, height = 5.4, dpi = 300, bg = "white")
+
+## 7.2 Comparación de distribuciones antes vs. después de Z-score ----
+df_dist_orig <- matriz_localidad |>
+  select(localidad, tasa_personas_prom, tasa_resid_prom, tasa_motos_prom) |>
+  pivot_longer(-localidad, names_to = "modalidad", values_to = "valor") |>
+  mutate(escala = "1. Tasas originales (por 100.000 hab.)")
+
+df_dist_z <- as_tibble(matriz_scale, rownames = "localidad") |>
+  pivot_longer(-localidad, names_to = "modalidad", values_to = "valor") |>
+  mutate(escala = "2. Estandarización Z-score (media 0, DE 1)")
+
+p_zscore <- bind_rows(df_dist_orig, df_dist_z) |>
+  mutate(modalidad = recode(
+    modalidad,
+    "tasa_personas_prom" = "Personas",
+    "tasa_resid_prom"    = "Residencias",
+    "tasa_motos_prom"    = "Motocicletas"
+  )) |>
+  ggplot(aes(x = modalidad, y = valor, fill = modalidad)) +
+  geom_boxplot(alpha = 0.85, outlier.size = 1.6, show.legend = FALSE) +
+  facet_wrap(~ escala, scales = "free_y") +
+  scale_fill_manual(values = c("Personas" = "#1B365D", "Residencias" = "#D97706", "Motocicletas" = "#B91C1C")) +
+  scale_y_continuous(labels = label_number(big.mark = ".", decimal.mark = ",")) +
+  labs(
+    title = "Efecto de la estandarización Z-score sobre las tres modalidades",
+    x = NULL, y = "Valor"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(plot.title = element_text(face = "bold"), strip.text = element_text(face = "bold"))
+
+ggsave(file.path(ruta_salida_figuras, "kmeans_zscore_distribuciones.png"),
+       p_zscore, width = 8.5, height = 4.2, dpi = 300, bg = "white")
+
+## 7.3 Curva de silueta promedio para K = 2 a 5 ----
+p_silueta <- diagnostico_k |>
+  ggplot(aes(x = k, y = silueta_media)) +
+  geom_line(color = "#1B365D", linewidth = 1) +
+  geom_point(aes(color = k == k_optimo), size = 3.5, show.legend = FALSE) +
+  geom_text(
+    aes(label = number(silueta_media, decimal.mark = ",", accuracy = 0.0001)),
+    vjust = -1.1, size = 3.4, fontface = "bold"
+  ) +
+  scale_color_manual(values = c("FALSE" = "#1B365D", "TRUE" = "#D97706")) +
+  scale_x_continuous(breaks = 2:5) +
+  scale_y_continuous(
+    limits = c(0.30, max(diagnostico_k$silueta_media) + 0.06),
+    labels = label_number(decimal.mark = ",")
+  ) +
+  labs(
+    title = "Coeficiente de silueta promedio según número de clústeres (K = 2 a 5)",
+    subtitle = paste0("Óptimo seleccionado: K* = ", k_optimo, " (silueta = ",
+                      format(max(diagnostico_k$silueta_media), decimal.mark = ","), ")"),
+    x = "Número de clústeres (K)", y = "Silueta promedio"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(plot.title = element_text(face = "bold"))
+
+ggsave(file.path(ruta_salida_figuras, "kmeans_silueta_promedio.png"),
+       p_silueta, width = 7.2, height = 4.2, dpi = 300, bg = "white")
+
+## 7.4 Dispersión bidimensional de localidades por clúster ----
+p_disp <- df_clusters |>
+  ggplot(aes(x = tasa_personas_prom, y = tasa_motos_prom, color = cluster_nombre)) +
+  geom_point(aes(size = tasa_resid_prom), alpha = 0.9) +
+  geom_text_repel(aes(label = localidad), size = 3, show.legend = FALSE, max.overlaps = 25) +
+  scale_color_manual(values = paleta_clusters, name = "Perfil territorial") +
+  scale_size_continuous(range = c(2.5, 7), name = "Tasa residencias") +
+  scale_x_continuous(labels = label_number(big.mark = ".", decimal.mark = ",")) +
+  scale_y_continuous(labels = label_number(big.mark = ".", decimal.mark = ",")) +
+  labs(
+    title = "Perfiles territoriales: hurto a personas vs. hurto de motocicletas",
+    subtitle = "Tamaño proporcional a la tasa promedio de hurto a residencias",
+    x = "Tasa promedio hurto a personas (por 100.000 hab.)",
+    y = "Tasa promedio hurto a motos (por 100.000 hab.)"
+  ) +
+  theme_minimal(base_size = 10) +
+  theme(legend.position = "bottom", plot.title = element_text(face = "bold"))
+
+ggsave(file.path(ruta_salida_figuras, "kmeans_dispersion_clusters.png"),
+       p_disp, width = 8.5, height = 5.2, dpi = 300, bg = "white")
+
+## 7.5 Mapa coroplético de los tres clústeres en Bogotá ----
+archivo_geo <- here("data", "raw", "delitos", "localidades_bogota_raw.geojson")
+if (file.exists(archivo_geo)) {
+  mapa_loc <- st_read(archivo_geo, quiet = TRUE) |>
+    filter(!CMIULOCAL %in% c("20", "99")) |>
+    left_join(df_clusters, by = c("CMIULOCAL" = "codigo_localidad"))
+
+  p_mapa <- ggplot(mapa_loc) +
+    geom_sf(aes(fill = cluster_nombre), color = "white", linewidth = 0.4) +
+    geom_sf_text(aes(label = localidad), size = 2.4, color = "white", fontface = "bold") +
+    scale_fill_manual(values = paleta_clusters, name = "Perfil territorial") +
+    labs(
+      title = "Distribución espacial de clústeres de hurto en Bogotá",
+      subtitle = "19 localidades urbanas (K-Means Z-score, K* = 3)"
+    ) +
+    theme_void(base_size = 10) +
+    theme(legend.position = "bottom", plot.title = element_text(face = "bold", hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5))
+
+  ggsave(file.path(ruta_salida_figuras, "kmeans_mapa_clusters.png"),
+         p_mapa, width = 6.5, height = 7.2, dpi = 300, bg = "white")
+}
+
+message("✔ Figuras de clustering actualizadas en: ", ruta_salida_figuras)

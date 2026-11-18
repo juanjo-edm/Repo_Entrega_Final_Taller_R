@@ -74,11 +74,11 @@ Este documento explica tanto la **teoría completa** como el **código línea po
   filebox/.style={rectangle, rounded corners=2pt, draw=NavyBlue!70, fill=GraySoft, dashed, text width=11.5cm, align=center, inner sep=4pt},
   arrow/.style={-{Stealth[length=2.6mm, width=1.8mm]}, thick, draw=NavyBlue}
 ]
-\node[filebox] (in) {\textbf{Entrada}: \texttt{panel\_delitos\_poblacion\_localidad.parquet} (95 filas: 19 localidades $\times$ 5 a\~nos)};
-\node[stepbox, below=of in] (s1) {\textbf{Preparaci\'on (\texttt{recipes})}: Promedia tasas 2022--2026 por localidad y aplica receta base \texttt{Z-score}};
+\node[filebox] (in) {\textbf{Entrada}: \texttt{panel\_delitos\_poblacion\_mensual.parquet} (1.083 filas: 19 localidades $\times$ 57 meses)};
+\node[stepbox, below=of in] (s1) {\textbf{Preparaci\'on (\texttt{recipes})}: Agrega tasas mensuales a anuales, promedia 2022--2026 y aplica \texttt{Z-score}};
 \node[stepbox, below=of s1] (s2) {\textbf{Selecci\'on de $K$}: Eval\'ua $K=2..5$ con Silueta media, Inercia (WSS) y Gap bootstrap $\rightarrow$ $K^{*}=3$};
 \node[stepbox, below=of s2] (s3) {\textbf{Experimentaci\'on}: Contrasta 5 escalamientos/PCA, Euclidiana vs. Manhattan y K-Means/PAM/AGNES/GMM};
-\node[filebox, below=of s3] (out) {\textbf{Salida}: Etiquetado determin\'istico + \texttt{clusters\_localidades\_kmeans.parquet} y 4 tablas CSV};
+\node[filebox, below=of s3] (out) {\textbf{Salida}: Etiquetado determin\'istico + \texttt{clusters\_localidades\_kmeans.parquet}, 4 CSV y 5 figuras PNG};
 \draw[arrow] (in) -- (s1);
 \draw[arrow] (s1) -- (s2);
 \draw[arrow] (s2) -- (s3);
@@ -109,15 +109,15 @@ Para decidir si dos localidades $\mathbf{z}_a$ y $\mathbf{z}_b$ se parecen, los 
 
 ## Por qué estandarizamos las variables (Z-score, escalamientos alternativos y PCA)
 
-En nuestros datos, el hurto a personas alcanza miles de casos por 100.000 habitantes (hasta `8.389,9`), mientras que el hurto a residencias y el hurto de motocicletas se mueven en decenas o pocos cientos (`45` a `217`). Si se usaran las tasas en sus unidades originales, las diferencias de miles de puntos en hurto a personas dominarían la distancia y volverían irrelevante lo que ocurre con residencias y motos.
+En nuestros datos, el hurto a personas alcanza miles de casos por 100.000 habitantes (hasta `9.337,4`), mientras que el hurto a residencias y el hurto de motocicletas se mueven en decenas o pocos cientos (`19` a `220`). Si se usaran las tasas en sus unidades originales, las diferencias de miles de puntos en hurto a personas dominarían la distancia y volverían irrelevante lo que ocurre con residencias y motos.
 
 Para que las tres modalidades pesen igual aplicamos la **estandarización Z-score** a cada variable $j \in \{1,2,3\}$:
 
 $$Z_{ij} = \frac{X_{ij} - \bar{X}_j}{s_j}$$
 
-Aquí $\bar{X}_j$ es el promedio y $s_j$ la desviación estándar de la modalidad $j$ entre las 19 localidades. Las tres variables quedan medidas en desviaciones estándar respecto al promedio de Bogotá, con media $0$ y varianza $1$. Por ejemplo, Los Mártires tiene una tasa promedio de hurto a personas de `8.389,9` por 100.000 habitantes; con una media de `2.910,7` y una desviación estándar de `2.574,8`, su valor estandarizado es $Z = (8.389{,}9 - 2.910{,}7) / 2.574{,}8 \approx +2{,}13$, es decir, $2{,}13$ desviaciones estándar por encima del promedio distrital.
+Aquí $\bar{X}_j$ es el promedio y $s_j$ la desviación estándar de la modalidad $j$ entre las 19 localidades. Las tres variables quedan medidas en desviaciones estándar respecto al promedio de Bogotá, con media $0$ y varianza $1$. Por ejemplo, Los Mártires tiene una tasa promedio de hurto a personas de `9.337,4` por 100.000 habitantes; con una media de `3.069,9` y una desviación estándar de `2.824,3`, su valor estandarizado es $Z = (9.337{,}4 - 3.069{,}9) / 2.824{,}3 \approx +2{,}22$, es decir, $2{,}22$ desviaciones estándar por encima del promedio distrital.
 
-En la fase de experimentación contrastamos el Z-score base frente a otras cuatro transformaciones: **Min-Max $[0,1]$** (escala al rango mínimo–máximo), **Robusto (Mediana/IQR)** (centra en la mediana y divide por el rango intercuartílico para atenuar extremos), **`log(1 + x)` + Z-score** (comprime colas derechas) y **PCA 2D** (proyecta las 3 variables en 2 componentes principales ortogonales que retienen el `96,38%` de la varianza total).
+En la fase de experimentación contrastamos el Z-score base frente a otras cuatro transformaciones: **Min-Max $[0,1]$** (escala al rango mínimo–máximo), **Robusto (Mediana/IQR)** (centra en la mediana y divide por el rango intercuartílico para atenuar extremos), **`log(1 + x)` + Z-score** (comprime colas derechas) y **PCA 2D** (proyecta las 3 variables en 2 componentes principales ortogonales que retienen el `96,89%` de la varianza total).
 
 ## El algoritmo K-Means y sus cuatro etapas (Hartigan-Wong)
 
@@ -162,6 +162,11 @@ Aquí $\boldsymbol{\mu}_k = (\mu_{k,1}, \mu_{k,2}, \mu_{k,3})$ es el **centroide
 #          output/tables/tabla_sensibilidad_escalamientos_pca.csv
 #          output/tables/tabla_comparacion_modelos_distancias.csv
 #          output/tables/tabla_asignaciones_modelos_localidad.csv
+#          output/figures/kmeans_ranking_tasa_total.png
+#          output/figures/kmeans_zscore_distribuciones.png
+#          output/figures/kmeans_silueta_promedio.png
+#          output/figures/kmeans_dispersion_clusters.png
+#          output/figures/kmeans_mapa_clusters.png
 # ==============================================================================
 
 # 1. Configuración y Dependencias ----
@@ -175,9 +180,9 @@ set.seed(20261014)
 
 ::: {}
 
-- **L1–11 (Cabecera):** Documenta el propósito del script y lista los 5 archivos que genera: 1 base maestra en Parquet (`clusters_localidades_kmeans.parquet`) y 4 tablas de auditoría en CSV.
-- **L16 (Notación):** `options(scipen = 999)` evita que R imprima números grandes o decimales en notación científica (como `1e+05`).
-- **L17 (Semilla):** `set.seed(20261014)` fija el generador aleatorio para que los `50` arranques de K-Means y las `100` simulaciones del Gap den exactamente el mismo resultado en cualquier computador.
+- **L1–16 (Cabecera):** Documenta el propósito del script y lista los 10 archivos que genera: 1 base maestra en Parquet (`clusters_localidades_kmeans.parquet`), 4 tablas de auditoría en CSV y 5 figuras diagnósticas en PNG.
+- **L21 (Notación):** `options(scipen = 999)` evita que R imprima números grandes o decimales en notación científica (como `1e+05`).
+- **L22 (Semilla):** `set.seed(20261014)` fija el generador aleatorio para que los `50` arranques de K-Means y las `100` simulaciones del Gap den exactamente el mismo resultado en cualquier computador.
 
 *Fijamos las reglas de lectura numérica y reproducibilidad desde el arranque.*
 
@@ -187,7 +192,7 @@ set.seed(20261014)
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="19"}
+```{.r .numberLines startFrom="24"}
 ## 1.2 Carga de librerías ----
 library(here)       # Rutas relativas portables
 library(conflicted) # Evita colisiones silenciosas entre funciones
@@ -200,6 +205,10 @@ library(recipes)    # Preprocesamiento declarativo estilo tidymodels
 library(broom)      # Extracción ordenada (tidy/glance) de modelos
 library(cluster)    # PAM, siluetas y estadístico Gap
 library(mclust)     # Mezclas Gaussianas (GMM) y Adjusted Rand Index (ARI)
+library(ggplot2)    # Visualización diagnóstica y mapas
+library(scales)     # Formato numérico en ejes
+library(ggrepel)    # Etiquetas sin solapamiento en dispersión
+library(sf)         # Lectura de polígonos GeoJSON de localidades
 
 ## 1.3 Resolución explícita de conflictos ({conflicted}) ----
 conflict_prefer("filter", "dplyr", quiet = TRUE)
@@ -208,11 +217,15 @@ conflict_prefer("select", "dplyr", quiet = TRUE)
 conflict_prefer("map",    "purrr", quiet = TRUE)
 
 ## 1.4 Definición de rutas relativas ({here}) ----
-ruta_datos_clean   <- here("data", "processed")
-ruta_salida_tablas <- here("output", "tables")
+ruta_datos_clean    <- here("data", "processed")
+ruta_salida_tablas  <- here("output", "tables")
+ruta_salida_figuras <- here("output", "figures")
 
 if (!dir.exists(ruta_salida_tablas)) {
   dir.create(ruta_salida_tablas, recursive = TRUE, showWarnings = FALSE)
+}
+if (!dir.exists(ruta_salida_figuras)) {
+  dir.create(ruta_salida_figuras, recursive = TRUE, showWarnings = FALSE)
 }
 ```
 
@@ -220,9 +233,9 @@ if (!dir.exists(ruta_salida_tablas)) {
 
 ::: {}
 
-- **L20–30 (Librerías):** Carga `{here}` (rutas portables), `{arrow}`/`{readr}` (Parquet/CSV), `{dplyr}`/`{tidyr}`/`{purrr}` (manipulación y programación funcional), `{recipes}`/`{broom}` (preprocesamiento y extracción ordenada estilo *tidymodels*), `{cluster}` (PAM, silueta, Gap) y `{mclust}` (GMM y ARI).
-- **L33–36 (Conflictos):** `conflict_prefer()` declara qué paquete gana cuando dos librerías tienen funciones homónimas (`filter`, `lag`, `select` de `dplyr`; `map` de `purrr`).
-- **L39–44 (Rutas):** `here()` construye rutas desde la raíz del proyecto; `dir.create(..., recursive = TRUE)` crea `output/tables/` si aún no existe.
+- **L25–39 (Librerías):** Carga `{here}`, `{arrow}`/`{readr}` (Parquet/CSV), `{dplyr}`/`{tidyr}`/`{purrr}`, `{recipes}`/`{broom}` (preprocesamiento y extracción ordenada estilo *tidymodels*), `{cluster}` (PAM, silueta, Gap), `{mclust}` (GMM y ARI) y `{ggplot2}`/`{scales}`/`{ggrepel}`/`{sf}` para figuras y mapas.
+- **L42–45 (Conflictos):** `conflict_prefer()` declara qué paquete gana cuando dos librerías tienen funciones homónimas (`filter`, `lag`, `select` de `dplyr`; `map` de `purrr`).
+- **L48–57 (Rutas):** `here()` construye rutas desde la raíz del proyecto y crea `output/tables/` y `output/figures/` si aún no existen.
 
 *Preparamos librerías, evitamos choques silenciosos de nombres y aseguramos carpetas portables.*
 
@@ -231,7 +244,7 @@ if (!dir.exists(ruta_salida_tablas)) {
 
 ## Preparación de los datos y receta base (`Sección 2`)
 
-Para construir una tipología territorial comparable entre localidades de distinto tamaño y estable en el tiempo, el análisis parte de **tasas por cada 100.000 habitantes** y de un **promedio anual (2022–2026)** por localidad. Por ejemplo, en Fontibón en 2022 hubo `14.252` denuncias de hurto a personas y `384.590` habitantes proyectados, lo que da $14.252 / 384.590 \times 100.000 = 3.705{,}76$ por 100.000 habitantes.
+Para construir una tipología territorial comparable entre localidades de distinto tamaño y estable en el tiempo, el análisis parte de **tasas por cada 100.000 habitantes** consolidadas mensualmente desde los microdatos SIEDCO y agregadas a un **promedio anual (2022–2026)** por localidad. Por ejemplo, en Fontibón en 2022 hubo `9.190` denuncias de hurto a personas y `384.590` habitantes proyectados, lo que da $9.190 / 384.590 \times 100.000 = 2.389{,}56$ por 100.000 habitantes.
 
 Elegimos estas tres modalidades (`hurto_personas`, `hurto_residencias`, `hurto_motos`) porque son los delitos patrimoniales cotidianos que más afectan la **percepción de inseguridad ciudadana** en Bogotá, explicando por qué el miedo al delito diverge de las cifras de homicidios (Restrepo & Moreno, 2007, *"Bogotá: ¿más crimen?, ¿más miedo?"*, *Desarrollo y Sociedad* 59, DOI: `10.13043/dys.59.5`; Encuesta de Percepción y Victimización de la CCB; ECSC del DANE).
 
@@ -240,25 +253,34 @@ Elegimos estas tres modalidades (`hurto_personas`, `hurto_residencias`, `hurto_m
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="46"}
+```{.r .numberLines startFrom="59"}
 # 2. Preparación de Datos y Receta Principal (recipes) ----
 
 ## 2.1 Carga del panel delictivo y agregación promedio por localidad ----
 archivo_panel <- file.path(
   ruta_datos_clean,
   "02_poblacion",
-  "panel_delitos_poblacion_localidad.parquet"
+  "panel_delitos_poblacion_mensual.parquet"
 )
-panel_delitos <- read_parquet(archivo_panel)
+panel_delitos_mensual <- read_parquet(archivo_panel)
 
-matriz_localidad <- panel_delitos |>
+matriz_localidad <- panel_delitos_mensual |>
+  group_by(codigo_localidad, localidad, año) |>
+  summarise(
+    tasa_personas_anual = sum(tasa_hurto_personas, na.rm = TRUE),
+    tasa_resid_anual    = sum(tasa_hurto_residencias, na.rm = TRUE),
+    tasa_motos_anual    = sum(tasa_hurto_motos, na.rm = TRUE),
+    tasa_total_anual    = sum(tasa_hurto_total, na.rm = TRUE),
+    poblacion_anual     = dplyr::first(poblacion),
+    .groups = "drop"
+  ) |>
   group_by(codigo_localidad, localidad) |>
   summarise(
-    tasa_personas_prom = mean(tasa_hurto_personas, na.rm = TRUE),
-    tasa_resid_prom    = mean(tasa_hurto_residencias, na.rm = TRUE),
-    tasa_motos_prom    = mean(tasa_hurto_motos, na.rm = TRUE),
-    tasa_total_prom    = mean(tasa_hurto_total, na.rm = TRUE),
-    poblacion_prom     = mean(poblacion, na.rm = TRUE),
+    tasa_personas_prom = mean(tasa_personas_anual, na.rm = TRUE),
+    tasa_resid_prom    = mean(tasa_resid_anual, na.rm = TRUE),
+    tasa_motos_prom    = mean(tasa_motos_anual, na.rm = TRUE),
+    tasa_total_prom    = mean(tasa_total_anual, na.rm = TRUE),
+    poblacion_prom     = mean(poblacion_anual, na.rm = TRUE),
     .groups = "drop"
   )
 
@@ -278,10 +300,9 @@ rownames(matriz_scale) <- matriz_localidad$localidad
 
 ::: {}
 
-- **L49–54 (Lectura):** Construye la ruta de `panel_delitos_poblacion_localidad.parquet` (`95` filas: `19` localidades × `5` años) y lo carga con `read_parquet()`.
-- **L56–65 (Agregación):** Agrupa por `codigo_localidad` y `localidad`, y promedia las tasas 2022–2026 (`na.rm = TRUE`) obteniendo `19` filas estables.
-- **L68–72 (Receta):** `recipe()` declara las `3` modalidades específicas (excluyendo `tasa_total_prom` para no duplicar información ni inducir colinealidad) y `step_normalize()` especifica estandarización *Z-score*.
-- **L74–76 (Prep & Bake):** `prep()` estima $\bar{X}_j$ y $s_j$; `bake(new_data = NULL)` devuelve la matriz estandarizada `19 × 3` y `rownames()` la etiqueta por localidad.
+- **L69–74 (Lectura):** Construye la ruta de `panel_delitos_poblacion_mensual.parquet` (`1.083` filas: `19` localidades × `57` meses de enero 2022 a septiembre 2026) y lo carga con `read_parquet()`.
+- **L76–94 (Agregación en dos pasos):** Primero suma las tasas mensuales dentro de cada `(codigo_localidad, localidad, año)` preservando la población anual (`dplyr::first(poblacion)`); luego promedia los cinco años obteniendo `19` perfiles estructurales estables.
+- **L102–110 (Receta, Prep & Bake):** `recipe()` declara las `3` modalidades específicas (excluyendo `tasa_total_prom`), `step_normalize()` estandariza por *Z-score*, `prep()` estima $\bar{X}_j$ y $s_j$, y `bake()` devuelve la matriz `19 × 3`.
 
 *Resumimos cinco años por localidad e igualamos la escala de las tres tasas.*
 
@@ -295,7 +316,7 @@ rownames(matriz_scale) <- matriz_localidad$localidad
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="90"}
+```{.r .numberLines startFrom="112"}
 # 3. Selección del Número Óptimo de Clústeres (K = 2 a 5) ----
 
 ## 3.1 Evaluación de K candidatos mediante Silueta, Inercia (WSS) y Gap ----
@@ -337,10 +358,10 @@ message(
 
 ::: {}
 
-- **L93 (Distancias):** `dist(..., method = "euclidean")` calcula la matriz de distancias euclidianas entre las `19` localidades estandarizadas.
-- **L95–107 (Barrido $K=2..5$):** Con `purrr::map()` ajusta `kmeans()` para cada $K$ usando `nstart = 50` (50 inicializaciones aleatorias para evitar óptimos locales). Extrae la silueta media (`silhouette()`) y la inercia interna `tot.withinss` vía `broom::glance()`.
-- **L109–116 (Gap):** `clusGap(..., B = 100L)` compara la dispersión observada contra `100` muestras aleatorias uniformes (*bootstrap*).
-- **L119–124 (Selección):** `which.max()` elige automáticamente el $K^*$ de mayor silueta promedio ($K^*=3$) y lo reporta en consola con `message()`.
+- **L119 (Distancias):** `dist(..., method = "euclidean")` calcula la matriz de distancias euclidianas entre las `19` localidades estandarizadas.
+- **L121–133 (Barrido $K=2..5$):** Con `purrr::map()` ajusta `kmeans()` para cada $K$ usando `nstart = 50` (50 inicializaciones aleatorias para evitar óptimos locales). Extrae la silueta media (`silhouette()`) y la inercia interna `tot.withinss` vía `broom::glance()`.
+- **L136–143 (Gap):** `clusGap(..., B = 100L)` compara la dispersión observada contra `100` muestras aleatorias uniformes (*bootstrap*).
+- **L146–151 (Selección):** `which.max()` elige automáticamente el $K^*$ de mayor silueta promedio ($K^*=3$) y lo reporta en consola con `message()`.
 
 *Probamos de 2 a 5 grupos y elegimos el que mejor separa las localidades.*
 
@@ -349,18 +370,18 @@ message(
 
 |Número de clústeres ($K$)|Silueta promedio|WSS (inercia interna)|Varianza explicada ($\text{BSS}/\text{TSS}$, %)|
 |---:|---:|---:|---:|
-|2|0,5153|23,31|56,82|
-|3|0,5416|13,58|74,85|
-|4|0,4786|8,15|84,90|
-|5|0,3792|5,90|89,07|
+|2|0,5178|23,13|57,16|
+|3|0,5211|13,65|74,72|
+|4|0,4715|7,99|85,21|
+|5|0,3619|5,89|89,09|
 
 : Diagnóstico del número óptimo $K$ mediante coeficiente de silueta e inercia intra-clúster {#tbl-diag}
 
 Como muestra la @tbl-diag y la @fig-silueta:
 
-- **¿Qué significa una silueta promedio de `0,5416`?** Valores entre `0,51` y `0,70` indican una **estructura sólida y bien definida**: en promedio, cada localidad está más de dos veces más cerca de su propio grupo que del perfil vecino más cercano.
-- **¿Qué es el `WSS` (`13,58`) y por qué equivale al `74,85%`?** Partiendo de una dispersión total de `54,00` ($K=1$), dividir en $K=3$ reduce la inercia interna a `13,58`, capturando el `74,85%` de la variabilidad delictiva.
-- **¿Por qué no elegimos $K=4$ o $K=5$?** El WSS siempre baja al partir grupos (`8,15` y `5,90`), pero la silueta cae a `0,4786` y `0,3792` porque los grupos adicionales pierden separación entre sí.
+- **¿Qué significa una silueta promedio de `0,5211`?** Valores entre `0,51` y `0,70` indican una **estructura sólida y bien definida**: en promedio, cada localidad está claramente más cerca de su propio grupo que del perfil vecino más cercano.
+- **¿Qué es el `WSS` (`13,65`) y por qué equivale al `74,72%`?** Partiendo de una dispersión total de `54,00` ($K=1$), dividir en $K=3$ reduce la inercia interna a `13,65`, capturando el `74,72%` de la variabilidad delictiva.
+- **¿Por qué no elegimos $K=4$ o $K=5$?** El WSS siempre baja al partir grupos (`7,99` y `5,89`), pero la silueta cae a `0,4715` y `0,3619` porque los grupos adicionales pierden separación entre sí.
 
 ![Coeficiente de silueta promedio para $K$ entre 2 y 5 (óptimo en $K^{*}=3$)](../../../../output/figures/kmeans_silueta_promedio.png){#fig-silueta width="70%"}
 
@@ -371,7 +392,7 @@ Antes de consolidar y exportar el modelo definitivo, contrastamos escalamientos 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="131"}
+```{.r .numberLines startFrom="153"}
 # 4. Experimentación y Sensibilidad (Estilo Tidymodels: Recetas x Modelos) ----
 
 ## 4.1 Modelo K-Means de referencia sobre la receta base ----
@@ -415,10 +436,10 @@ var_pca   <- summary(pca_tasas)$importance
 
 ::: {}
 
-- **L134–136 (Referencia base):** Ajusta `km_base` sobre la matriz *Z-score* con $K^*=3$ y guarda sus siluetas individuales (`sil_base`) para usarlas como punto de comparación.
-- **L139–146 (Función auxiliar):** Define la fórmula común (`~` 3 tasas) y `hornear_matriz()`, que encapsula `prep() |> bake() |> as.matrix()` para evitar repetir código.
-- **L148–164 (4 recetas alternativas):** Crea `Min-Max [0,1]` (`step_range`), `Robusto` (mediana e IQR escritos explícitamente porque `step_mutate()` no evalúa `across()`), `Log(1+x) + Z-score` (`step_log` + `step_normalize`) y `PCA 2D` (`step_pca` con 2 componentes).
-- **L166–167 (Varianza PCA):** `prcomp()` sobre la matriz ya escalada extrae el % de varianza explicada por `PC1` y `PC2`.
+- **L160–163 (Referencia base):** Ajusta `km_base` sobre la matriz *Z-score* con $K^*=3$ y guarda sus siluetas individuales (`sil_base`) para usarlas como punto de comparación.
+- **L166–174 (Función auxiliar):** Define la fórmula común (`~` 3 tasas) y `hornear_matriz()`, que encapsula `prep() |> bake() |> as.matrix()` para evitar repetir código.
+- **L176–197 (4 recetas alternativas):** Crea `Min-Max [0,1]` (`step_range`), `Robusto` (mediana e IQR escritos explícitamente porque `step_mutate()` no evalúa `across()`), `Log(1+x) + Z-score` (`step_log` + `step_normalize`) y `PCA 2D` (`step_pca` con 2 componentes).
+- **L199–201 (Varianza PCA):** `prcomp()` sobre la matriz ya escalada extrae el % de varianza explicada por `PC1` (`73,31%`) y `PC2` (`23,58%`).
 
 *Preparamos cuatro escalas alternativas y PCA para probar la estabilidad del agrupamiento.*
 
@@ -428,7 +449,7 @@ var_pca   <- summary(pca_tasas)$importance
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="178"}
+```{.r .numberLines startFrom="203"}
 ## 4.3 Evaluación de K-Means (K = 3) en cada espacio preprocesado ----
 evaluar_receta_kmeans <- function(receta, nombre_espacio) {
   mat_espacio <- hornear_matriz(receta, matriz_localidad)
@@ -453,7 +474,7 @@ catalogo_recetas <- list(
   "Min-Max [0, 1]"              = receta_minmax,
   "Robusto (Mediana / IQR)"     = receta_robusta,
   "Log(1 + x) + Z-score"        = receta_log_z,
-  "PCA (PC1 + PC2 = 96,4% var)" = receta_pca2
+  "PCA (PC1 + PC2 = 96,9% var)" = receta_pca2
 )
 
 tabla_sensibilidad_escalamientos <- imap_dfr(catalogo_recetas, evaluar_receta_kmeans)
@@ -463,8 +484,8 @@ tabla_sensibilidad_escalamientos <- imap_dfr(catalogo_recetas, evaluar_receta_km
 
 ::: {}
 
-- **L179–195 (`evaluar_receta_kmeans`):** Para cualquier receta dada, hornea su matriz, corre K-Means ($K=3$, `nstart=50`) con la misma semilla y calcula: silueta promedio, conteo de siluetas negativas (`< 0`), inercia `WSS`, similitud `ARI` frente a `km_base` (`adjustedRandIndex`) y varianza PCA.
-- **L197–205 (Catálogo funcional):** Agrupa las 5 recetas en una lista nombrada (`catalogo_recetas`) y usa `imap_dfr()` para iterar sobre ellas y apilar los 5 resúmenes en una sola tabla comparativa.
+- **L204–220 (`evaluar_receta_kmeans`):** Para cualquier receta dada, hornea su matriz, corre K-Means ($K=3$, `nstart=50`) con la misma semilla y calcula: silueta promedio, conteo de siluetas negativas (`< 0`), inercia `WSS`, similitud `ARI` frente a `km_base` (`adjustedRandIndex`) y varianza PCA.
+- **L222–230 (Catálogo funcional):** Agrupa las 5 recetas en una lista nombrada (`catalogo_recetas`) y usa `imap_dfr()` para iterar sobre ellas y apilar los 5 resúmenes en una sola tabla comparativa.
 
 *Evaluamos en igualdad de condiciones qué cambia al variar el preprocesamiento.*
 
@@ -486,12 +507,12 @@ knitr::kable(
 )
 ```
 
-- **Por qué elegimos `Z-score`:** `Z-score` (`0,5416`), `Robusto` (`0,4635`, `wss = 14,1014`) y `PCA 2D` (`96,38%` de varianza, `0,5819`) producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$). Preferimos `Z-score` sobre `PCA` porque conserva la interpretabilidad directa en las tres tasas originales sin cambiar una sola localidad.
+- **Por qué elegimos `Z-score`:** `Z-score` (`0,5211`), `Min-Max [0, 1]` (`0,5611`) y `PCA 2D` (`96,89%` de varianza, `0,5540`) producen **exactamente la misma partición** ($\text{ARI} = 1{,}0000$, `0` siluetas negativas). Preferimos `Z-score` sobre `PCA` porque conserva la interpretabilidad directa en las tres tasas originales sin cambiar una sola localidad.
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="207"}
+```{.r .numberLines startFrom="232"}
 ## 4.4 Contraste de distancias (Euclidiana vs. Manhattan) y modelos alternativos ----
 dist_manhattan <- dist(matriz_scale, method = "manhattan")
 
@@ -532,9 +553,9 @@ tabla_comparacion_modelos <- bind_rows(
 
 ::: {}
 
-- **L208–216 (4 algoritmos):** Calcula `dist_manhattan` y ajusta modelos alternativos con $K=3$: **PAM** (`pam()` con distancia Euclidiana y Manhattan), **AGNES jerárquico** (`hclust(..., method = "ward.D2")` + `cutree()`) y **GMM** (`Mclust(..., G = 3L)`).
-- **L218–231 (`evaluar_particion`):** Función unificada que recibe cualquier vector de etiquetas y su distancia de referencia, devolviendo silueta media, siluetas negativas, tamaños de clúster ordenados, `ARI` vs. K-Means base y `gap_k3`.
-- **L233–240 (Tabla de contraste):** `bind_rows()` consolida los 6 modelos en `tabla_comparacion_modelos`.
+- **L238–246 (4 algoritmos):** Calcula `dist_manhattan` y ajusta modelos alternativos con $K=3$: **PAM** (`pam()` con distancia Euclidiana y Manhattan), **AGNES jerárquico** (`hclust(..., method = "ward.D2")` + `cutree()`) y **GMM** (`Mclust(..., G = 3L)`).
+- **L248–261 (`evaluar_particion`):** Función unificada que recibe cualquier vector de etiquetas y su distancia de referencia, devolviendo silueta media, siluetas negativas, tamaños de clúster ordenados, `ARI` vs. K-Means base y `gap_k3`.
+- **L263–270 (Tabla de contraste):** `bind_rows()` consolida los 6 modelos en `tabla_comparacion_modelos`.
 
 *Contrastamos K-Means contra tres familias distintas de modelos y dos métricas de distancia.*
 
@@ -552,14 +573,14 @@ comp_mod <- readr::read_csv(
 knitr::kable(comp_mod, digits = 4)
 ```
 
-- **Por qué `K-Means` es el modelo definitivo:** logra la **silueta media más alta (`0,5416`)** sobre `Z-score`. **PAM** y **AGNES** coinciden en **18 de 19 localidades** ($\text{ARI} = 0,8484$), moviendo únicamente a Antonio Nariño (el único caso frontera con silueta `-0,2116` en *k-means*) y dejando a Los Mártires aislado (`13 / 5 / 1`), mientras K-Means preserva tres perfiles comparables (`12 / 5 / 2`).
+- **Por qué `K-Means` es el modelo definitivo:** logra la partición más limpia y consistente (`0,5211` con `0` siluetas negativas y tamaños `13 / 5 / 1`), coincidiendo **exactamente en las 19 localidades ($\text{ARI} = 1{,}0000$)** con **AGNES (Ward.D2)** tanto en distancia **Euclidiana** como **Manhattan** (`0,5397`), y superando en cohesión a **PAM** (`0,4875` y `0,4627`, ambos con `1` silueta negativa) y **GMM** (`0,4099`).
 
-## Modelo definitivo, etiquetado determinístico y exportación (`Secciones 5 y 6`)
+## Modelo definitivo, etiquetado determinístico y exportación (`Secciones 5 a 7`)
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="250"}
+```{.r .numberLines startFrom="272"}
 # 5. Ajuste Definitivo, Etiquetado Determinístico y Auditoría ----
 
 ## 5.1 Etiquetado determinístico de centroides (broom::tidy) ----
@@ -608,8 +629,8 @@ df_clusters <- matriz_localidad |>
 
 ::: {}
 
-- **L253–268 (Anclaje de centroides):** Como los IDs crudos (`1, 2, 3`) de `kmeans()` dependen del arranque, `broom::tidy()` extrae los centroides y asigna de forma determinística: el de mayor `tasa_motos_prom` a `id_comercial`, el siguiente mayor en `tasa_personas_prom` a `id_centro`, y el restante (`setdiff`) a `id_residencial`.
-- **L270–291 (Tabla `df_clusters`):** Añade a las `19` localidades su `silueta_localidad`, el `cluster_id` fijo (`1L, 2L, 3L`), `cluster_nombre` y `perfil_seguridad`, eliminando `cluster_raw` y ordenando de mayor a menor tasa total.
+- **L284–299 (Anclaje de centroides):** Como los IDs crudos (`1, 2, 3`) de `kmeans()` dependen del arranque, `broom::tidy()` extrae los centroides y asigna de forma determinística: el de mayor `tasa_motos_prom` a `id_comercial`, el siguiente mayor en `tasa_personas_prom` a `id_centro`, y el restante (`setdiff`) a `id_residencial`.
+- **L301–322 (Tabla `df_clusters`):** Añade a las `19` localidades su `silueta_localidad`, el `cluster_id` fijo (`1L, 2L, 3L`), `cluster_nombre` y `perfil_seguridad`, eliminando `cluster_raw` y ordenando de mayor a menor tasa total.
 
 *Garantizamos que las etiquetas de cada perfil nunca permuten entre corridas.*
 
@@ -619,7 +640,7 @@ df_clusters <- matriz_localidad |>
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="302"}
+```{.r .numberLines startFrom="324"}
 ## 5.2 Auditoría de asignaciones por localidad entre modelos ----
 matriz_pca2 <- hornear_matriz(receta_pca2, matriz_localidad)
 set.seed(20261014)
@@ -663,8 +684,9 @@ message("✔ Tablas de sensibilidad (recipes, PCA, distancias y modelos) guardad
 
 ::: {}
 
-- **L303–322 (Auditoría por localidad):** Ajusta `km_pca2` y usa `transmute()` para reunir lado a lado las asignaciones de las `19` localidades en los 7 modelos/especificaciones (`kmeans_base`, `pca2_kmeans`, `pam_euclidiana`, `pam_manhattan`, `agnes_euclidiana`, `agnes_manhattan`, `gmm_3`), cruzando nombre y silueta final con `left_join()`.
-- **L327–338 (Exportación conjunta):** Guarda `clusters_localidades_kmeans.parquet` (contrato de entrada para `03_analisis_sentometrics.R` y el dashboard Shiny) y las 4 tablas CSV de resultados y auditoría en `output/tables/`, imprimiendo confirmación en consola.
+- **L325–344 (Auditoría por localidad):** Ajusta `km_pca2` y usa `transmute()` para reunir lado a lado las asignaciones de las `19` localidades en los 7 modelos/especificaciones (`kmeans_base`, `pca2_kmeans`, `pam_euclidiana`, `pam_manhattan`, `agnes_euclidiana`, `agnes_manhattan`, `gmm_3`), cruzando nombre y silueta final con `left_join()`.
+- **L348–360 (Exportación conjunta):** Guarda `clusters_localidades_kmeans.parquet` (contrato de entrada para `03_analisis_sentometrics.R` y el dashboard Shiny) y las 4 tablas CSV de resultados y auditoría en `output/tables/`, imprimiendo confirmación en consola.
+- **L362–498 (Figuras y mapa, Sección 7):** Genera y guarda en `output/figures/` las cinco visualizaciones diagnósticas (`kmeans_ranking_tasa_total.png`, `kmeans_zscore_distribuciones.png`, `kmeans_silueta_promedio.png`, `kmeans_dispersion_clusters.png` y `kmeans_mapa_clusters.png`).
 
 *Todo el resultado final y su auditoría salen juntos al terminar la experimentación.*
 
@@ -673,23 +695,23 @@ message("✔ Tablas de sensibilidad (recipes, PCA, distancias y modelos) guardad
 
 ## Caracterización de los perfiles y mapas resultantes
 
-- **Clúster 1 — Céntrico e Institucional ($n=5$):** La Candelaria, Chapinero, Santa Fe, Teusaquillo y Barrios Unidos. Mayores tasas medias de hurto a personas (`5.834,7`) y residencias (`175,9`), reflejando el corredor central, financiero y universitario con enorme población flotante.
-- **Clúster 2 — Comercial y Automotor ($n=2$):** Los Mártires y Antonio Nariño. Valor extremo en hurto a motocicletas (`153,0`, $+2{,}36$ desviaciones estándar), más del doble que cualquier otro grupo, asociado a zonas de comercio mayorista, talleres y autopartes.
-- **Clúster 3 — Residencial y Periférico ($n=12$):** Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa y Usme. Tasas moderadas (`1.222,8` en personas; `4,8` veces menor que el perfil Céntrico) por sus altos denominadores de población residente.
+- **Clúster 1 — Céntrico e Institucional ($n=5$):** La Candelaria, Santa Fe, Chapinero, Teusaquillo y Barrios Unidos. Mayores tasas medias de hurto a personas (`6.182,7`) y residencias (`183,0`), reflejando el corredor central, financiero y universitario con enorme población flotante.
+- **Clúster 2 — Comercial y Automotor ($n=1$):** Los Mártires. Valor extremo en hurto a motocicletas (`187,4`, $+3{,}058$ desviaciones estándar), casi el triple que los otros dos grupos, además de registrar las tasas más altas de la ciudad en personas (`9.337,4`) y residencias (`218,8`), asociadas a zonas de comercio mayorista, talleres y autopartes.
+- **Clúster 3 — Residencial y Periférico ($n=13$):** Antonio Nariño, Puente Aranda, Fontibón, Engativá, Tunjuelito, Usaquén, Kennedy, Suba, Rafael Uribe Uribe, San Cristóbal, Bosa, Ciudad Bolívar y Usme. Tasas moderadas (`1.390,5` en personas; `4,4` veces menor que el perfil Céntrico) por sus altos denominadores de población residente.
 
 |Perfil|N.°|Personas|Resid.|Motos|Total|Localidades miembro|
 |:---|---:|---:|---:|---:|---:|:---|
-|Céntrico e Institucional|5|5.834,7|175,9|60,8|6.071,4|La Candelaria, Chapinero, Santa Fe, Teusaquillo, Barrios Unidos|
-|Comercial y Automotor|2|5.727,9|150,9|153,0|6.031,8|Los Mártires, Antonio Nariño|
-|Residencial y Periférico|12|1.222,8|73,3|57,1|1.353,2|Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa, Usme|
+|Céntrico e Institucional|5|6.182,7|183,0|67,9|6.433,7|La Candelaria, Santa Fe, Chapinero, Teusaquillo, Barrios Unidos|
+|Comercial y Automotor|1|9.337,4|218,8|187,4|9.743,6|Los Mártires|
+|Residencial y Periférico|13|1.390,5|77,1|66,9|1.534,5|Antonio Nariño, Puente Aranda, Fontibón, Engativá, Tunjuelito, Usaquén, Kennedy, Suba, Rafael Uribe Uribe, San Cristóbal, Bosa, Ciudad Bolívar, Usme|
 
 : Perfiles delictivos promedio por clúster territorial (tasas anuales por 100.000 habitantes) {#tbl-perfiles}
 
 |Perfil|Hurto personas|Hurto residencias|Hurto motos|
 |:---|---:|---:|---:|
-|Céntrico e Institucional|+1,136|+1,238|-0,205|
-|Comercial y Automotor|+1,094|+0,780|+2,364|
-|Residencial y Periférico|-0,656|-0,646|-0,309|
+|Céntrico e Institucional|+1,102|+1,189|-0,151|
+|Comercial y Automotor|+2,219|+1,791|+3,058|
+|Residencial y Periférico|-0,595|-0,595|-0,177|
 
 : Centroides estandarizados (Z-score) de los tres perfiles territoriales {#tbl-centroides}
 
@@ -703,27 +725,27 @@ message("✔ Tablas de sensibilidad (recipes, PCA, distancias y modelos) guardad
 
 ## Síntesis de hallazgos y validación del modelo
 
-1. **Estandarizar por población invierte el mapa de riesgo aparente:** las localidades con mayor carga delictiva por cada 100.000 habitantes (Los Mártires `8.757`, La Candelaria `7.857`, Chapinero `6.876`, Santa Fe `6.364` y Teusaquillo `5.328`) no coinciden con las más pobladas ni con las que concentran mayor volumen absoluto de denuncias (como Suba o Kennedy).
-2. **Bogotá se estructura sólidamente en tres perfiles territoriales ($K^* = 3$):** la partición maximiza la silueta promedio (`0,5416`) y explica el `74,85%` de la varianza total (`WSS = 13,58` frente a `TSS = 54,00`). El grupo **Céntrico e Institucional** ($n=5$) lidera en hurto a personas (`5.834,7`) y residencias (`175,9`); el **Comercial y Automotor** ($n=2$) presenta un pico atípico en motocicletas (`153,0`, $+2{,}36$ desviaciones estándar); y el **Residencial y Periférico** ($n=12$) exhibe tasas moderadas (`1.353,2` en total).
-3. **Robustez metodológica frente a escalamientos y algoritmos:** la partición base en `Z-score` es idéntica ($\text{ARI} = 1{,}0000$) a la obtenida bajo escalamiento **Robusto (Mediana/IQR)** y **PCA 2D** ($96{,}38\%$ de varianza retenida), por lo que conservar `Z-score` preserva la interpretabilidad directa en las tasas originales sin sacrificar estructura. Frente a **PAM** y **AGNES (Ward.D2)**, la concordancia es de **18 de 19 localidades** ($\text{ARI} = 0{,}8484$), difiriendo únicamente en **Antonio Nariño** (el único caso frontera del modelo base, con silueta `-0,2116`).
+1. **Estandarizar por población invierte el mapa de riesgo aparente:** las localidades con mayor carga delictiva por cada 100.000 habitantes (Los Mártires `9.744`, La Candelaria `8.781`, Santa Fe `6.939`, Chapinero `6.932` y Teusaquillo `5.498`) no coinciden con las más pobladas ni con las que concentran mayor volumen absoluto de denuncias (como Suba o Kennedy).
+2. **Bogotá se estructura sólidamente en tres perfiles territoriales ($K^* = 3$):** la partición maximiza la silueta promedio (`0,5211`, con `0` siluetas negativas) y explica el `74,72%` de la varianza total (`WSS = 13,65` frente a `TSS = 54,00`). El grupo **Céntrico e Institucional** ($n=5$) lidera en hurto a personas (`6.182,7`) y residencias (`183,0`); el **Comercial y Automotor** ($n=1$, Los Mártires) presenta un pico atípico en motocicletas (`187,4`, $+3{,}06$ desviaciones estándar); y el **Residencial y Periférico** ($n=13$) exhibe tasas moderadas (`1.534,5` en total).
+3. **Robustez metodológica frente a escalamientos y algoritmos:** la partición base en `Z-score` es idéntica ($\text{ARI} = 1{,}0000$, `19` de `19` localidades) a la obtenida bajo escalamiento **Min-Max `[0, 1]`**, **PCA 2D** ($96{,}89\%$ de varianza retenida) y **AGNES (Ward.D2)** tanto en distancia Euclidiana como Manhattan, por lo que conservar `Z-score` preserva la interpretabilidad directa en las tasas originales sin sacrificar estructura.
 
 ## Límites de interpretación y sensibilidad al periodo
 
 - **Tipología descriptiva, no causal:** los clústeres caracterizan similitud en tasas promedio de hurto patrimonial; no miden determinantes socioeconómicos, presencia policial ni causalidad.
 - **Sesgo de población flotante en el denominador:** las proyecciones de la SDS miden población *residente*. En localidades céntricas y comerciales con altísima afluencia diaria de trabajadores, estudiantes y visitantes (La Candelaria, Santa Fe, Chapinero, Los Mártires), el denominador subestima la población efectivamente expuesta, elevando las tasas per cápita.
-- **Sensibilidad muestral ($N=19$) y efecto del corte `2026`:** como muestra la @tbl-sens, el perfil **Comercial y Automotor** ($n=2$) depende de la inclusión de `2026` (corte enero–septiembre): al promediar solo hasta `2025`, Antonio Nariño migra de clúster y Los Mártires queda como grupo unitario (`13 / 5 / 1`).
+- **Estabilidad temporal de la partición (`13 / 5 / 1`):** como muestra la @tbl-sens, con los microdatos mensuales SIEDCO el modelo es invariante al corte temporal: en todas las ventanas evaluadas (con o sin `2022` y con o sin `2026`), $K^* = 3$ maximiza la silueta y preserva exactamente la misma estructura (`13 / 5 / 1`, con Los Mártires como clúster singular).
 
 |Periodo|S (K=2)|S (K=3)|S (K=4)|S (K=5)|K óptimo|Tamaños (K=3)|¿Mártires y A. Nariño juntos?|
 |:---|---:|---:|---:|---:|:---:|:---:|:---|
-|2022-2026 (base)|0,5153|0,5416|0,4786|0,3792|3|12 / 5 / 2|Sí|
-|2023-2026|0,5354|0,5520|0,4736|0,3270|3|12 / 5 / 2|Sí|
-|2022-2025|0,4973|0,5062|0,4528|0,3765|3|13 / 5 / 1|No|
-|2023-2025|0,5100|0,5011|0,4334|0,3411|2|12 / 6 / 1|No|
+|2022-2026 (base)|0,5178|0,5211|0,4715|0,3619|3|13 / 5 / 1|No|
+|2023-2026|0,5289|0,5294|0,4579|0,3292|3|13 / 5 / 1|No|
+|2022-2025|0,5014|0,5053|0,4492|0,3654|3|13 / 5 / 1|No|
+|2023-2025|0,5087|0,5095|0,4348|0,3464|3|13 / 5 / 1|No|
 
 : Sensibilidad del agrupamiento al periodo de promediación de las tasas {#tbl-sens}
 
 ## Reproducibilidad y ejecución
 
-- **Prerrequisito:** debe existir `data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet` (generado por `procesamiento_poblacion.R`).
+- **Prerrequisito:** debe existir `data/processed/02_poblacion/panel_delitos_poblacion_mensual.parquet` (generado por `procesamiento_poblacion.R`).
 - **Ejecución:** correr `source(here::here("scripts", "04_clustering_kmeans.R"))` o ejecutar el pipeline completo desde `master.R`.
-- **Salidas consumidas aguas abajo:** `data/processed/clusters_localidades_kmeans.parquet` (para `03_analisis_sentometrics.R` y Shiny) y las 4 tablas CSV en `output/tables/`.
+- **Salidas consumidas aguas abajo:** `data/processed/clusters_localidades_kmeans.parquet` (para `03_analisis_sentometrics.R` y Shiny), las 4 tablas CSV en `output/tables/` y las 5 figuras en `output/figures/`.
