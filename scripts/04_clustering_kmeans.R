@@ -42,6 +42,7 @@ library(sf)         # Lectura de polígonos GeoJSON de localidades
 conflict_prefer("filter", "dplyr", quiet = TRUE)
 conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
+conflict_prefer("first",  "dplyr", quiet = TRUE)
 conflict_prefer("map",    "purrr", quiet = TRUE)
 
 ## 1.4 Definición de rutas relativas ({here}) ----
@@ -80,7 +81,7 @@ matriz_localidad <- panel_delitos_mensual |>
     tasa_resid_anual    = sum(tasa_hurto_residencias, na.rm = TRUE),
     tasa_motos_anual    = sum(tasa_hurto_motos, na.rm = TRUE),
     tasa_total_anual    = sum(tasa_hurto_total, na.rm = TRUE),
-    poblacion_anual     = dplyr::first(poblacion),
+    poblacion_anual     = first(poblacion),
     .groups = "drop"
   ) |>
   group_by(codigo_localidad, localidad) |>

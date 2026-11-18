@@ -113,7 +113,7 @@ conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
 ## 1.3 Rutas relativas de almacenamiento ----
-ruta_raw_delitos <- here::here("data", "raw", "delitos")
+ruta_raw_delitos <- here("data", "raw", "delitos")
 archivo_siedco   <- file.path(ruta_raw_delitos, "SIEDCO.csv")
 archivo_geojson  <- file.path(ruta_raw_delitos, "localidades_bogota_raw.geojson")
 
@@ -142,14 +142,14 @@ url_siedco_csv <- "https://oaiee.scj.gov.co/DatosDescarga/SIEDCO.csv"
 url_zip_sdscj  <- "https://datosabiertos.bogota.gov.co/dataset/7b270013-42ca-436b-9c1e-3bcb7d280c6b/resource/aba0e25d-d407-45f4-9a98-327493b538bd/download/dai_geojson.zip"
 
 descargar_siedco_csv <- function() {
-  resp <- httr::GET(
+  resp <- GET(
     url_siedco_csv,
-    httr::user_agent("Mozilla/5.0"),
-    httr::write_disk(archivo_siedco, overwrite = TRUE),
-    httr::timeout(180)
+    user_agent("Mozilla/5.0"),
+    write_disk(archivo_siedco, overwrite = TRUE),
+    timeout(180)
   )
-  if (httr::status_code(resp) != 200) {
-    stop("Error al descargar SIEDCO.csv (HTTP ", httr::status_code(resp), ").")
+  if (status_code(resp) != 200) {
+    stop("Error al descargar SIEDCO.csv (HTTP ", status_code(resp), ").")
   }
   message("✔ Microdatos SIEDCO.csv guardados en: ", archivo_siedco)
 }
@@ -194,7 +194,7 @@ Lee `SIEDCO.csv`, filtra el periodo `2022–2026` (hasta septiembre `2026`), hom
 ::: {}
 
 ```{.r .numberLines startFrom="45"}
-siedco_raw <- data.table::fread(
+siedco_raw <- fread(
   archivo_siedco,
   sep = ";",
   encoding = "UTF-8",

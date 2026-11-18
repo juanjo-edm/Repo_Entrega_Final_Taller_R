@@ -271,7 +271,7 @@ matriz_localidad <- panel_delitos_mensual |>
     tasa_resid_anual    = sum(tasa_hurto_residencias, na.rm = TRUE),
     tasa_motos_anual    = sum(tasa_hurto_motos, na.rm = TRUE),
     tasa_total_anual    = sum(tasa_hurto_total, na.rm = TRUE),
-    poblacion_anual     = dplyr::first(poblacion),
+    poblacion_anual     = first(poblacion),
     .groups = "drop"
   ) |>
   group_by(codigo_localidad, localidad) |>
@@ -301,7 +301,7 @@ rownames(matriz_scale) <- matriz_localidad$localidad
 ::: {}
 
 - **L69–74 (Lectura):** Construye la ruta de `panel_delitos_poblacion_mensual.parquet` (`1.083` filas: `19` localidades × `57` meses de enero 2022 a septiembre 2026) y lo carga con `read_parquet()`.
-- **L76–94 (Agregación en dos pasos):** Primero suma las tasas mensuales dentro de cada `(codigo_localidad, localidad, año)` preservando la población anual (`dplyr::first(poblacion)`); luego promedia los cinco años obteniendo `19` perfiles estructurales estables.
+- **L76–94 (Agregación en dos pasos):** Primero suma las tasas mensuales dentro de cada `(codigo_localidad, localidad, año)` preservando la población anual (`first(poblacion)`); luego promedia los cinco años obteniendo `19` perfiles estructurales estables.
 - **L102–110 (Receta, Prep & Bake):** `recipe()` declara las `3` modalidades específicas (excluyendo `tasa_total_prom`), `step_normalize()` estandariza por *Z-score*, `prep()` estima $\bar{X}_j$ y $s_j$, y `bake()` devuelve la matriz `19 × 3`.
 
 *Resumimos cinco años por localidad e igualamos la escala de las tres tasas.*

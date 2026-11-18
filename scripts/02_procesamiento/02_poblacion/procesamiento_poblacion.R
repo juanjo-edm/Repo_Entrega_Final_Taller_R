@@ -26,9 +26,9 @@ conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
 ## 1.3 Rutas relativas y directorios ----
-ruta_raw_pob      <- here::here("data", "raw", "poblacion")
-ruta_proc_delitos <- here::here("data", "processed", "01_delitos")
-ruta_proc_pob     <- here::here("data", "processed", "02_poblacion")
+ruta_raw_pob      <- here("data", "raw", "poblacion")
+ruta_proc_delitos <- here("data", "processed", "01_delitos")
+ruta_proc_pob     <- here("data", "processed", "02_poblacion")
 
 archivo_pob_raw       <- file.path(ruta_raw_pob, "poblacion_localidades_raw.parquet")
 archivo_delitos_mes   <- file.path(ruta_proc_delitos, "delitos_localidad_mensual.parquet")
@@ -50,7 +50,7 @@ if (!file.exists(archivo_delitos_mes)) {
 
 leer_parquet_seguro <- function(ruta) {
   tam <- file.info(ruta)$size
-  arrow::read_parquet(readBin(ruta, what = "raw", n = tam + 1024L))
+  read_parquet(readBin(ruta, what = "raw", n = tam + 1024L))
 }
 
 df_pob_raw            <- leer_parquet_seguro(archivo_pob_raw)
@@ -105,5 +105,5 @@ stopifnot(length(unique(panel_indicadores_mensual$codigo_localidad)) == 19L)
 stopifnot(all(!is.na(panel_indicadores_mensual$tasa_hurto_personas)))
 
 ## 5.2 Exportación a Apache Parquet ----
-arrow::write_parquet(panel_indicadores_mensual, archivo_salida_mes)
+write_parquet(panel_indicadores_mensual, archivo_salida_mes)
 message("✔ Panel mensual de delitos y población guardado en: ", archivo_salida_mes, " (", nrow(panel_indicadores_mensual), " filas)")

@@ -28,8 +28,8 @@ conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
 ## 1.3 Rutas relativas y directorios ----
-ruta_raw_delitos  <- here::here("data", "raw", "delitos")
-ruta_proc_delitos <- here::here("data", "processed", "01_delitos")
+ruta_raw_delitos  <- here("data", "raw", "delitos")
+ruta_proc_delitos <- here("data", "processed", "01_delitos")
 archivo_siedco    <- file.path(ruta_raw_delitos, "SIEDCO.csv")
 archivo_mensual   <- file.path(ruta_proc_delitos, "delitos_localidad_mensual.parquet")
 
@@ -44,7 +44,7 @@ if (!file.exists(archivo_siedco)) {
   stop("No se encontró '", archivo_siedco, "'. Ejecute primero: source('scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R')")
 }
 
-siedco_raw <- data.table::fread(
+siedco_raw <- fread(
   archivo_siedco,
   sep = ";",
   encoding = "UTF-8",
@@ -130,5 +130,5 @@ stopifnot(nrow(panel_delitos_mensual) == 19L * 57L)
 stopifnot(length(unique(panel_delitos_mensual$codigo_localidad)) == 19L)
 
 ## 4.2 Exportación a Apache Parquet ----
-arrow::write_parquet(panel_delitos_mensual, archivo_mensual)
+write_parquet(panel_delitos_mensual, archivo_mensual)
 message("✔ Panel mensual guardado en: ", archivo_mensual, " (", nrow(panel_delitos_mensual), " filas)")
