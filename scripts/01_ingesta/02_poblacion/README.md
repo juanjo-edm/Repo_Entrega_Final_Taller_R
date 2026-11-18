@@ -9,7 +9,7 @@ Este submódulo gestiona la descarga reproducible de las proyecciones demográfi
 * **Entidad Emisora:** Secretaría Distrital de Salud (SDS).
 * **Portal Oficial:** [Datos Abiertos Bogotá — Pirámide Poblacional](https://datosabiertos.bogota.gov.co/dataset/piramide-poblacional-bogota-d-c).
 * **Mecanismo de Consulta:** API CKAN (`package_show` y `datastore_search`) con paginación por bloques de 30.000 registros y enlace de respaldo (*fallback*) directo en CSV.
-* **Archivo de Salida:** [`data/raw/poblacion/poblacion_localidades_raw.parquet`](file:///data/raw/poblacion/poblacion_localidades_raw.parquet).
+* **Archivo de Salida:** [`data/raw/poblacion/poblacion_localidades_raw.parquet`](../../../data/raw/poblacion/poblacion_localidades_raw.parquet).
 * **Formato de Almacenamiento:** Apache Parquet (compresión Snappy, tipado estricto y lectura optimizada).
 * **Cobertura Temporal:** 2005 a 2035 (proyecciones oficiales ininterrumpidas, cubriendo con exactitud el periodo de análisis 2022–2026).
 * **Volumen:** 131.502 registros tabulares.
@@ -35,7 +35,7 @@ El archivo crudo almacena la pirámide poblacional proyectada con la siguiente g
 
 ## 3. Rol Metodológico en el Proyecto
 
-En la etapa de limpieza ([`02_limpieza_indicadores.R`](file:///scripts/02_limpieza_indicadores.R)), estos datos se filtran para excluir el total distrital (`CODIGO_LOCALIDAD != 0`), se agrupan por localidad y año ($2022 \le t \le 2026$), y se suman para obtener la población total anual por localidad ($\text{Pob}_{i,t}$), empleada en la tasa delictiva:
+En la etapa de limpieza ([`procesamiento_poblacion.R`](../../02_procesamiento/02_poblacion/procesamiento_poblacion.R)), estos datos se filtran para excluir el total distrital (`CODIGO_LOCALIDAD != 0`), se agrupan por localidad y año ($2022 \le t \le 2026$), y se suman para obtener la población total anual por localidad ($\text{Pob}_{i,t}$), empleada en la tasa delictiva:
 
 $$\text{Tasa de Hurto}_{i,t} = \left( \frac{\text{Conteo Hurtos}_{i,t}}{\text{Población Proyectada}_{i,t}} \right) \times 100.000$$
 
@@ -43,7 +43,7 @@ $$\text{Tasa de Hurto}_{i,t} = \left( \frac{\text{Conteo Hurtos}_{i,t}}{\text{Po
 
 ## 4. Lógica de Ejecución y Resiliencia
 
-El script [`descarga_poblacion_sds.R`](file:///scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R) implementa un flujo con doble capa de redundancia:
+El script [`descarga_poblacion_sds.R`](descarga_poblacion_sds.R) implementa un flujo con doble capa de redundancia:
 
 ```mermaid
 flowchart TD

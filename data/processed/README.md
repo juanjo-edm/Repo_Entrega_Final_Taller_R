@@ -21,6 +21,7 @@ data/processed/
 ├── 04_peak_docs.rds                                  # [T-11] Noticias pico y catálogo filtrable (peakdocs)
 ├── 05_sento_measures.rds                             # [T-13] Objeto S3 sento_measures (364 series mensuales)
 ├── 06_measures_long.rds                              # [T-14] Series en formato long (18.928 filas) y wide
+├── 06_measures_wide.rds                              # [T-14] Matriz ancha (52 meses × 365 cols) para consulta rápida
 ├── 07_global_index.rds                               # [T-15] Índice global distrital y fechas pico (peakdates)
 ├── 08_attributions.rds                               # [T-17] Modelo Elastic Net (sento_model) y atribuciones
 ├── panel_consolidado_localidad_anual.parquet         # Fusión anual de tasas delictivas y sentimiento
@@ -43,11 +44,13 @@ data/processed/
 | `03_analisis_sentometrics.R` | `03_sentiment_scores.rds` | `sentiment` | Puntuaciones documentales calculadas con `how = "proportionalPol"` y validación cruzada frente a `TFIDF`. |
 | `03_analisis_sentometrics.R` | `04_peak_docs.rds` | `list` / `data.table` | Documentos críticos extraídos con `peakdocs()` (globales y locales) enriquecidos con metadatos editoriales. |
 | `03_analisis_sentometrics.R` | `05_sento_measures.rds` | `sento_measures` | Panel de 364 series mensuales (`howWithin = "proportionalPol"`, `howDocs = "proportional"`, `howTime = c("linear", "exponential", "beta")`, `lag = 6`). |
-| `03_analisis_sentometrics.R` | `06_measures_long.rds` | `list` (`long`/`wide`) | Series continuas auditadas con `measures_fill()` y remodeladas a 18.928 filas en formato largo para visualización interactiva. |
+| `03_analisis_sentometrics.R` | `06_measures_long.rds` y `06_measures_wide.rds` | `list` / `data.table` | Series continuas auditadas con `measures_fill()` y remodeladas a 18.928 filas en formato largo (y matriz ancha `52 × 365`) para visualización interactiva. |
 | `03_analisis_sentometrics.R` | `07_global_index.rds` | `list` / `data.table` | Índice global ponderado (`aggregate(..., do.global = TRUE)`) y fechas históricas de alarma social (`peakdates()`). |
 | `03_analisis_sentometrics.R` | `08_attributions.rds` | `list` (`sento_model`) | Regresión penalizada Elastic Net ($\alpha = 0.2$, selección BIC, $R^2 = 0.8753$) y descomposición de atribuciones (`features`, `lexicons`, `time`). |
-| `03_analisis_sentometrics.R` | `panel_consolidado_localidad_anual.parquet` | Parquet | Panel balanceado final (95 filas) que fusiona tasas delictivas oficiales e indicadores anuales de sentimiento mediático. |
+| `03_analisis_sentometrics.R` | `panel_consolidado_localidad_anual.parquet` | Parquet | Panel balanceado final (95 filas × 20 cols) que fusiona tasas delictivas oficiales e indicadores anuales de sentimiento mediático. |
 | `05_export_insumos_shiny.R` | `datos_consolidados_shiny.rds` | RDS | Bundle consolidado con paneles, geometrías `sf` (`EPSG:4326`) y objetos `sentometrics` listos para carga inmediata en Shiny. |
+
+> 📖 Para consultar tipos de dato, rangos observados, nulabilidad, llaves primarias (`PK`/`FK`) y el diagrama entidad-relación completo, consulte el [**Diccionario de Datos (`docs/diccionario_datos/`)**](../../docs/diccionario_datos/README.md).
 
 ---
 
@@ -64,6 +67,9 @@ stopifnot(nrow(arrow::read_parquet(here::here("data", "processed", "03_noticias"
 stopifnot(all(file.exists(here::here("data", "processed", c(
   "01_sento_corpus.rds", "02_lexicons_es.rds", "03_sentiment_scores.rds",
   "04_peak_docs.rds", "05_sento_measures.rds", "06_measures_long.rds",
-  "07_global_index.rds", "08_attributions.rds", "datos_consolidados_shiny.rds"
+  "06_measures_wide.rds", "07_global_index.rds", "08_attributions.rds",
+  "datos_consolidados_shiny.rds"
 )))))
 ```
+
+> ⬅️ Volver al [índice de datos](../README.md) | Ir al [README principal](../../README.md)

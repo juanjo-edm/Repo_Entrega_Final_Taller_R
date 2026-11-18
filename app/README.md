@@ -39,14 +39,15 @@ La aplicación **no ejecuta procesos pesados de scraping ni recalcula matrices l
 ## Las 6 Pestañas del Tablero (`page_navbar`)
 
 1. **`Panorama`**:
-   - Filtros por modalidad de hurto (*Personas*, *Residencias*, *Motocicletas*), año (*Promedio 2022–2026* o año específico) y capa del mapa (*Denuncias* en ámbar vs. *Prensa* en azul).
+   - Filtros por modalidad de hurto (*Total*, *Personas*, *Residencias*, *Motocicletas*), año (*Promedio 2022–2026* o año específico) y capa del mapa (*Denuncias* en ámbar vs. *Prensa* en azul). Al elegir una modalidad específica distinta de *Total*, tanto las denuncias como las métricas de prensa (*noticias*, *sentimiento medio* y *% negativas*) se filtran dinámicamente para esa modalidad.
    - 4 tarjetas KPI (`value_box`), mapa coroplético interactivo en `{leaflet}` (con clic directo para saltar a la ficha de la localidad) y ranking de las 5 tasas más altas.
 2. **`Mi localidad`**:
-   - Ficha individual de cualquiera de las 19 localidades urbanas con su puesto en el ranking distrital, evolución anual frente al promedio de Bogotá, composición del tono de prensa por año y tabla interactiva (`{DT}`) con las 5 noticias más negativas y las 5 más positivas con enlaces directos.
+   - Ficha individual de cualquiera de las 19 localidades urbanas con su puesto en el ranking distrital, 4 tarjetas KPI por modalidad (*Hurto total*, *Hurto a personas*, *Hurto a residencias* y *Hurto de motocicletas*), evolución anual comparada frente al promedio de Bogotá (filtrable por las 4 modalidades), composición del tono de prensa por año y tabla interactiva (`{DT}`) con las 5 noticias más negativas y las 5 más positivas con enlaces directos.
 3. **`Hurto vs. prensa`**:
-   - Gráfico de dispersión interactivo (`{plotly}`) que cruza la tasa de hurto denunciado (eje X) contra el porcentaje de noticias negativas (eje Y), dividido en cuatro cuadrantes interpretativos (*¿estigma mediático?*, *alta denuncia y prensa dura*, etc.) con selección por clic (`plotly_click`).
+   - Gráfico de dispersión interactivo (`{plotly}`) que cruza la tasa de hurto denunciado filtrable por modalidad (*Total*, *Personas*, *Residencias*, *Motocicletas*) en el eje X contra el porcentaje de noticias negativas en el eje Y (también actualizado dinámicamente según la modalidad seleccionada), dividido en cuatro cuadrantes interpretativos (*¿estigma mediático?*, *alta denuncia y prensa dura*, etc.) con selección por clic (`plotly_click`).
 4. **`Clusters`**:
-   - Cartografía y tarjetas comparativas de los 3 grupos territoriales hallados con K-Means ($K^* = 3$): *Céntrico e Institucional* (`#B08CF0`), *Comercial y Automotor* (`#E86A50`) y *Residencial y Periférico* (`#3FB8A6`).
+   - Cartografía (`{leaflet}`) y tarjetas comparativas (incluyendo tasa total y desagregada por modalidad) de los 3 grupos territoriales hallados con K-Means ($K^* = 3$): *Céntrico e Institucional* (`#B08CF0`), *Comercial y Automotor* (`#E86A50`) y *Residencial y Periférico* (`#3FB8A6`).
+   - Tarjeta expandible (`full_screen = TRUE`) con el **gráfico tridimensional interactivo (`{plotly}` `scatter3d`)** de las 19 localidades, radios intra-clúster y centroides $\mu_k$: incluye controles `bslib::input_switch()` para mostrar u ocultar nombres y alternar entre tasas por 100.000 habitantes y $Z$-scores estandarizados, más sincronización bidireccional al hacer clic en esferas, mapa o tarjetas.
 5. **`Sentometrics y Elastic Net`**:
    - Indicadores de desempeño del modelo regularizado Elastic Net ($\text{BIC}$, $h = 1$ mes: $R^2$, $\alpha^*$, $\lambda^*$, series activas y $\text{RMSE}$).
    - Explorador interactivo de las **364 series mensuales de sentimiento** (`sento_measures`) por grupo de *features* (clústeres, tópicos DAI o localidades), léxico (`crimen_es` vs. `nrc_es`) y esquema de memoria temporal (`lag = 6` meses), incluyendo las fechas críticas detectadas con `peakdates()`.
