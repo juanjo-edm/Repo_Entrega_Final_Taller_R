@@ -9,9 +9,6 @@ notebook/
     ├── 02_modelado_clustering_sentometrics.qmd       # Guía metodológica y pedagógica integral
     ├── 02_modelado_clustering_sentometrics.html      # Reporte interactivo con código y gráficos
     ├── 02_modelado_clustering_sentometrics.pdf
-    ├── guia_estudio/
-    │   ├── 05_guia_estudio_sustentacion.qmd          # Guía de estudio y banco de preguntas para sustentación
-    │   └── 05_guia_estudio_sustentacion.pdf
     └── instrucciones_codigo/                         # Guías línea a línea de cada etapa del código en R
         ├── 03_ingesta_tasas_poblacion.pdf
         ├── 04_modelo_kmeans_clusters.pdf
@@ -44,7 +41,7 @@ quarto render output/entregas/04_documento_final/documento_final_grupo_3.qmd --t
 
 ## 2. Subcarpeta `notebook/metodologia/`
 
-Aloja el cuaderno metodológico maestro, la guía de estudio para sustentación y las cinco guías didácticas de código que documentan el pipeline reproducible en R. Sigue de manera estricta los estándares de programación declarados en [`docs/guias/estandares_programacion.md`](../docs/guias/estandares_programacion.md).
+Aloja el cuaderno metodológico maestro y las cinco guías didácticas de código que documentan el pipeline reproducible en R (las guías de estudio para sustentación se encuentran ahora en [`output/guia_estudio/`](../../output/guia_estudio/README.md)). Sigue de manera estricta los estándares de programación declarados en [`docs/guias/estandares_programacion.md`](../docs/guias/estandares_programacion.md).
 
 ### 2.1 Cuaderno metodológico integral
 
@@ -68,12 +65,12 @@ quarto render notebook/metodologia/02_modelado_clustering_sentometrics.qmd --to 
 
 ---
 
-## 3. Subcarpeta `notebook/metodologia/guia_estudio/`
+## 3. Guías de estudio para sustentación (ahora en [`output/guia_estudio/`](../output/guia_estudio/README.md))
 
-* [**`05_guia_estudio_sustentacion.qmd`**](metodologia/guia_estudio/05_guia_estudio_sustentacion.qmd) ([PDF](metodologia/guia_estudio/05_guia_estudio_sustentacion.pdf)): Resumen compacto con fórmulas clave, cifras de control y banco de preguntas para la preparación de la sustentación oral.
+Las guías de estudio fueron trasladadas y ampliadas por componente en [`output/guia_estudio/`](../output/guia_estudio/README.md) (`01_metodologia_sustentacion/`, `02_presentacion_plenaria/`, `03_documento_final/` y `04_aplicacion_shiny/`):
 
 ```bash
-quarto render notebook/metodologia/guia_estudio/05_guia_estudio_sustentacion.qmd --to pdf
+quarto render output/guia_estudio/01_metodologia_sustentacion/01_guia_estudio_metodologia_sustentacion.qmd --to pdf
 ```
 
 ---

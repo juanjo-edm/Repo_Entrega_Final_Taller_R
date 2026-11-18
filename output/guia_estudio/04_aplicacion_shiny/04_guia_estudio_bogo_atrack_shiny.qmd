@@ -1,0 +1,118 @@
+---
+title: "Guía de Estudio y Demo en Vivo: Aplicación Shiny Bogo-Atrack"
+subtitle: "Arquitectura en 3 capas, recorrido por las 6 pestañas, libreto de 75 s y Q&A técnico · Grupo 3"
+author:
+  - "Juan Esteban Carvajal Cruz (202614312)"
+  - "Gabriel Arturo Echeverry Castaño (201016705)"
+  - "Juan José Echeverry De Mendoza (202616233)"
+  - "Sergio Alejandro López Valderrama (202111932)"
+  - "Miguelangel Palma Rojas (202621481)"
+  - "Olga Lucía Ramírez Contreras (202624900)"
+date: "2026-11-18"
+lang: es
+format:
+  pdf:
+    pdf-engine: pdflatex
+    documentclass: article
+    papersize: letter
+    fontsize: 9.8pt
+    linestretch: 1.12
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    colorlinks: true
+    tbl-pos: "H"
+    geometry:
+      - top=18mm
+      - bottom=18mm
+      - left=18mm
+      - right=18mm
+    include-in-header:
+      text: |
+        \usepackage{microtype}
+        \usepackage{charter}
+        \usepackage{booktabs}
+        \usepackage{float}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+        \DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}
+        \DeclareUnicodeCharacter{03B2}{\ensuremath{\beta}}
+        \DeclareUnicodeCharacter{03BB}{\ensuremath{\lambda}}
+        \DeclareUnicodeCharacter{03BC}{\ensuremath{\mu}}
+        \DeclareUnicodeCharacter{03C1}{\ensuremath{\rho}}
+        \DeclareUnicodeCharacter{00B2}{\ensuremath{^2}}
+        \DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+        \DeclareUnicodeCharacter{2194}{\ensuremath{\leftrightarrow}}
+        \DeclareUnicodeCharacter{2260}{\ensuremath{\neq}}
+        \DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+        \DeclareUnicodeCharacter{2265}{\ensuremath{\geq}}
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+# Concepto de diseño e identidad visual de `Bogo-Atrack`
+
+**`Bogo-Atrack`** (*Observatorio de hurto y sentimiento mediático*) implementa la herramienta interactiva exigida por el enunciado en [`app/app.R`](../../../app/app.R). Toda la interfaz está unificada bajo `{bslib}` (Bootstrap 5 en tema oscuro `#0E1116` con tarjetas `#171B22`) y una regla cromática explícita de **dos lecturas**:
+
+- **Ámbar (`#F0A43A`):** representa los registros administrativos oficiales (**SIEDCO / SDSCJ**) expresados en tasas por cada `100.000` habitantes.
+- **Azul (`#79AEFF`):** representa las métricas mediáticas calculadas con **`sentometrics`** (conteo, sentimiento neto y `%` de notas negativas).
+
+El mapa coroplético usa `{leaflet}` sobre OpenStreetMap con un filtro CSS invertido (`.leaflet-tile-pane`) sin depender de API keys ni cuentas externas, y mantiene coherencia cromática exacta entre el mapa y el ranking `Top 5` en `Panorama`. Para los diagramas Mermaid completos de componentes y flujo reactivo, consultar [`arquitectura_bogo_atrack_shiny.md`](arquitectura_bogo_atrack_shiny.md).
+
+# Arquitectura en tres capas (cómo responde en milisegundos)
+
+1. **Capa offline (`scripts/master.R` $\rightarrow$ `05_export_insumos_shiny.R`):** simplifica polígonos con `sf::st_simplify()` en `WGS84`, calcula resúmenes longitudinales con `corpus_summarize()` y serializa un único paquete liviano `data/processed/datos_consolidados_shiny.rds` (`0,87 MB`).
+2. **Capa global al arranque (`app/app.R`):** carga el `.rds` una única vez (`readRDS()`), valida con `stopifnot()` la cobertura de las `19` localidades urbanas y pre-calcula `datos_promedio_global` y `datos_clusters_3d` (coordenadas reales, $Z$-scores y radios $\mu_k$) fuera de `server()`.
+3. **Capa reactiva (`server` + `bindCache()`):** filtra en memoria mediante `resumir_panel()` y memoriza combinaciones repetidas (`datos_panorama`, `datos_prensa`, `grafico_clusters_3d`). Al elegir una modalidad distinta de *Total*, `resumir_panel()` recalcula en vivo las métricas de prensa desde `tabla_noticias` (`993` objetivo) para empatar el numerador con SIEDCO.
+
+# Qué hace cada una de las `6` pestañas (`page_navbar`)
+
+| Pestaña | Propósito analítico | Interacción clave para destacar |
+| :--- | :--- | :--- |
+| **1. `Panorama`** | Foto general de tasas oficiales y cobertura/tono por año (`2022–2026` o promedio) y modalidad (`Total`, `Personas`, `Residencias`, `Motocicletas`). | Cambiar mapa entre *Denuncias (hurto)* (ámbar) y *Prensa* (azul) sincroniza mapa, paleta y `Top 5`. Clic en un polígono salta automáticamente a `Mi localidad`. |
+| **2. `Mi localidad`** | Ficha individual con puesto `1..19` en cada modalidad, serie anual comparada frente al promedio de Bogotá, composición de tono y tabla `{DT}` extrema. | Muestra las `5` noticias más negativas y `5` más positivas con enlace al titular original; responde tanto a clic desde `Panorama` como al selector superior. |
+| **3. `Hurto vs. prensa`** | Contrasta tasa oficial (eje X) frente a `%` de notas negativas (eje Y) dividido por los promedios distritales dinámicos $(\bar{X}, \bar{Y})$. | Los **cuatro cuadrantes** muestran convergencia (`superior derecho`) frente a posible estigma mediático (`superior izquierdo`, baja tasa pero prensa dura). Clic en una burbuja actualiza la ficha lateral. |
+| **4. `Clusters`** | Expone los `3` perfiles K-Means ($K^* = 3$): *Céntrico e Institucional* (`#B08CF0`), *Comercial y Automotor* (`#E86A50`) y *Residencial y Periférico* (`#3FB8A6`). | **Sincronización bidireccional** entre mapa `leaflet`, tarjetas comparativas y cubo `plotly` `scatter3d`, más switches de nombres y escala `Z-score` exacta. |
+| **5. `Sentometrics y Elastic Net`** | Explora las `36` series mensuales ($2 \times 6 \times 3$, `lag = 6`), los `8` meses críticos de `peakdates()`, el ajuste `h = 1` vs. SIEDCO y `attributions()`. | Permite descomponer mes a mes qué clúster, modalidad, léxico o memoria empuja $\hat{y}_{t+1}$, y ver el Top 10 de coeficientes $|\beta|$. |
+| **6. `Datos y método`** | Resume fuentes, advertencias (`2026` corte a septiembre y sesgo por población flotante) y contrato técnico `.rds`. | Tabla interactiva con los `8` componentes de `sentometrics_pipeline.rds` y el bundle `datos_consolidados_shiny.rds`. |
+
+# Libreto de demo en vivo (`75` segundos en la Diapositiva 9)
+
+Si durante la exposición del **25 de noviembre** muestran la app en vivo dentro del turno de **Juan José (`12:30–14:15`)**, seguir exactamente esta secuencia evita perder segundos buscando botones:
+
+::: {.callout-tip}
+## Guion cronometrado de demostración (tenerla abierta en segundo plano antes de empezar)
+- **`0:00 – 0:15` (`Panorama`):** mostrar mapa ámbar de *Denuncias* y cambiar el radio button a *Prensa* para evidenciar cómo cambian mapa y `Top 5` a paleta azul.
+- **`0:15 – 0:30` (`Mi localidad`):** hacer clic en **Los Mártires** o **Chapinero** en el mapa para saltar directo a la ficha (`puesto 1 de 19`), señalar la evolución frente a Bogotá y la tabla de noticias extremas.
+- **`0:30 – 0:50` (`Hurto vs. prensa` y `Clusters`):** abrir `Hurto vs. prensa` mostrando los 4 cuadrantes $(\bar{X}, \bar{Y})$; pasar a `Clusters`, activar `Escala Z-score` en el cubo `3D` y hacer clic en *Comercial y Automotor* para iluminar a **Los Mártires** en las tres vistas.
+- **`0:50 – 1:15` (`Sentometrics` y `Datos y método`):** mostrar la curva `observado vs. predicho` y cerrar en `Datos y método` señalando el contrato único de `.rds` generado por `scripts/master.R`.
+:::
+
+**Plan B ante falla de internet o latencia de pantalla:** si las teselas de OpenStreetMap tardan en cargar por red o si quedan menos de `90` segundos en el reloj del grupo, usar directamente la captura de alta resolución embebida en la **Diapositiva 9** de `presentacion_grupo_3.pptx` sin detener la exposición.
+
+# Banco técnico de `8` preguntas sobre `app/app.R`
+
+1. **¿Cómo lanzan la aplicación sin rutas absolutas?**
+   Abriendo el proyecto desde `Repo_Entrega_Final_Taller_R.Rproj` y ejecutando `shiny::runApp(here::here("app"))`. Tanto `master.R` como `app/app.R` ubican el archivo `datos_consolidados_shiny.rds` (en `data/processed/`) mediante `here::here()`.
+
+2. **¿Por qué `Bogo-Atrack` no corre `sentometrics` ni `kmeans()` cada vez que alguien entra?**
+   Porque estimar diccionarios, `sento_measures()` y `sf::st_read()` sobre polígonos crudos tardaría varios segundos por sesión. Al mover todo ese cálculo a `scripts/master.R` y `05_export_insumos_shiny.R`, `app/app.R` solo lee `0,87 MB` de `.rds` al iniciar.
+
+3. **¿Para qué sirve `bindCache()` en `datos_panorama()`, `datos_prensa()` y `grafico_clusters_3d()`?**
+   Guarda en caché las respuestas según los `input$` activos (`anio`, `modalidad`, `escala_z_3d`). Si el usuario vuelve a una combinación ya visitada, Shiny entrega el gráfico o tabla al instante sin refiltrar ni reconstruir trazas `plotly`.
+
+4. **¿Qué hace exactamente `resumir_panel()` cuando cambian la modalidad en `Panorama` o `Hurto vs. prensa`?**
+   Para `"tasa_hurto_total"` lee los totales ya agregados en `panel_localidades`. Cuando se selecciona `"tasa_hurto_personas"`, `"tasa_hurto_residencias"` o `"tasa_hurto_motos"`, filtra `tabla_noticias` (`993` objetivo) por `delito_sdscj` y año, recalcula en vivo conteo, sentimiento promedio y `%` negativo para que ambos ejes correspondan al mismo delito.
+
+5. **¿Cómo lograron el tema oscuro del mapa `{leaflet}` sin pagar una API key?**
+   Cargamos teselas estándar gratuitas de OpenStreetMap mediante `agregar_mapa_base()` y aplicamos un filtro CSS (`invert(100%) hue-rotate(180deg) contrast(90%) saturate(25%)`) sobre `.leaflet-tile-pane` para integrarlo al fondo `#0E1116`.
+
+6. **¿Cómo funcionan las líneas punteadas $(\bar{X}, \bar{Y})$ en `Hurto vs. prensa`?**
+   No son umbrales fijos: `grafico_dispersion` y `explicacion_lineas_corte` calculan en vivo el promedio simple de las `19` localidades urbanas para la modalidad y el año elegidos, dividiendo el plano en cuatro cuadrantes comparables frente al promedio distrital.
+
+7. **¿Por qué el cubo 3D en `Clusters` no pierde la rotación al resaltar un grupo?**
+   Porque `grafico_clusters_3d` define `uirevision = if (usar_z) "zscore" else "tasas"`. `{plotly}` conserva el ángulo de cámara cuando cambian opacidades, colores o etiquetas dentro del mismo sistema de ejes, y solo reencuadra si cambian entre tasas reales y `Z-score`.
+
+8. **¿Qué previenen `options(scipen = 999)` y `{conflicted}` al inicio de `app/app.R`?**
+   `scipen = 999` evita notación científica (`1e+05`) en etiquetas e tooltips, mientras `conflict_prefer()` resuelve explícitamente las funciones `filter`, `lag`, `select` (`dplyr`) y `layout` (`plotly`) frente a otros paquetes cargados en sesión.

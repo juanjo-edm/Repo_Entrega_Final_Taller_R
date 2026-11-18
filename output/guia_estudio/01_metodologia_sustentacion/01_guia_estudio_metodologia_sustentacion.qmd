@@ -1,0 +1,346 @@
+---
+title: "Guía de Estudio y Defensa Metodológica: Clústeres, sentometrics y Elastic Net"
+subtitle: "Versión robustecida para sustentación oral y Q&A · Grupo 3 · Taller de Programación Aplicada a R (MECA)"
+author:
+  - "Juan Esteban Carvajal Cruz (202614312)"
+  - "Gabriel Arturo Echeverry Castaño (201016705)"
+  - "Juan José Echeverry De Mendoza (202616233)"
+  - "Sergio Alejandro López Valderrama (202111932)"
+  - "Miguelangel Palma Rojas (202621481)"
+  - "Olga Lucía Ramírez Contreras (202624900)"
+date: "2026-11-18"
+lang: es
+format:
+  pdf:
+    pdf-engine: pdflatex
+    documentclass: article
+    papersize: letter
+    fontsize: 9.8pt
+    linestretch: 1.12
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    colorlinks: true
+    tbl-pos: "H"
+    fig-pos: "H"
+    geometry:
+      - top=18mm
+      - bottom=18mm
+      - left=18mm
+      - right=18mm
+    include-in-header:
+      text: |
+        \usepackage{microtype}
+        \usepackage{charter}
+        \usepackage{booktabs}
+        \usepackage{float}
+        \usepackage{needspace}
+        \DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+        \DeclareUnicodeCharacter{03B1}{\ensuremath{\alpha}}
+        \DeclareUnicodeCharacter{03B2}{\ensuremath{\beta}}
+        \DeclareUnicodeCharacter{03BB}{\ensuremath{\lambda}}
+        \DeclareUnicodeCharacter{03BC}{\ensuremath{\mu}}
+        \DeclareUnicodeCharacter{03C1}{\ensuremath{\rho}}
+        \DeclareUnicodeCharacter{0177}{\ensuremath{\hat{y}}}
+        \DeclareUnicodeCharacter{00B2}{\ensuremath{^2}}
+        \DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+        \DeclareUnicodeCharacter{2194}{\ensuremath{\leftrightarrow}}
+        \DeclareUnicodeCharacter{2260}{\ensuremath{\neq}}
+        \DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+        \DeclareUnicodeCharacter{2265}{\ensuremath{\geq}}
+        \DeclareUnicodeCharacter{2714}{\ensuremath{\checkmark}}
+        \DeclareUnicodeCharacter{2605}{\ensuremath{\star}}
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup-guia-metodologia
+options(scipen = 999)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(arrow)
+library(knitr)
+
+cl  <- read_parquet(here::here("data", "processed", "clusters_localidades_kmeans.parquet"))
+pa  <- read_parquet(here::here("data", "processed", "panel_consolidado_localidad_anual.parquet"))
+pm  <- read_parquet(here::here("data", "processed", "02_poblacion", "panel_delitos_poblacion_mensual.parquet"))
+not <- read_parquet(here::here("data", "processed", "03_noticias", "noticias_procesadas.parquet"))
+d   <- readRDS(here::here("data", "processed", "datos_consolidados_shiny.rds"))
+p   <- readRDS(here::here("data", "processed", "sentometrics_pipeline.rds"))
+```
+
+# Arquitectura del flujo analítico y estandarización demográfica
+
+El cuaderno metodológico maestro (`notebook/metodologia/02_modelado_clustering_sentometrics.qmd`) replica en memoria la lógica de los scripts de modelado (`scripts/04_clustering_kmeans.R`, `scripts/06_descriptivos_corpus.R` y `scripts/03_analisis_sentometrics.R`) leyendo únicamente los datos depurados en `data/processed/`, sin depender de conexión a internet ni sobreescribir artefactos del repositorio.
+
+## Insumos base, filtro temático y alcance temporal
+
+El panel mensual oficial (`data/processed/02_poblacion/panel_delitos_poblacion_mensual.parquet`, construido desde `SIEDCO.csv`) contiene **`1.083` filas**: las **`19` localidades urbanas** de Bogotá durante **`57` meses continuos** entre enero de `2022` y septiembre de `2026`, cruzadas con las proyecciones poblacionales anuales de la Secretaría Distrital de Salud (SDS). Los `376.185` registros crudos filtrados suman **`684.007` denuncias** en las tres modalidades objetivo: `627.299` de hurto a personas, `32.408` de hurto a residencias y `24.300` de hurto de motocicletas. Sumapaz (`codigo_localidad == "20"`) y los hechos sin localidad (`"99"`) se excluyen por su carácter rural y escasa cobertura en prensa urbana.
+
+El corpus periodístico completo (`data/processed/03_noticias/noticias_procesadas.parquet`) reúne **`3.916` noticias únicas** publicadas en el mismo periodo tras eliminar etiquetas HTML y aplicar filtros contra homonimias geográficas (*Santa Fe* fútbol, *Bosa* Italia, *San Cristóbal* Venezuela). Al clasificarlas con la taxonomía oficial SDSCJ en `13` categorías, **`993` noticias (`25,4 %`, marcadas con `es_objetivo_3mod = TRUE`)** empatan directamente con las tres columnas del panel SIEDCO (*Hurto a personas* `736`, *Hurto a residencias* `141` y *Hurto de motocicletas* `116`) y alimentan `sentometrics`. Las `2.923` notas restantes corresponden a otros delitos (`790` *No DAI*, `576` hurto de automotores, `538` hurto sin modalidad identificada, `453` homicidio, `350` hurto a comercio y otras categorías menores).
+
+```{=latex}
+\Needspace{10\baselineskip}
+```
+
+```{r}
+#| label: tbl-corpus-anual
+#| tbl-cap: "Evolución anual del corpus de noticias y cambio de longitud en 2026 (Google News RSS)"
+tc <- read_csv(here::here("output", "tables", "tabla_descriptivos_corpus.csv"), show_col_types = FALSE) |>
+  mutate(
+    sentimiento_prom = format(round(sentimiento_prom, 4), decimal.mark = ",", big.mark = ".", nsmall = 4),
+    media_palabras   = format(round(media_palabras, 1), decimal.mark = ",", big.mark = ".", nsmall = 1),
+    mediana_palabras = format(round(mediana_palabras, 0), decimal.mark = ",", big.mark = ".")
+  )
+kable(
+  tc,
+  col.names = c("Año", "Noticias totales", "Notas 3 mod.", "Loc.", "Media pal.", "Mediana pal.", "Sent. prom."),
+  align = c("c", "r", "r", "c", "r", "r", "r")
+)
+```
+
+Un detalle empírico importante visible en @tbl-corpus-anual es la caída abrupta en la extensión de los textos de `2026` (media de **`18,7` palabras** y mediana de `18`, frente a más de `400` palabras entre `2023` y `2025`), pues la extracción reciente de RSS capturó titulares y entradillas breves. Esta heterogeneidad justifica dividir el puntaje sentimental entre palabras con carga polar (`proportionalPol`) y no entre palabras totales del texto.
+
+## Tasas por `100.000` habitantes, población flotante y promedios
+
+Como la población residente varía desde unos `16.700` habitantes en La Candelaria hasta cerca de `1,25` millones en Suba, cada modalidad $m$ en la localidad $i$ y año $t$ se expresa como tasa por cada `100.000` residentes:
+
+$$
+\text{Tasa}_{i,m,t} = \frac{\text{Denuncias}_{i,m,t}}{\text{Población}_{i,t}} \times 100.000
+$$
+
+::: {.callout-note}
+## Distinción clave de sustentación: promedio simple (`285,6` o `3.255,8`) vs. tasa distrital ponderada (`154,1`)
+En el panel anual (`n = 95`), la media simple no ponderada entre localidades es `3.069,9` en personas, `112,4` en residencias, `73,5` en motos y `3.255,8` en la suma combinada (`285,6` en las `1.083` filas mensuales). Esa media pesa igual a La Candelaria y a Suba. En cambio, la serie dependiente del modelo Elastic Net (`scripts/03_analisis_sentometrics.R`) agrega todas las denuncias del distrito y las divide entre la población total de las 19 localidades cada mes, arrojando una tasa distrital mensual promedio de **`154,1` hurtos por `100.000` habitantes**.
+:::
+
+En el centro ampliado surge además un sesgo de denominador por población flotante: **Los Mártires** (`9.743,6`/100k promedio y pico anual de `15.719,5` en 2024), **La Candelaria** (`8.781,6`), **Santa Fe** (`6.938,6`) y **Chapinero** (`6.932,5`) reciben cada día trabajadores, estudiantes y compradores no censados como residentes, multiplicando por más de ocho veces la tasa de **Usme** (`761,2`).
+
+# Agrupamiento territorial no supervisado ($K$-Means)
+
+## Tres razones para agrupar promedios anuales bajo `Z-score`
+
+Cada localidad $i \in \{1, \dots, 19\}$ ingresa al algoritmo con su vector promedio anualizado (`2022`–sep. `2026`) en las tres modalidades específicas, excluyendo la tasa total para evitar colinealidad perfecta con la suma de sus componentes:
+
+$$
+\mathbf{x}_i = \left(\text{Hurto personas}_i,\; \text{Hurto residencias}_i,\; \text{Hurto motos}_i\right) \in \mathbb{R}^3, \qquad Z_{ij} = \frac{X_{ij} - \bar{X}_j}{s_j}
+$$
+
+Sin estandarizar, la media anual de hurto a personas (`3.069,9`) superaría en más de `27` veces a la de residencias (`112,4`) y en más de `41` veces a la de motocicletas (`73,5`), por lo que la distancia euclidiana de Hartigan-Wong ignoraría residencias y motos. Preferimos los **promedios anuales (`19` filas)** sobre el panel mensual (`1.083` filas) por tres motivos:
+
+1. **Etiqueta fija de territorio para `sentometrics`:** el clúster actúa como covariable constante de localidad (`c_centro`, `c_comercial`, `c_residencial`); en datos mensuales, `10` de `19` localidades cambian de clúster según el mes (hay `20` observaciones localidad-mes con cero robos de motos y `4` con cero en residencias).
+2. **Coherencia demográfica y estabilidad temporal:** las proyecciones SDS son anuales y la partición `13 / 5 / 1` no varía si se excluye `2022` o `2026`.
+3. **Invariancia matemática bajo `Z-score`:** promediar los `57` meses produce correlación `1,0000` en las tres tasas, silueta idéntica (`0,5211`) y exactamente los mismos clústeres ($\text{ARI} = 1{,}0000$), reservando la variación mensual para Elastic Net ($N = 51$).
+
+## Sensibilidad entre escalamientos (`{recipes}`) y otros algoritmos
+
+La función `kmeans(..., centers = K, nstart = 50)` (`set.seed(20261014)`) minimiza la suma de cuadrados intra-clúster ($WSS$) y alcanza su óptimo en **$K^* = 3$** según el coeficiente de silueta $S(i) = \frac{b(i) - a(i)}{\max\{a(i), b(i)\}}$, con silueta media **`0,5211`** y **cero localidades con silueta negativa** (Antonio Nariño es positiva con `+0,0926`; Los Mártires toma `S = 0` por ser grupo unitario). Como `kmeans()` numera aleatoriamente los grupos, los nombres se asignan de forma determinística por centroides: mayor tasa de motos → *Comercial y Automotor*; de los dos restantes, mayor tasa de personas → *Céntrico e Institucional*; el tercero → *Residencial y Periférico*.
+
+```{=latex}
+\Needspace{12\baselineskip}
+```
+
+```{r}
+#| label: tbl-sensibilidad-metodos
+#| tbl-cap: "Sensibilidad de K-Means (Z-score, K* = 3) frente a escalamientos ({recipes}), PCA y algoritmos alternativos"
+sens <- read_csv(here::here("output", "tables", "tabla_sensibilidad_escalamientos_pca.csv"), show_col_types = FALSE) |>
+  transmute(
+    Metodo = espacio,
+    Silueta = format(round(silueta_media, 4), decimal.mark = ",", nsmall = 4),
+    Neg = n_silueta_neg,
+    WSS = format(round(wss, 2), decimal.mark = ",", nsmall = 2),
+    ARI = format(round(ari_vs_base, 4), decimal.mark = ",", nsmall = 4),
+    Particion = "13 / 5 / 1 (salvo Rob./Log)"
+  )
+mods <- read_csv(here::here("output", "tables", "tabla_comparacion_modelos_distancias.csv"), show_col_types = FALSE) |>
+  filter(modelo != "K-Means (base)") |>
+  transmute(
+    Metodo = paste0(modelo, " · ", distancia),
+    Silueta = format(round(silueta_media, 4), decimal.mark = ",", nsmall = 4),
+    Neg = n_silueta_neg,
+    WSS = "—",
+    ARI = format(round(ari_vs_kmeans, 4), decimal.mark = ",", nsmall = 4),
+    Particion = tamanios_grupo
+  )
+kable(bind_rows(sens, mods), col.names = c("Método / Espacio", "Silueta", "Neg.", "WSS", "ARI base", "Partición"),
+      align = c("l", "r", "c", "r", "r", "c"))
+```
+
+Como muestra @tbl-sensibilidad-metodos, `Min-Max [0, 1]` (`0,5614`) y `PCA 2D` (`0,5539`, `96,89 %` de varianza en `PC1 + PC2`) obtienen siluetas ligeramente superiores únicamente porque la métrica se evalúa sobre sus propias distancias reescaladas, pero asignan exactamente las mismas `19` localidades ($\text{ARI} = 1{,}0000$), al igual que el agrupamiento jerárquico **AGNES (`Ward.D2`)** tanto con distancia euclidiana como Manhattan. Por el contrario, `PAM`, `GMM` y las recetas `Robusto` y `Log(1+x)` rompen el bloque óptimo creando siluetas negativas o diluyendo las brechas extremas del centro.
+
+# Minería de texto con `sentometrics`
+
+Sobre las **`993` noticias objetivo** se construye `sento_corpus()` con **`6` covariables binarias (`{0, 1}`)** sin guiones en los nombres: tres de clúster territorial (`c_centro`, `c_comercial`, `c_residencial`) y tres de modalidad (`tema_hurto_personas`, `tema_hurto_residencias`, `tema_hurto_motos`). Se excluyen *dummies* individuales de localidad para evitar explosión dimensional.
+
+1. **Dos léxicos combinados:** `nrc_es` (`4.388` términos generales, media documental `-0,1193`) y el diccionario especializado local `crimen_es` (`105` términos entre `-1,0` y `+0,9` para voces como *fleteo, cosquilleo, halado, escopolamina* vs. *captura, incautación, megatoma*; media `-0,4034`).
+2. **Modificadores contextuales (`valenceIn`, `30` reglas):** ajusta la vecindad sintáctica con negadores ($t = 1, y = -1{,}0$: *no, nunca, sin, ni*), amplificadores ($t = 2, y \in \{1{,}5; 1{,}8\}$), atenuadores ($t = 3, y \in \{0{,}2; 0{,}4\}$) y adversativos ($t = 4, y = -1{,}0$).
+3. **Polaridad documental (`how = "proportionalPol"`):** divide la suma ponderada por el número de palabras con carga polar $N_{\text{pol}}(d_i)$ para que las noticias cortas de `2026` (~19 palabras) sean comparables con reportajes largos de `2023`–`2025` (~410 palabras). Su ordenamiento concuerda con `TF-IDF` ($r = 0{,}7233$). Sobre las `993` notas, la media combinada es **`-0,2613`**: `74,8 %` negativas ($< -0{,}02$), `20,8 %` positivas ($> +0{,}02$) y `4,3 %` neutras.
+4. **Agregación parsimoniosa en `36` series mensuales:** `sento_measures()` agrega mensualmente con `howDocs = "proportional"`, `do.ignoreZeros = TRUE` y `3` esquemas de decaimiento en ventana `lag = 6` (`linear`, `exponential0.5`, `beta22`):
+
+$$
+2\text{ léxicos} \times 6\text{ covariables} \times 3\text{ curvas temporales} = 36\text{ series mensuales} \times 52\text{ meses (jun. 2022–sep. 2026)} = 1.872\text{ observaciones}
+$$
+
+Los meses sin menciones de una variable se completan con `measures_fill(..., fill = "zero")`. Con `peakdates()` se identifican los `8` meses de mayor alarma negativa en el índice global (`dic. 2025`, `ene. 2026` y `mar.–ago. 2026`).
+
+# Modelado econométrico Elastic Net, atribuciones y límites del modelo
+
+Con $M = 36$ series mensuales frente a $N = 51$ meses efectivos para horizonte $h = 1$ (`2022-07-01` a `2026-09-01`), OLS seguiría expuesto a colinealidad alta entre clústeres, modalidades y memorias temporales. `sento_model(..., type = "BIC", alphas = c(0.2, 0.5, 0.8), h = 1)` resuelve:
+
+$$
+\min_{\beta_0, \boldsymbol{\beta}} \; \frac{1}{2T_{\text{ef}}} \sum_{t=1}^{T_{\text{ef}}} \left( y_{t+1} - \beta_0 - \sum_{m=1}^{36} \beta_m S_{t,m} \right)^2 + \lambda \left[ \frac{1 - \alpha}{2} \sum_{m=1}^{36} \beta_m^2 + \alpha \sum_{m=1}^{36} |\beta_m| \right]
+$$
+
+El criterio BIC selecciona **$\alpha^* = 0{,}5$** y **$\lambda^* = 0{,}2521$**, retiene **`25` de `36` series activas** y alcanza **$R^2 = 88{,}99\%$** dentro de muestra con **$\text{RMSE} = 9{,}78$** puntos de tasa mensual sobre $\bar{y} = 154{,}1$. El intercepto estimado es **$\hat{\beta}_0 = 275{,}99$**: como las series de sentimiento $S_{t,m}$ son negativas y los coeficientes dominantes son positivos (`crimen_es--c_centro--linear = +124,8`, `crimen_es--tema_hurto_residencias--beta22 = +99,8`, `nrc_es--tema_hurto_personas--exponential0.5 = +94,8`), el término $\sum \hat{\beta}_m S_{t,m}$ resta sobre `275,99` y sitúa las predicciones alrededor de la media observada (`154,1`).
+
+Mediante `attributions(model, sento_measures, do.lags = TRUE)` se descompone cada predicción $\hat{y}_{t+1}$ en la constante $\hat{\beta}_0$ más las contribuciones aditivas por diccionario, característica o esquema temporal, manteniendo cuidado en que el aporte indexado en fecha $t$ (`2022-09-01`) pronostica el mes $t+1$ (`2022-10-01`).
+
+::: {.callout-important}
+## Límites reales del modelo que el equipo debe defender con transparencia
+1. **Desempeño *in-sample*, no *out-of-sample*:** con `25` variables activas sobre `51` meses, el $R^2 = 88{,}99\%$ mide ajuste descriptivo del ciclo mensual histórico, no capacidad probada fuera de muestra ni ausencia de sobreajuste temporal.
+2. **Dirección de la ecuación vs. pregunta problema:** `sento_model` estima la tasa SIEDCO en $t+1$ a partir de señales de prensa en $t$ (`h = 1`); eso evalúa **sincronía temporal y co-movimiento predictivo**, sin probar que las noticias causen los hurtos.
+3. **Alternancia de signos entre rezagos de un mismo factor:** `crimen_es--c_centro--linear` pesa `+124,8` mientras `crimen_es--c_centro--exponential0.5` pesa `-61,1`, efecto esperado por el agrupamiento $\ell_2$ entre curvas altamente correlacionadas sobre un mismo clúster.
+:::
+
+# Cartografía espacial, hurto de motocicletas y respuesta a la pregunta
+
+```{=latex}
+\Needspace{10\baselineskip}
+```
+
+```{r}
+#| label: tbl-espacial-reconciliada
+#| tbl-cap: "Correlación espacial exacta por modalidad entre SIEDCO y prensa (n = 19 localidades; n = 18 con tono en motos)"
+cnt_m <- function(dn) not |> filter(delito_sdscj == dn) |> group_by(localidad) |> summarise(nn = n(), sn = mean(sentimiento_score), .groups = "drop")
+t3 <- not |> filter(es_objetivo_3mod) |> group_by(localidad) |> summarise(nn = n(), sn = mean(sentimiento_score), .groups = "drop")
+ac <- not |> group_by(localidad) |> summarise(nn = n(), sn = mean(sentimiento_score), .groups = "drop")
+b_del <- cl |> select(localidad, tp = tasa_personas_prom, tr = tasa_resid_prom, tm = tasa_motos_prom, tt = tasa_total_prom, pob = poblacion_prom)
+mk <- function(df, rc, lbl) {
+  x <- b_del |> left_join(df, by = "localidad") |> mutate(nn = replace_na(nn, 0L), rn = nn / pob * 1e5 / 5)
+  tibble(
+    Modalidad = lbl,
+    Notas = sum(x$nn),
+    Del_100k = format(round(mean(x[[rc]]), 1), decimal.mark = ",", big.mark = ".", nsmall = 1),
+    Not_100k = format(round(mean(x$rn), 2), decimal.mark = ",", nsmall = 2),
+    Sent_med = format(round(mean(x$sn, na.rm = TRUE), 3), decimal.mark = ",", nsmall = 3),
+    r_tasa   = format(round(cor(x[[rc]], x$rn), 3), decimal.mark = ",", nsmall = 3),
+    rho_tasa = format(round(cor(x[[rc]], x$rn, method = "spearman"), 3), decimal.mark = ",", nsmall = 3),
+    r_conteo = format(round(cor(x[[rc]], x$nn), 3), decimal.mark = ",", nsmall = 3),
+    r_sent   = format(round(cor(x[[rc]], x$sn, use = "complete.obs"), 3), decimal.mark = ",", nsmall = 3)
+  )
+}
+kable(
+  bind_rows(
+    mk(cnt_m("Hurto a personas"), "tp", "Hurto personas"),
+    mk(cnt_m("Hurto a residencias"), "tr", "Hurto residencias"),
+    mk(cnt_m("Hurto de motocicletas"), "tm", "Hurto motos"),
+    mk(t3, "tt", "Total (3 mod.)"),
+    mk(ac, "tt", "Ref.: corpus total")
+  ),
+  col.names = c("Modalidad", "Notas", "Del./100k", "Not./100k", "Sent. med.", "r (tasa)", "rho (tasa)", "r (conteo)", "r (sent.)"),
+  align = c("l", "r", "r", "r", "r", "r", "r", "r", "r")
+)
+```
+
+## Lectura de resultados frente a la hipótesis original
+
+1. **Volumen en tasas ($r = +0{,}845$, $p = 5{,}25 \times 10^{-6}$):** cuando denuncias y cobertura se dividen por población residente, ambos fenómenos convergen en el centro ampliado (La Candelaria, Los Mártires).
+2. **Desacople en volumen bruto ($r = -0{,}148$, $p = 0{,}545$; `-0,421` sobre las `3.916` notas):** al no dividir por habitantes, el bloque *Residencial y Periférico* reúne el `69,2 %` de las `993` noticias objetivo (`687` notas: Bosa `90`, Suba `79`, Engativá `78` frente a `21` en La Candelaria), pues las redacciones siguen tamaño poblacional y hechos notorios.
+3. **Tono mediático ($r = +0{,}296$, $p = 0{,}219$ en `n = 19`; $r = +0{,}111$, $p = 0{,}286$ en `n = 95`):** la hipótesis inicial esperaba tono más negativo en zonas con más hurto, pero la correlación no es estadísticamente significativa y tiene signo positivo. En hurto a personas ($r = +0{,}361$), localidades como Tunjuelito (`-0,396`, `89,5 %` negativas) y Teusaquillo (`-0,389`) concentran crónicas de atracos sin balance favorable, mientras en el centro o Suba (`-0,192`) abundan notas sobre capturas e intervenciones policiales que moderan el promedio léxico.
+4. **Asimetría de motocicletas y subregistro (`rho = +0,374`):** cinco localidades periféricas (Kennedy `4.475`, Ciudad Bolívar `2.882`, Engativá `2.583`, Bosa `2.212` y Suba `2.063`) acumulan el **`58,5 %` (`14.215` de `24.300`)** de los casos por su parque residencial (más de `92.000` motos en Kennedy y ~`90 %` de viajes en estratos 1–3 según SDM 2023 y ProBogotá) y el *halado* en vía pública, pese a tener mínimo subregistro por exigencia de aseguradoras y Fiscalía.
+
+> **Síntesis frente a la pregunta:** el volumen de prensa acompaña la geografía del delito al normalizar por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve estadísticamente más negativo el sentimiento entre localidades ($r = +0{,}296$, $p = 0{,}219$); es decir, el sesgo mediático opera más por visibilidad selectiva y peso demográfico que por endurecimiento del tono.
+
+# Trazabilidad código ↔ modelo para estudio técnico
+
+```{=latex}
+\begingroup\footnotesize
+```
+
+| Etapa metodológica | Script responsable | Funciones / objetos clave | Artefacto de salida |
+| :--- | :--- | :--- | :--- |
+| Panel delictivo mensual (`1.083` filas) | `02_poblacion/` `procesamiento_poblacion.R` | Unión SIEDCO + SDS, tasas/100k | `panel_delitos_poblacion_mensual.parquet` |
+| Limpieza de noticias y 13 DAI | `03_noticias/` `procesamiento_noticias.R` | Regex anti-homonimia, `es_objetivo_3mod` | `noticias_procesadas.parquet` (`3.916` / `993`) |
+| Clustering $K^*=3$ y sensibilidad | `04_clustering_kmeans.R` | `kmeans(..., nstart=50)`, `recipe()`, `agnes()`, `pam()` | `clusters_localidades_kmeans.parquet`, CSVs |
+| Léxicos, `36` series y Elastic Net | `03_analisis_sentometrics.R` | `sento_corpus()`, `compute_sentiment()`, `sento_measures()`, `sento_model()`, `attributions()` | `sentometrics_pipeline.rds`, `panel_consolidado_localidad_anual.parquet` |
+| Descriptivos del corpus | `06_descriptivos_corpus.R` | Longitudinal `2022–2026` por año | `tabla_descriptivos_corpus.csv` |
+| Empaquetado Shiny | `05_export_insumos_shiny.R` | `corpus_summarize()`, `st_simplify()`, `saveRDS()` | `datos_consolidados_shiny.rds` (`0,87` MB) |
+| Orquestación integral | `scripts/master.R` | `here::here()`, `source(..., local = new.env())` | Valida ambos `.rds` finales |
+
+: {tbl-colwidths="[18,26,26,30]"}
+
+```{=latex}
+\endgroup
+```
+
+*Nota: los scripts de procesamiento residen bajo `scripts/02_procesamiento/` y los de modelado/orquestación directamente en `scripts/`.*
+
+# Banco ampliado de 20 preguntas de sustentación
+
+## Bloque A · Preguntas estructurales de método (1–11)
+
+1. **¿Por qué se agrupan tasas promedio anuales en $K$-Means en lugar de tasas mensuales?**
+   Por tres razones: (1) fija una etiqueta territorial única por localidad (`c_centro`, `c_comercial`, `c_residencial`) como covariable en `sentometrics`, mientras sobre filas mensuales `10` de `19` localidades cambian de grupo entre meses (`20` meses en cero motos y `4` en cero residencias); (2) mantiene coherencia con la frecuencia anual de las proyecciones SDS y la estabilidad temporal (`13 / 5 / 1` quitando `2022` o `2026`); y (3) bajo `Z-score`, promediar los `57` meses entrega correlaciones `1,0000`, silueta `0,5211` y $\text{ARI} = 1{,}0000$, reservando los meses para Elastic Net ($N = 51$).
+
+2. **¿Por qué estandarizar con `Z-score` antes de ejecutar $K$-Means?**
+   Porque hurto a personas promedia `3.069,9`/100k frente a `112,4` en residencias y `73,5` en motos. Sin llevar cada columna a media `0` y desviación estándar `1`, la distancia euclidiana de Hartigan-Wong ignoraría residencias y motos y agruparía casi solo por personas.
+
+3. **¿Por qué preferir `Z-score` (`0,5211`) si `Min-Max [0, 1]` (`0,5614`) y `PCA 2D` (`0,5539`) arrojan siluetas mayores?**
+   Cada silueta se evalúa sobre su propia matriz de distancias reescalada. En realidad, las tres recetas asignan exactamente las mismas `19` localidades ($\text{ARI} = 1{,}0000$, cero siluetas negativas). Conservamos `Z-score` porque conserva unidades directas en desviaciones estándar sin anclarse a extremos muestrales (`Min-Max`) ni perder el `3,11 %` de varianza de `PC3` (`PCA 2D`), mientras `Robusto` (`0,4562`, `1` negativa) y `Log(1+x)+Z` (`0,4442`, $\text{ARI} = 0{,}3380$) degradan la cohesión.
+
+4. **¿Por qué Los Mártires queda solo en su clúster y Antonio Nariño pasa al bloque Residencial y Periférico?**
+   Los Mártires encabeza simultáneamente personas (`9.337,4`), residencias (`218,8`) y motos (`187,4`), formando un polo comercial único (`S = 0` por ser unitario), mientras Antonio Nariño (`3.087,8` en personas, `135,7` en motos) alcanza silueta positiva (`+0,0926`) dentro de *Residencial y Periférico*, logrando cero siluetas negativas en toda la ciudad.
+
+5. **¿Cómo se integran $K$-Means y `sentometrics` dentro del código?**
+   Las asignaciones territoriales de `04_clustering_kmeans.R` entran a `sento_corpus()` como tres *features* binarias excluyentes (`c_centro`, `c_comercial`, `c_residencial`) combinadas con las tres modalidades objetivo (`tema_*`), generando las `36` series que luego alimentan `sento_model()` y `attributions()`.
+
+6. **¿Por qué combinar `nrc_es` y `crimen_es` con `valenceIn`?**
+   `nrc_es` (`4.388` palabras) ignora vocabulario criminológico local (*fleteo, cosquilleo, halado, escopolamina, megatoma*), y sin las `30` reglas contextuales de `valenceIn` ($t \in \{1..4\}$) no distinguiría negaciones (*"operativo sin capturas"*) ni separaría crónicas de atracos frente a noticias de capturas.
+
+7. **¿Por qué dividir por $N_{\text{pol}}(d_i)$ (`proportionalPol`) y no por el total de palabras?**
+   Porque en `2026` la mediana de longitud cae a `18` palabras frente a ~`410` en `2023–2025`. Dividir solo por palabras con carga polar evita diluir los reportajes extensos con párrafos descriptivos neutros, manteniendo concordancia con `TF-IDF` ($r = 0{,}7233$).
+
+8. **¿Por qué pasar de `364` series iniciales a `36` y usar Elastic Net en lugar de MCO?**
+   Con `2` léxicos $\times$ `6` *features* $\times$ `3` curvas (`lag = 6`) obtenemos $M = 36 < N = 51$ meses, evitando un problema indeterminado ($p > n$). Como las series por diccionario y memoria siguen siendo altamente colineales, Elastic Net ($\alpha^* = 0{,}5$, $\lambda^* = 0{,}2521$ por BIC) aplica regularización $\ell_1/\ell_2$, retiene `25` variables activas y estabiliza bloques correlacionados.
+
+9. **¿Por qué restringir `sentometrics` a `993` noticias y no usar las `3.916` del corpus?**
+   Porque el panel oficial de SIEDCO solo incluye tres modalidades (`personas`, `residencias`, `motos`), que corresponden a las `993` noticias objetivo. Incluir `790` notas *No DAI*, `576` de automotores o `453` homicidios contaminaría el numerador mediático con hechos ausentes de la variable objetivo; por eso `Ref.: corpus` se reporta por separado.
+
+10. **¿Qué explica la alta incidencia de hurto de motos en la periferia y su baja cobertura per cápita?**
+    Según SDM (Encuesta de Movilidad 2023) y ProBogotá (2023), la propiedad (Kennedy `>92.000` motos) y el ~`90 %` de orígenes de viaje en estratos 1–3 se ubican en el sur y occidente, donde ~7 de cada 10 robos ocurren por *halado* en vía pública (`58,5 %` del total en 5 localidades periféricas). Sin embargo, la prensa por habitante privilegia incidentes en ejes céntricos como Los Mártires o Antonio Nariño.
+
+11. **¿Cómo se leen los mapas de sentimiento neto en el cuaderno y en Shiny?**
+    En los mapas de tasas y conteos el tono claro marca mayor magnitud; en sentimiento neto, en cambio, azul oscuro señala promedios **más negativos** (predominio de robos sin balance favorable, como Tunjuelito `-0,396` y Teusaquillo `-0,389`), mientras azul claro indica promedios menos negativos o positivos por mayor peso de noticias de capturas/operativos.
+
+## Bloque B · Preguntas difíciles esperadas de jurado y co-evaluadores (12–20)
+
+12. **Si `sento_model()` predice denuncias ($y_{t+1}$) usando sentimiento ($S_t$), ¿no invierte el sentido de su pregunta problema?**
+    La pregunta es de **correspondencia** (*cómo se relacionan*), no un modelo estructural causal unidireccional. La relación espacial (*denuncias $\rightarrow$ cobertura*) se evalúa en las correlaciones transversales y en las 36 series, mientras `sento_model()` contrasta en el agregado mensual si la señal acumulada de prensa (`h = 1`, `lag = 6`) guarda información sincrónica y predictiva sobre el ciclo mensual real de denuncias en Bogotá.
+
+13. **Con `25` variables activas sobre `51` observaciones, ¿el $R^2 = 88{,}99\%$ no refleja sobreajuste *in-sample*?**
+    Sí, es explícitamente una medida **`in-sample`** del ajuste mensual dentro del horizonte observado (`2022-07` a `2026-09`) y así lo declaramos en la app (`r2_in_sample`), en el documento y en la presentación. Con `51` meses la ventana aún es corta para una validación *rolling-window* amplia fuera de muestra; el ejercicio muestra ajuste descriptivo regularizado del ciclo temporal, no predicción validada *out-of-sample*.
+
+14. **Su hipótesis esperaba *"cobertura más frecuente y negativa"*, pero $r(\text{tasa}, \text{sentimiento}) = +0{,}296$ ($p = 0{,}219$). ¿Se refutó la mitad de la hipótesis?**
+    Se **cualifica empíricamente** con un hallazgo claro: la primera parte se cumple al ajustar por población (mayor tasa sí atrae mayor frecuencia de notas por habitante, $r = +0{,}845$), pero se invierte en conteos brutos ($r = -0{,}148$) y **no se cumple** que mayores tasas vuelvan más negativo el tono medio entre localidades ($r = +0{,}296$, n. s.), porque la cobertura policial es homogéneamente negativa (`-0,251` anual) y en zonas céntricas entran noticias de capturas que suavizan el puntaje.
+
+15. **¿Por qué usar diccionarios con `sentometrics` en vez de un modelo tipo BERT o LLM?**
+    Por **trazabilidad estadística, reproducibilidad offline y diseño de series temporales**: `sentometrics` permite auditar palabra por palabra qué regla de `crimen_es` o `valenceIn` explica cada pico, construir matrices $L \times F \times T$ con funciones de memoria explícitas y descomponer cada mes exactamente con `attributions()`, mientras BERT sobre ~`18` palabras por nota en `2026` actuaría como caja negra más costosa y difícil de descomponer aditivamente.
+
+16. **¿Por qué el intercepto $\hat{\beta}_0$ vale `275,99` si la tasa mensual distrital media observada es `154,1`?**
+    Porque todas las series predictoras $S_{t,m}$ tienen valores predominantemente **negativos** (`mean = -0,261`), y la mayoría de los coeficientes relevantes son **positivos** (por ejemplo `crimen_es--c_centro--linear = +124,8`). Al multiplicar coeficiente positivo por sentimiento negativo, $\sum \hat{\beta}_m S_{t,m}$ aporta alrededor de `-121,9` puntos respecto al basal `275,99`, ubicando $\hat{y}_{t+1}$ justo sobre la media real de `154,1`.
+
+17. **¿Cómo sostienen los 3 canales económicos (arriendos, seguridad privada, bienes públicos) sin tener datos de precios ni patrullaje?**
+    Están formulados explícitamente como **mecanismo motivacional** en economía urbana que explica por qué importa medir brechas entre percepción noticiosa y riesgo real. No afirmamos estimar elasticidades de arriendo ni de gasto privado; identificamos qué localidades están sobreexpuestas o subexpuestas en prensa respecto a SIEDCO como insumo para estudiar esos canales.
+
+18. **¿Por qué eligieron K-Means frente a PAM (`k-medoids`) o modelos de mezclas gaussianas (`GMM`)?**
+    Como muestra `tabla_comparacion_modelos_distancias.csv`, `K-Means` con `Z-score` logra silueta `0,521` y **cero** localidades negativas y concuerda al `100 %` con `AGNES Ward.D2` ($\text{ARI} = 1{,}000$), mientras que `PAM Euclidiana` (`0,488`), `PAM Manhattan` (`0,463`) y `GMM` (`0,410`) obtienen siluetas menores y dejan al menos `1` localidad mal clasificada (silueta negativa).
+
+19. **¿Por qué `panel_delitos_poblacion_mensual` tiene media de `285,6` hurtos/100k y el objetivo de `sento_model` promedia `154,1`?**
+    La diferencia es ponderación demográfica: `285,6` es el promedio simple de las `19` tasas locales (donde La Candelaria, con ~`16.700` habitantes, pesa lo mismo que Suba, con ~`1,25` millones), mientras `154,1` es la tasa **distrital agregada** ($\sum \text{denuncias}_i / \sum \text{población}_i \times 100.000$), donde pesan más las localidades populosas de menores tasas per cápita.
+
+20. **¿Qué sesgos introduce usar `Google News RSS`, corte a septiembre de `2026` y denominadores residentes?**
+    Tres acotamientos que documentamos abiertamente: (a) `2026` solo abarca `9` meses (por eso trabajamos con tasas mensuales o promedios comparables y mostramos la longitud textual reducida de `2026` en `tabla_descriptivos_corpus.csv`); (b) RSS indexa prensa digital abierta y no radio ni redes sociales locales; y (c) el censo residente infla las tasas del centro comercial frente a la periferia por la población flotante diaria.

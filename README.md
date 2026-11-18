@@ -109,9 +109,15 @@ Repo_Entrega_Final_Taller_R/
 │       ├── clusters_localidades_kmeans.parquet        # Asignaciones de clústeres K-means (K* = 3)
 │       └── datos_consolidados_shiny.rds               # Insumo consolidado para la aplicación Shiny
 │
-├── output/                                   # Resultados generados y entregables del curso
+├── output/                                   # Resultados generados, guías de estudio y entregables
 │   ├── tables/                               # 8 tablas CSV (K-Means, sensibilidad, descriptivos y DAI)
 │   ├── figures/                              # Figuras exploratorias (figura1..9) y K-Means (kmeans_*.png)
+│   ├── guia_estudio/                         # Guías de estudio (Metodología, Presentación, Documento Final y Shiny)
+│   │   ├── README.md                         # Índice y ruta recomendada por integrante
+│   │   ├── 01_metodologia_sustentacion/      # Guía metodológica robustecida + 20 Q&A (.qmd/.pdf)
+│   │   ├── 02_presentacion_plenaria/         # Libreto de 15 min (6 integrantes) + rúbrica v2 (.qmd/.pdf)
+│   │   ├── 03_documento_final/               # Auditoría de criterios C1–C7 y consistencia numérica (.qmd/.pdf)
+│   │   └── 04_aplicacion_shiny/              # Arquitectura describe-design (.md) + guía demo 75 s (.qmd/.pdf)
 │   └── entregas/                             # Entregables académicos de Grupo 3 + checklist maestro
 │       ├── README.md                         # Checklist completo de qué entregar, fechas y formatos
 │       ├── 01_primera_entrega/               # Propuesta (QMD/HTML/PDF), copia evaluada y respuestas
@@ -137,10 +143,8 @@ Repo_Entrega_Final_Taller_R/
 │
 ├── notebook/                                 # Cuadernos metodológicos en Quarto
 │   ├── README.md                             # Instrucciones para compilar y guía de cuadernos
-│   └── metodologia/                          # Cuadernos metodológicos y guías de estudio/código
+│   └── metodologia/                          # Cuadernos metodológicos y guías de código (guías de estudio en output/guia_estudio/)
 │       ├── 02_modelado_clustering_sentometrics.* # Tasas, clustering K-means y Sentometrics (QMD, HTML, PDF)
-│       ├── guia_estudio/
-│       │   └── 05_guia_estudio_sustentacion.* # Guía de estudio para sustentación (QMD, PDF)
 │       └── instrucciones_codigo/             # Guías línea a línea en PDF (03 a 07) y fuentes en qmd/
 │           ├── 03_ingesta_tasas_poblacion.pdf
 │           ├── 04_modelo_kmeans_clusters.pdf
@@ -201,8 +205,11 @@ quarto render output/entregas/04_documento_final/documento_final_grupo_3.qmd --t
 quarto render notebook/metodologia/02_modelado_clustering_sentometrics.qmd --to html
 quarto render notebook/metodologia/02_modelado_clustering_sentometrics.qmd --to pdf
 
-# Guía de estudio para sustentación:
-quarto render notebook/metodologia/guia_estudio/05_guia_estudio_sustentacion.qmd --to pdf
+# Guías de estudio para sustentación (Metodología, Plenaria, Doc Final y Shiny):
+quarto render output/guia_estudio/01_metodologia_sustentacion/01_guia_estudio_metodologia_sustentacion.qmd --to pdf
+quarto render output/guia_estudio/02_presentacion_plenaria/02_guia_estudio_presentacion_plenaria.qmd --to pdf
+quarto render output/guia_estudio/03_documento_final/03_guia_estudio_documento_final.qmd --to pdf
+quarto render output/guia_estudio/04_aplicacion_shiny/04_guia_estudio_bogo_atrack_shiny.qmd --to pdf
 ```
 
 ### Paso 5: Abrir el tablero interactivo de Shiny
