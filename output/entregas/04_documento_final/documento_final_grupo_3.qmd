@@ -211,6 +211,8 @@ ggplot(df_long, aes(x = tasa_total_prom, y = y_val, color = cluster_nombre)) +
 
 **Tercero**, el hurto de motocicletas muestra la concordancia ordinal más baja ($\rho = 0{,}374$): cinco localidades periféricas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba) concentran el `58,5 %` de las `24.300` denuncias absolutas (`14.215` casos), por su tenencia residencial (más de `92.000` motos en Kennedy y ~`90 %` de viajes en estratos 1 a 3 según SDM y ProBogotá, 2023) y el *halado* en vía pública, pero reciben mínima cobertura per cápita frente a Los Mártires o Antonio Nariño. **Cuarto**, el sentimiento neto en hurto a personas presenta correlación positiva con la tasa ($r = +0{,}361$): Tunjuelito (`-0,396`, `89,5 %` negativas) y Teusaquillo (`-0,389`) concentran reportes de robos sin balance favorable, mientras en el centro y Suba (`-0,192`) las noticias de capturas moderan el tono neto.
 
+**Síntesis frente a la pregunta.** El volumen de prensa acompaña la geografía del delito al normalizar por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve estadísticamente más negativo el sentimiento entre localidades ($r = +0{,}296$, $p = 0{,}219$); es decir, el sesgo mediático opera más por visibilidad selectiva y peso demográfico que por endurecimiento del tono.
+
 ```{=latex}
 \Needspace{10\baselineskip}
 ```
