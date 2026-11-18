@@ -36,18 +36,21 @@ flowchart LR
     C -.-> F["Visualización S3 / Shiny<br/>(plot, measures_fill)"]
 ```
 
-### Tabla de Objetos S3 y Archivos `.rds` en `data/processed/`
+### Estructura de Objetos S3 y Archivos `.rds` en `data/processed/`
 
-| Fase | Función Principal | Clase S3 Devuelta | Archivo Entregable | Responsable |
+Todo el flujo de `sentometrics` se compila en `scripts/03_analisis_sentometrics.R` y se guarda en **un único artefacto maestro** `data/processed/sentometrics_pipeline.rds` (evitando múltiples archivos `.rds` fragmentados), acompañado únicamente de `data/processed/datos_consolidados_shiny.rds` para el tablero interactivo:
+
+| Fase | Función Principal | Clase S3 Devuelta | Ubicación en `.rds` | Responsable |
 | :--- | :--- | :--- | :--- | :--- |
-| **1. Corpus** | `sento_corpus()`, `add_features()` | `sento_corpus`, `corpus` | `data/processed/01_sento_corpus.rds` | Juan José (T-07) |
-| **2. Léxicos** | `sento_lexicons()` | `sento_lexicons`, `list` | `data/processed/02_lexicons_es.rds` | Juan José (T-09) |
-| **2. Puntuaciones** | `compute_sentiment()`, `as.sentiment()` | `sentiment`, `data.table` | `data/processed/03_sentiment_scores.rds` | Juan José (T-10) |
-| **2. Noticias Pico** | `peakdocs()` | `data.table` | `data/processed/04_peak_docs.rds` | Sergio (T-11) |
-| **3. Medidas** | `ctr_agg()`, `sento_measures()` | `sento_measures`, `list` | `data/processed/05_sento_measures.rds` | Juan José (T-13) |
-| **3. Series Long / Wide** | `measures_fill()`, `as.data.table()` | `list (long/wide)` / `data.table` | `data/processed/06_measures_long.rds`<br/>`data/processed/06_measures_wide.rds` | Sergio (T-14) |
-| **3. Índice Global** | `aggregate(..., do.global=TRUE)`, `peakdates()` | `data.table`, `list` | `data/processed/07_global_index.rds` | Juan José (T-15) |
-| **4. Modelo / Atribución** | `ctr_model()`, `sento_model()`, `attributions()` | `sento_model`, `attributions` | `data/processed/08_attributions.rds` | Juan José (T-17) |
+| **1. Corpus** | `sento_corpus()` | `sento_corpus`, `corpus` | `sentometrics_pipeline.rds$corpus_sento` (`993` docs objetivo, `6` features) | Juan José |
+| **2. Léxicos** | `sento_lexicons()` | `sento_lexicons`, `list` | `sentometrics_pipeline.rds$lexicons_es` | Juan José |
+| **2. Puntuaciones** | `compute_sentiment()` | `sentiment`, `data.table` | `sentometrics_pipeline.rds$sentiment_scores` (`how = "proportionalPol"`) | Juan José |
+| **2. Noticias Pico** | `peakdocs()` | `list` / `data.table` | `sentometrics_pipeline.rds$peak_docs` | Sergio |
+| **3. Medidas** | `ctr_agg()`, `sento_measures()` | `sento_measures`, `list` | `sentometrics_pipeline.rds$sento_measures` (`36` series: `2 × 6 × 3`) | Juan José |
+| **3. Series Long / Wide** | `measures_fill()`, `as.data.table()` | `list (long/wide)` | `sentometrics_pipeline.rds$measures_long` (`1.872` filas) | Sergio |
+| **3. Índice Global** | `aggregate(..., do.global=TRUE)`, `peakdates()` | `list` / `data.table` | `sentometrics_pipeline.rds$global_index` | Juan José |
+| **4. Modelo / Atribución** | `ctr_model()`, `sento_model()`, `attributions()` | `sento_model`, `attributions` | `sentometrics_pipeline.rds$attributions` (`BIC`, `h = 1`) | Juan José |
+| **5. Bundle Shiny** | `05_export_insumos_shiny.R` | `list` | `data/processed/datos_consolidados_shiny.rds` | Equipo NLP |
 
 ---
 
@@ -63,18 +66,12 @@ Construye la estructura base tabular requerida por el paquete a partir de un `da
   * `date`: Fecha en formato `Date` de R (`yyyy-mm-dd`). No admite marcas de tiempo con zona horaria ni valores nulos.
   * `texts`: Cadena de texto a procesar (unión de titular y resumen).
   * Columnas numéricas adicionales: Variables indicadoras binarias `[0, 1]` o continuas que representan las características de cada documento.
-* **Regla estricta de nomenclatura:** Los nombres de las columnas de características nunca deben incluir guiones medios (`-`), pues el paquete los reserva como separadores internos de dimensión (por ejemplo, `localidad--lexico--tiempo`). Se debe usar guion bajo: `barrios_unidos`, `puente_aranda`, `santa_fe`.
+* **Regla estricta de nomenclatura:** Los nombres de las columnas de características nunca deben incluir guiones medios (`-`), pues el paquete los reserva como separadores internos de dimensión (por ejemplo, `crimen_es--c_centro--exponential0.5`). Se debe usar guion bajo: `c_centro`, `c_comercial`, `c_residencial`, `tema_hurto_personas`, `tema_hurto_residencias`, `tema_hurto_motos`.
 * **Ejemplo en R:**
   ```r
-  corpus_base <- df_noticias |>
-    dplyr::mutate(
-      id    = as.character(dplyr::row_number()),
-      date  = as.Date(fecha_chunk_desde),
-      texts = paste(coalesce(titulo, ""), coalesce(resumen, ""), sep = ". ")
-    )
-  
   corpus_sento <- sentometrics::sento_corpus(
-    corpusdf = corpus_base[, c("id", "date", "texts", localidades_19, temas)]
+    corpusdf = df_sento_input[, c("id", "date", "texts", cols_features)],
+    do.clean = FALSE
   )
   ```
 
@@ -120,7 +117,7 @@ Calcula la puntuación de sentimiento para cada noticia aplicando los léxicos y
 Convierte una tabla externa con puntuaciones ya calculadas en un objeto de clase `sentiment`, permitiendo integrar indicadores calculados fuera del pipeline si se requiere una auditoría manual.
 
 #### `peakdocs(sentiment, n = 5, type = "both")`
-Extrae del objeto `sentiment` los documentos con las puntuaciones más altas (`type = "pos"`), más bajas (`type = "neg"`) o de mayor magnitud absoluta (`type = "both"`). Sergio emplea esta función para generar el archivo `04_peak_docs.rds`, el cual alimenta la tabla de noticias críticas en la aplicación Shiny.
+Extrae del objeto `sentiment` los documentos con las puntuaciones más altas (`type = "pos"`), más bajas (`type = "neg"`) o de mayor magnitud absoluta (`type = "both"`). Esta función alimenta el componente `peak_docs` dentro de `sentometrics_pipeline.rds` y las tablas de noticias críticas en la aplicación Shiny.
 
 ---
 
@@ -129,11 +126,11 @@ Extrae del objeto `sentiment` los documentos con las puntuaciones más altas (`t
 #### `ctr_agg(howWithin, howDocs, howTime, by, lag, ...)`
 Define la función de control con los hiperparámetros que gobiernan la agregación en tres niveles: dentro del texto ($\omega$), entre textos ($\theta$) y en el tiempo ($b$).
 
-* **Configuración del equipo para Bogotá:**
+* **Configuración parsimoniosa del equipo (`36` series sobre `993` noticias objetivo):**
   * `howWithin = "proportionalPol"`: Normalización por palabras emotivas reales.
   * `howDocs = "proportional"`: Pondera las noticias del mes según su extensión en palabras, asignando mayor representatividad a reportajes de fondo que a notas breves.
-  * `howTime = c("linear", "exponential", "beta")`: Modela la memoria y la persistencia de la alarma social. El esquema exponencial usa `alphasExp = c(0.2, 0.5)` para capturar olvido moderado y rápido; las curvas Beta usan `aBeta = c(1, 2)` y `bBeta = c(2, 3)` para modelar picos retardados de debate público.
-  * `by = "month"`: Frecuencia mensual para coincidir con la periodicidad de los registros delictivos.
+  * `howTime = c("linear", "exponential", "beta")`: Modela exactamente **3 curvas representativas** de memoria en una ventana móvil de 6 meses: decrecimiento `linear` uniforme, exponencial con `alphasExp = 0.5` (olvido rápido) y curva tipo joroba Beta con `aBeta = 2` y `bBeta = 2` (eco mediático en meses intermedios).
+  * `by = "month"`: Frecuencia mensual para coincidir con la periodicidad real de `SIEDCO.csv`.
   * `lag = 6`: Ventana temporal de agregación retrospectiva de 6 meses.
   * `do.ignoreZeros = TRUE`: Parámetro crítico que ignora documentos con sentimiento exactamente igual a 0 al calcular los pesos entre noticias, impidiendo que el índice se sesgue artificialmente hacia la neutralidad.
 * **Ejemplo en R:**
@@ -144,10 +141,11 @@ Define la función de control con los hiperparámetros que gobiernan la agregaci
     howTime        = c("linear", "exponential", "beta"),
     by             = "month",
     lag            = 6,
-    alphasExp      = c(0.2, 0.5),
-    aBeta          = c(1, 2),
-    bBeta          = c(2, 3),
-    do.ignoreZeros = TRUE
+    alphasExp      = 0.5,
+    aBeta          = 2,
+    bBeta          = 2,
+    do.ignoreZeros = TRUE,
+    fill           = "zero"
   )
   ```
 
@@ -176,12 +174,12 @@ Configura la estimación del modelo predictivo.
 * **Parámetros utilizados en `scripts/03_analisis_sentometrics.R`:**
   * `model = "gaussian"`: Familia lineal gaussiana con penalización Elastic Net ($L_1$ y $L_2$; Zou y Hastie, 2005) vía `glmnet`.
   * `type = "BIC"`: Calibración de los hiperparámetros $(\alpha^*, \lambda^*)$ mediante el Criterio de Información Bayesiano (BIC), más parsimonioso que CV con $N = 51$ meses efectivos.
-  * `alphas = c(0.2, 0.5, 0.8)`: Rejilla de búsqueda para el balance entre Ridge ($\alpha = 0$) y LASSO ($\alpha = 1$). El óptimo seleccionado por BIC resulta en $\alpha^* = 0.2$ (prioriza estabilidad ante series correlacionadas manteniendo selección de variables).
+  * `alphas = c(0.2, 0.5, 0.8)`: Rejilla de búsqueda para el balance entre Ridge ($\alpha = 0$) y LASSO ($\alpha = 1$). El óptimo seleccionado por BIC resulta en $\alpha^* = 0.5$ ($\lambda^* = 0.2521$, $25/36$ series activas, $R^2 = 0.8899$).
   * `h = 1`: Horizonte de pronóstico a un mes hacia adelante ($y_{t+1}$ en función de $s_t$), evaluando capacidad predictiva adelantada sin contemporaneidad.
   * `do.iter = FALSE`: Estimación conjunta sobre el panel completo (también se evalúa el comparativo contemporáneo $h = 0$).
 
 #### `sento_model(sento_measures, y, ctr, x = NULL)`
-Estima el modelo regularizado utilizando la librería `glmnet` bajo el capó. Ajusta la variable dependiente $y$ (tasa mensualizada de hurtos en el distrito por 100.000 habitantes) en función de las 364 series de sentimiento generadas y posibles controles exógenos $x$. Devuelve un objeto `sento_model`.
+Estima el modelo regularizado utilizando la librería `glmnet` bajo el capó. Ajusta la variable dependiente $y$ (tasa mensual real observada de hurtos en el distrito desde `SIEDCO.csv` por 100.000 habitantes) en función de las `36` series parsimoniosas de sentimiento generadas (`2 × 6 × 3`) y posibles controles exógenos $x$. Devuelve un objeto `sento_model`.
 
 * **Ejemplo en R:**
   ```r
@@ -250,7 +248,7 @@ Para evitar fallos de ejecución en el script orquestador `master.R` y en la apl
 1. **Sin guiones en features:** Ninguna columna indicadora de localidad o tema puede nombrarse con guion medio (`-`). Se debe usar siempre guion bajo (`_`).
 2. **Fechas estrictas:** La columna `date` debe tener clase `Date` (`as.Date()`). No se admiten objetos `POSIXct` con zonas horarias ni cadenas de texto sin convertir.
 3. **Cero valores `NA`:** El constructor `sento_corpus()` aborta la ejecución si encuentra valores perdidos en `texts`, `date` o en las columnas de características.
-4. **Remodelado para Shiny:** La aplicación web nunca debe procesar objetos `sento_measures` en tiempo real de renderizado. Debe consumir tablas precargadas en formato plano y largo (`data/processed/06_measures_long.rds`), generadas mediante `measures_fill()` y `as.data.table()`.
+4. **Remodelado para Shiny:** La aplicación web nunca debe procesar objetos `sento_measures` en tiempo real de renderizado. Debe consumir únicamente el bundle precalculado `data/processed/datos_consolidados_shiny.rds` (que incorpora la tabla larga generada desde `sentometrics_pipeline.rds$measures_long`).
 
 ---
 

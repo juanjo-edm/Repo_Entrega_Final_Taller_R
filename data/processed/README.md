@@ -1,6 +1,6 @@
 # Datos Procesados (`data/processed/`)
 
-Esta carpeta contiene los conjuntos de datos limpios, transformados y enriquecidos del proyecto **Hurtos y Sentimiento Mediático en Bogotá (2022–2026)**, así como los 8 artefactos S3 del contrato de `sentometrics`.
+Esta carpeta contiene los conjuntos de datos limpios, transformados y enriquecidos del proyecto **Hurtos y Sentimiento Mediático en Bogotá (2022–2026)**, junto con los 2 artefactos `.rds` consolidados del pipeline (`sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds`).
 
 ---
 
@@ -10,22 +10,14 @@ Esta carpeta contiene los conjuntos de datos limpios, transformados y enriquecid
 data/processed/
 ├── README.md
 ├── 01_delitos/
-│   └── delitos_localidad_anual.parquet               # Conteo oficial anual de hurtos (19 locs × 5 años)
+│   └── delitos_localidad_mensual.parquet             # Conteo oficial mensual de hurtos SIEDCO (1.083 filas: 19 × 57)
 ├── 02_poblacion/
-│   └── panel_delitos_poblacion_localidad.parquet     # Tasas por 100.000 habitantes (SIEDCO + SDS)
+│   └── panel_delitos_poblacion_mensual.parquet       # Tasas mensuales por 100.000 habitantes (SIEDCO + SDS, 1.083 × 13)
 ├── 03_noticias/
-│   └── noticias_procesadas.parquet                   # Microdatos de prensa limpios (3.916 noticias, 11 DAI)
-├── 01_sento_corpus.rds                               # [T-07] Objeto S3 sento_corpus (26 features sin '-')
-├── 02_lexicons_es.rds                                # [T-09] Objeto S3 sento_lexicons (nrc_es + crimen_es + valenceIn)
-├── 03_sentiment_scores.rds                           # [T-10] Objeto S3 sentiment (how = 'proportionalPol')
-├── 04_peak_docs.rds                                  # [T-11] Noticias pico y catálogo filtrable (peakdocs)
-├── 05_sento_measures.rds                             # [T-13] Objeto S3 sento_measures (364 series mensuales)
-├── 06_measures_long.rds                              # [T-14] Series en formato long (18.928 filas) y wide
-├── 06_measures_wide.rds                              # [T-14] Matriz ancha (52 meses × 365 cols) para consulta rápida
-├── 07_global_index.rds                               # [T-15] Índice global distrital y fechas pico (peakdates)
-├── 08_attributions.rds                               # [T-17] Modelo Elastic Net (sento_model) y atribuciones
-├── panel_consolidado_localidad_anual.parquet         # Fusión anual de tasas delictivas y sentimiento
-├── clusters_localidades_kmeans.parquet               # Asignaciones de clústeres K-Means (K* = 3)
+│   └── noticias_procesadas.parquet                   # Microdatos de prensa limpios (3.916 filas; 993 en es_objetivo_3mod)
+├── sentometrics_pipeline.rds                         # Bundle único S3 (corpus 993 docs, 6 features, 36 series, Elastic Net)
+├── panel_consolidado_localidad_anual.parquet         # Fusión anual de tasas delictivas y sentimiento objetivo (95 × 20)
+├── clusters_localidades_kmeans.parquet               # Asignaciones de clústeres K-Means (K* = 3; 13 / 5 / 1)
 └── datos_consolidados_shiny.rds                      # Bundle integral pre-computado para app/app.R
 ```
 
@@ -35,20 +27,13 @@ data/processed/
 
 | Script Generador | Archivo Producido | Clase / Formato | Descripción Técnica |
 | :--- | :--- | :---: | :--- |
-| `02_procesamiento/01_delitos/procesamiento_delitos.R` | `01_delitos/delitos_localidad_anual.parquet` | Parquet | Conteo anual oficial de denuncias de hurto (personas, residencias, motos) por localidad (95 filas). |
-| `02_procesamiento/02_poblacion/procesamiento_poblacion.R` | `02_poblacion/panel_delitos_poblacion_localidad.parquet` | Parquet | Panel oficial que integra la población proyectada SDS y calcula tasas de hurto por cada 100.000 habitantes. |
-| `02_procesamiento/03_noticias/procesamiento_noticias.R` | `03_noticias/noticias_procesadas.parquet` | Parquet | Corpus de 3.916 noticias depuradas con clasificación jerárquica en los 11 Delitos de Alto Impacto (SDSCJ) y puntuaciones de sentimiento. |
-| `04_clustering_kmeans.R` | `clusters_localidades_kmeans.parquet` | Parquet | Asignación determinística de conglomerados ($K^* = 3$, silueta $= 0.5416$): *Céntrico e Institucional*, *Comercial y Automotor* y *Residencial y Periférico*. |
-| `03_analisis_sentometrics.R` | `01_sento_corpus.rds` | `sento_corpus` | Corpus estructurado con 26 features binarias `[0, 1]` (19 localidades + 3 clústeres + 4 tópicos DAI) sin guiones medios (`-`). |
-| `03_analisis_sentometrics.R` | `02_lexicons_es.rds` | `sento_lexicons` | Diccionarios `nrc_es` y `crimen_es` integrados con modificadores de valencia contextual (`valenceIn`, $t \in \{1, 2, 3, 4\}$). |
-| `03_analisis_sentometrics.R` | `03_sentiment_scores.rds` | `sentiment` | Puntuaciones documentales calculadas con `how = "proportionalPol"` y validación cruzada frente a `TFIDF`. |
-| `03_analisis_sentometrics.R` | `04_peak_docs.rds` | `list` / `data.table` | Documentos críticos extraídos con `peakdocs()` (globales y locales) enriquecidos con metadatos editoriales. |
-| `03_analisis_sentometrics.R` | `05_sento_measures.rds` | `sento_measures` | Panel de 364 series mensuales (`howWithin = "proportionalPol"`, `howDocs = "proportional"`, `howTime = c("linear", "exponential", "beta")`, `lag = 6`). |
-| `03_analisis_sentometrics.R` | `06_measures_long.rds` y `06_measures_wide.rds` | `list` / `data.table` | Series continuas auditadas con `measures_fill()` y remodeladas a 18.928 filas en formato largo (y matriz ancha `52 × 365`) para visualización interactiva. |
-| `03_analisis_sentometrics.R` | `07_global_index.rds` | `list` / `data.table` | Índice global ponderado (`aggregate(..., do.global = TRUE)`) y fechas históricas de alarma social (`peakdates()`). |
-| `03_analisis_sentometrics.R` | `08_attributions.rds` | `list` (`sento_model`) | Regresión penalizada Elastic Net ($\alpha = 0.2$, selección BIC, $R^2 = 0.8753$) y descomposición de atribuciones (`features`, `lexicons`, `time`). |
-| `03_analisis_sentometrics.R` | `panel_consolidado_localidad_anual.parquet` | Parquet | Panel balanceado final (95 filas × 20 cols) que fusiona tasas delictivas oficiales e indicadores anuales de sentimiento mediático. |
-| `05_export_insumos_shiny.R` | `datos_consolidados_shiny.rds` | RDS | Bundle consolidado con paneles, geometrías `sf` (`EPSG:4326`) y objetos `sentometrics` listos para carga inmediata en Shiny. |
+| `02_procesamiento/01_delitos/procesamiento_delitos.R` | `01_delitos/delitos_localidad_mensual.parquet` | Parquet | Conteo mensual oficial de denuncias de hurto (`hurto_personas`, `hurto_residencias`, `hurto_motos`) desde `SIEDCO.csv` (`1.083` filas: 19 locs × 57 meses). |
+| `02_procesamiento/02_poblacion/procesamiento_poblacion.R` | `02_poblacion/panel_delitos_poblacion_mensual.parquet` | Parquet | Panel mensual que integra la población proyectada SDS y calcula tasas mensuales por cada 100.000 habitantes (`1.083 × 13`). |
+| `02_procesamiento/03_noticias/procesamiento_noticias.R` | `03_noticias/noticias_procesadas.parquet` | Parquet | Corpus de `3.916` noticias depuradas con clasificación jerárquica SDSCJ (`delito_sdscj`), bandera `es_objetivo_3mod` (`993` objetivo) y puntuaciones auxiliares de sentimiento. |
+| `04_clustering_kmeans.R` | `clusters_localidades_kmeans.parquet` | Parquet | Asignación determinística de conglomerados ($K^* = 3$, silueta $= 0.5211$, `0` siluetas negativas): *Residencial y Periférico* (`13`), *Céntrico e Institucional* (`5`) y *Comercial y Automotor* (`1`: Los Mártires). |
+| `03_analisis_sentometrics.R` | `sentometrics_pipeline.rds` | `list` (9 slots S3) | Contiene en un único archivo: `corpus_sento` (`993` docs × `6` features sin `-`), `lexicons_es` (`nrc_es` + `crimen_es` + valencia), `sentiment_scores` (`proportionalPol`), `peak_docs`, `sento_measures` (`36` series mensuales: `2 × 6 × 3` esquemas `linear`/`exponential0.5`/`beta22`, `lag = 6`), `measures_long` (`1.872` filas), `global_index` + `peakdates()`, `attributions` (Elastic Net $\alpha^* = 0.5$, $\lambda^* = 0.2521$, $R^2 = 0.8899$, $\text{RMSE} = 9.777$, `25/36` activas frente a la tasa mensual real de `SIEDCO.csv`) y `meta`. |
+| `03_analisis_sentometrics.R` | `panel_consolidado_localidad_anual.parquet` | Parquet | Panel balanceado final (`95` filas × `20` cols) que fusiona tasas delictivas anualizadas de SIEDCO e indicadores anuales de sentimiento calculados sobre las `993` noticias objetivo. |
+| `05_export_insumos_shiny.R` | `datos_consolidados_shiny.rds` | RDS | Bundle consolidado de `13` componentes con paneles, geometrías `sf` (`EPSG:4326`) y objetos `sentometrics` listos para carga inmediata en Shiny. |
 
 > 📖 Para consultar tipos de dato, rangos observados, nulabilidad, llaves primarias (`PK`/`FK`) y el diagrama entidad-relación completo, consulte el [**Diccionario de Datos (`docs/diccionario_datos/`)**](../../docs/diccionario_datos/README.md).
 
@@ -57,17 +42,16 @@ data/processed/
 ## 3. Auditoría de Calidad e Integridad
 
 ```r
-# 1. Integridad dimensional del panel de tasas (19 localidades x 5 años)
-stopifnot(nrow(arrow::read_parquet(here::here("data", "processed", "02_poblacion", "panel_delitos_poblacion_localidad.parquet"))) == 95)
+# 1. Integridad dimensional del panel mensual de tasas (19 localidades x 57 meses)
+stopifnot(nrow(arrow::read_parquet(here::here("data", "processed", "02_poblacion", "panel_delitos_poblacion_mensual.parquet"))) == 1083)
 
 # 2. Integridad del microdato de prensa
-stopifnot(nrow(arrow::read_parquet(here::here("data", "processed", "03_noticias", "noticias_procesadas.parquet"))) == 3916)
+noti <- arrow::read_parquet(here::here("data", "processed", "03_noticias", "noticias_procesadas.parquet"))
+stopifnot(nrow(noti) == 3916, sum(noti$es_objetivo_3mod, na.rm = TRUE) == 993)
 
-# 3. Existencia de los 8 artefactos .rds de sentometrics y bundle Shiny
+# 3. Existencia de los 2 artefactos .rds consolidados (sentometrics y bundle Shiny)
 stopifnot(all(file.exists(here::here("data", "processed", c(
-  "01_sento_corpus.rds", "02_lexicons_es.rds", "03_sentiment_scores.rds",
-  "04_peak_docs.rds", "05_sento_measures.rds", "06_measures_long.rds",
-  "06_measures_wide.rds", "07_global_index.rds", "08_attributions.rds",
+  "sentometrics_pipeline.rds",
   "datos_consolidados_shiny.rds"
 )))))
 ```

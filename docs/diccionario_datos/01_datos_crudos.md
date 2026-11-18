@@ -9,25 +9,55 @@ Esta capa almacena los insumos originales descargados desde fuentes oficiales de
 
 ## Tabla de Contenido
 
-1. [`localidades_bogota_raw.geojson`](#1-localidades_bogota_rawgeojson) — Capa cartográfica y conteos delictivos oficiales (SDSCJ / SIEDCO)
-2. [`poblacion_localidades_raw.parquet`](#2-poblacion_localidades_rawparquet) — Pirámide de proyecciones demográficas (SDS)
-3. [`noticias_google_news_consolidado.parquet` y `.rds`](#3-noticias_google_news_consolidadoparquet-y-rds) — Corpus consolidado de prensa digital
+1. [`SIEDCO.csv`](#1-siedcocsv) — Registro mensual oficial de delitos por localidad (OAIEE / SDSCJ)
+2. [`localidades_bogota_raw.geojson`](#2-localidades_bogota_rawgeojson) — Capa cartográfica y conteos delictivos oficiales (SDSCJ / SIEDCO)
+3. [`poblacion_localidades_raw.parquet`](#3-poblacion_localidades_rawparquet) — Pirámide de proyecciones demográficas (SDS)
+4. [`noticias_google_news_consolidado.parquet` y `.rds`](#4-noticias_google_news_consolidadoparquet-y-rds) — Corpus consolidado de prensa digital
 
 ---
 
-## 1. `localidades_bogota_raw.geojson`
+## 1. `SIEDCO.csv`
+
+* **Ruta relativa:** `data/raw/delitos/SIEDCO.csv`
+* **Formato / Clase en R:** CSV delimitado por punto y coma (`;`), codificación `UTF-8` (`data.table` / `tbl_df`)
+* **Dimensiones verificadas:** `376.185` filas × `12` columnas
+* **Unidad de observación (grano):** Microdato agregado por hecho delictivo, sexo, arma, rango vital, franja horaria, año, mes y localidad (`2018`–septiembre de `2026`).
+* **Propósito y uso:** Constituye la fuente oficial mensual de frecuencia exacta usada por [`procesamiento_delitos.R`](../../scripts/02_procesamiento/01_delitos/procesamiento_delitos.R) para construir las series mensuales de `hurto_personas`, `hurto_residencias` y `hurto_motos` (enero de 2022 a septiembre de 2026) que alimentan el clustering $K$-means y el vector objetivo real de Elastic Net.
+* **Linaje:**
+  * **Generado por:** [`scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R`](../../scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R) (`https://oaiee.scj.gov.co/DatosDescarga/SIEDCO.csv`).
+  * **Consumido por:** [`scripts/02_procesamiento/01_delitos/procesamiento_delitos.R`](../../scripts/02_procesamiento/01_delitos/procesamiento_delitos.R).
+
+```r
+siedco_raw <- data.table::fread(
+  here::here("data", "raw", "delitos", "SIEDCO.csv"),
+  sep = ";", encoding = "UTF-8",
+  select = c("ANIO", "MES", "HECHO", "LOCALIDAD", "COD_LOCALIDAD", "CANTIDAD")
+)
+```
+
+| Campo | Tipo (`R`) | Dominio / Valores observados | Descripción |
+| :--- | :---: | :--- | :--- |
+| `ANIO` | `integer` | `[2018, 2026]` (el estudio filtra `2022:2026`) | Año de ocurrencia del hecho delictivo. |
+| `MES` | `integer` | `1..12` (en `2026`, `1..9`) | Mes calendario del registro. |
+| `HECHO` | `character` | `12` hechos DAI (se filtran `HURTO A PERSONAS`, `HURTO A RESIDENCIAS`, `HURTO MOTOCICLETAS`) | Tipología delictiva oficial SIEDCO. |
+| `LOCALIDAD` | `character` | Nombres de localidades de Bogotá (homologados con tildes en procesamiento) | Nombre crudo de la localidad. |
+| `COD_LOCALIDAD` | `integer` | `1..19` urbanas + rurales/sin asignación (se filtra `1:19`) | Código oficial de la localidad. |
+| `CANTIDAD` | `integer` | `[1, 275]` | Número de casos registrados en la celda respectiva. |
+| `SEXO`, `ARMA_EMPLEADA`, `RANGO_VITAL`, `RANGO_DEL_DIA`, `Fecha de consulta`, `Datos actualizados hasta` | `character` | Variables descriptivas complementarias del registro SIEDCO | Metadatos sociodemográficos, modales y de corte oficial de actualización. |
+
+---
+
+## 2. `localidades_bogota_raw.geojson`
 
 * **Ruta relativa:** `data/raw/delitos/localidades_bogota_raw.geojson`
 * **Formato / Clase en R:** GeoJSON vectorial (`sf`, `data.frame`), proyección **WGS 84 (`EPSG:4326`)**
 * **Dimensiones verificadas:** `21` filas × `138` columnas
 * **Unidad de observación (grano):** Unidad territorial oficial (`CMIULOCAL`): 19 localidades urbanas (`"01"`–`"19"`), 1 localidad rural (`"20"` Sumapaz) y 1 categoría sin georreferenciación (`"99"` Sin Localización).
 * **Llave primaria (`PK`):** `CMIULOCAL`
-* **Propósito y uso:** Provee simultáneamente los polígonos espaciales de las localidades de Bogotá y las series oficiales acumuladas enero–septiembre (2018–2026) de los 12 Delitos de Alto Impacto (DAI) publicados por la SDSCJ.
+* **Propósito y uso:** Provee los polígonos oficiales de las localidades de Bogotá para cartografía en `{sf}` / `{leaflet}` y contiene series anuales comparativas de referencia publicadas por la SDSCJ.
 * **Linaje:**
   * **Generado por:** [`scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R`](../../scripts/01_ingesta/01_delitos/descarga_delitos_sdscj.R) (desde Datos Abiertos Bogotá, `dai_geojson.zip`).
-  * **Consumido por:**
-    * [`scripts/02_procesamiento/01_delitos/procesamiento_delitos.R`](../../scripts/02_procesamiento/01_delitos/procesamiento_delitos.R): extrae `CMHP*CONT`, `CMHR*CONT` y `CMHM*CONT` para 2022–2026 y descarta códigos `"20"` y `"99"`.
-    * [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R): extrae la columna `geometry`, la simplifica topológicamente (`dTolerance = 0.0005`) y la empaqueta en `datos_consolidados_shiny.rds$geometrias`.
+  * **Consumido por:** [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R) y [`notebook/metodologia/02_modelado_clustering_sentometrics.qmd`](../../notebook/metodologia/02_modelado_clustering_sentometrics.qmd) para extraer la columna `geometry` simplificada topológicamente (`dTolerance = 0.0005`) en `EPSG:4326`.
 
 ```r
 geo_raw <- sf::st_read(
@@ -73,15 +103,15 @@ Los 132 atributos numéricos siguen el patrón `<PREFIJO><SUFIJO>`, combinando *
 | Sufijo | Cantidad de columnas | Tipo (`R`) | Nulabilidad | Fórmula / Significado |
 | :--- | :---: | :---: | :---: | :--- |
 | `18CONT` .. `21CONT` | `4 × 12 = 48` | `numeric` | `0 NA` | Conteo acumulado enero–septiembre para los años 2018, 2019, 2020 y 2021 (fuera de la ventana 2022–2026). |
-| `22CONT` .. `26CONT` | `5 × 12 = 60` | `numeric` | `0 NA` | Conteo acumulado enero–septiembre para los años **2022 a 2026**. `CMHP*`, `CMHR*` y `CMHM*` alimentan `delitos_localidad_anual.parquet`. |
+| `22CONT` .. `26CONT` | `5 × 12 = 60` | `numeric` | `0 NA` | Conteo acumulado enero–septiembre para los años **2022 a 2026** (cifra de contraste oficial; el panel mensual del proyecto usa `SIEDCO.csv`). |
 | `VAR` | `1 × 12 = 12` | `numeric` | `0 NA` | Variación porcentual interanual 2026 vs. 2025: `round((26CONT - 25CONT) / 25CONT * 100, 2)`. |
 | `TOTAL` | `1 × 12 = 12` | `numeric` | `0 NA` | Suma distrital del año 2026 (`sum(*26CONT)` sobre las 21 filas), repetida como constante en cada registro. |
 
-> **Controles de auditoría en ingesta:** `descarga_delitos_sdscj.R` verifica la existencia de columnas `*26CONT` (incluida `CMHP26CONT`) y al menos 20 geometrías válidas.
+> **Controles de auditoría en ingesta:** `descarga_delitos_sdscj.R` verifica la descarga de `SIEDCO.csv` y del GeoJSON con columnas `*26CONT`.
 
 ---
 
-## 2. `poblacion_localidades_raw.parquet`
+## 3. `poblacion_localidades_raw.parquet`
 
 * **Ruta relativa:** `data/raw/poblacion/poblacion_localidades_raw.parquet`
 * **Formato / Clase en R:** Apache Parquet (`tbl_df`, `data.frame`)
@@ -116,7 +146,7 @@ pob_raw <- arrow::read_parquet(
 
 ---
 
-## 3. `noticias_google_news_consolidado.parquet` y `.rds`
+## 4. `noticias_google_news_consolidado.parquet` y `.rds`
 
 * **Rutas relativas:**
   * `data/raw/noticias/noticias_google_news_consolidado.parquet` (formato principal)

@@ -43,12 +43,12 @@ tabla_clusters <- readr::read_csv(
 | :--- | :---: | :---: | :--- | :--- |
 | `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | Código oficial DANE/Distrito de dos dígitos (conservado con cero a la izquierda). |
 | `localidad` | `character` | No nula (`0 NA`) | `19` nombres oficiales | Nombre oficial normalizado de la localidad urbana. |
-| `tasa_personas_prom` | `numeric` | No nula (`0 NA`) | `[619,698, 8.389,902]` | Tasa promedio 2022–2026 de hurto a personas por 100.000 hab. |
-| `tasa_resid_prom` | `numeric` | No nula (`0 NA`) | `[45,292, 217,482]` | Tasa promedio 2022–2026 de hurto a residencias por 100.000 hab. |
-| `tasa_motos_prom` | `numeric` | No nula (`0 NA`) | `[16,616, 178,178]` | Tasa promedio 2022–2026 de hurto a motocicletas por 100.000 hab. |
-| `tasa_total_prom` | `numeric` | No nula (`0 NA`) | `[729,754, 8.757,422]` | Tasa promedio quinquenal agregada por 100.000 hab. |
+| `tasa_personas_prom` | `numeric` | No nula (`0 NA`) | `[645,304, 9.337,386]` | Tasa promedio 2022–2026 de hurto a personas por 100.000 hab. (base mensual SIEDCO anualizada). |
+| `tasa_resid_prom` | `numeric` | No nula (`0 NA`) | `[44,506, 219,660]` | Tasa promedio 2022–2026 de hurto a residencias por 100.000 hab. |
+| `tasa_motos_prom` | `numeric` | No nula (`0 NA`) | `[19,034, 187,432]` | Tasa promedio 2022–2026 de hurto a motocicletas por 100.000 hab. |
+| `tasa_total_prom` | `numeric` | No nula (`0 NA`) | `[761,216, 9.743,590]` | Tasa promedio quinquenal agregada por 100.000 hab. |
 | `poblacion_prom` | `numeric` | No nula (`0 NA`) | `[16.682, 1.245.490,4]` | Población media proyectada en el periodo 2022–2026. |
-| `silueta_localidad` | `numeric` | No nula (`0 NA`) | `[-0,2116, 0,7615]` (promedio `0,5416`) | Coeficiente de silueta individual por localidad bajo distancia euclidiana Z-score. |
+| `silueta_localidad` | `numeric` | No nula (`0 NA`) | `[0,0000, 0,7176]` (promedio `0,5211`, `0` negativas) | Coeficiente de silueta individual por localidad bajo distancia euclidiana Z-score. |
 | `cluster_id` | `numeric` | No nula (`0 NA`) | `1`, `2`, `3` (`3` únicos) | Identificador entero del clúster territorial (al parsearse desde CSV `readr` lo infiere como `numeric`). |
 | `cluster_nombre` | `character` | No nula (`0 NA`) | `"Céntrico e Institucional"`, `"Comercial y Automotor"`, `"Residencial y Periférico"` | Etiqueta descriptiva del clúster territorial asignado. |
 | `perfil_seguridad` | `character` | No nula (`0 NA`) | 3 perfiles descriptivos completos | Síntesis criminológica asociada a `cluster_id`. |
@@ -77,12 +77,12 @@ tabla_desc <- readr::read_csv(
 | Campo | Tipo (`readr`) | Nulabilidad | Dominio / Valores observados | Origen / Fórmula | Descripción |
 | :--- | :---: | :---: | :--- | :--- | :--- |
 | `año` | `numeric` | No nula (`0 NA`) | `2022`, `2023`, `2024`, `2025`, `2026` | Agrupación por `año` | Año calendario de publicación (`2026` truncado a septiembre). |
-| `noticias` | `numeric` | No nula (`0 NA`) | `448`, `534`, `870`, `994`, `1.070` (`[448, 1.070]`) | `dplyr::n()` | Número total de artículos periodísticos publicados en el año. |
-| `noticias_dai` | `numeric` | No nula (`0 NA`) | `264`, `347`, `589`, `683`, `699` (`[264, 699]`) | `sum(es_dai_estricto)` | Cantidad de noticias clasificadas estrictamente en una categoría DAI específica de la SDSCJ. |
+| `noticias` | `numeric` | No nula (`0 NA`) | `448`, `534`, `870`, `994`, `1.070` (`total = 3.916`) | `dplyr::n()` | Número total de artículos recopilados en el año. |
+| `noticias_3mod` | `numeric` | No nula (`0 NA`) | `112`, `119`, `211`, `269`, `282` (`total = 993`) | `sum(es_objetivo_3mod)` | Noticias pertenecientes a las 3 modalidades objetivo (`Hurto a personas`, `Hurto a residencias`, `Hurto de motocicletas`). |
 | `localidades` | `numeric` | No nula (`0 NA`) | `19` (constante) | `n_distinct(localidad)` | Número de localidades urbanas cubiertas en el año (cobertura completa 19/19 en todos los años). |
-| `media_palabras` | `numeric` | No nula (`0 NA`) | `18,3` (`2026`) a `403,8` (`2023`) (`[18,3, 403,8]`) | `round(mean(palabras_cuerpo), 1)` | Promedio anual de palabras en el cuerpo limpio de la noticia. |
-| `mediana_palabras` | `numeric` | No nula (`0 NA`) | `18` (`2026`) a `354,5` (`2023`, `2024`) (`[18, 354,5]`) | `median(palabras_cuerpo)` | Mediana anual de palabras en `cuerpo`. |
-| `sentimiento_prom` | `numeric` | No nula (`0 NA`) | `[-0,4178, -0,0512]` | `round(mean(sentimiento_score), 4)` | Promedio anual del índice compuesto de sentimiento (`-0,0512` en `2022` hasta `-0,4178` en `2026`). |
+| `media_palabras` | `numeric` | No nula (`0 NA`) | `18,7` (`2026`) a `433,2` (`2025`) | `round(mean(palabras_cuerpo), 1)` | Promedio anual de palabras en el cuerpo limpio de la noticia. |
+| `mediana_palabras` | `numeric` | No nula (`0 NA`) | `18` (`2026`) a `411` (`2024`) | `median(palabras_cuerpo)` | Mediana anual de palabras en `cuerpo`. |
+| `sentimiento_prom` | `numeric` | No nula (`0 NA`) | `[-0,4246, -0,1483]` | `round(mean(sentimiento_score), 4)` | Promedio anual del índice compuesto de sentimiento sobre el corpus objetivo. |
 
 ---
 
@@ -178,19 +178,19 @@ muestra_val <- readr::read_csv(
 * **Dimensiones verificadas:** `5` filas × `8` columnas
 * **Unidad de observación (grano):** Receta de preprocesamiento / representación espacial para $K = 3$.
 * **Llave primaria (`PK`):** `espacio`
-* **Propósito y uso:** Audita la estabilidad de la partición $K$-means ($K^* = 3$) frente a cinco transformaciones de escala (`Z-score (base)`, `Min-Max [0, 1]`, `Robusto (Mediana / IQR)`, `Log(1 + x) + Z-score` y `PCA (PC1 + PC2 = 96,4% var)`), comparando silueta media, inercia intra-clúster, Adjusted Rand Index (`ari_vs_base`) y varianza explicada por las dos primeras componentes principales.
+* **Propósito y uso:** Audita la estabilidad de la partición $K$-means ($K^* = 3$) frente a cinco transformaciones de escala (`Z-score (base)`, `Min-Max [0, 1]`, `Robusto (Mediana / IQR)`, `Log(1 + x) + Z-score` y `PCA (PC1 + PC2 = 96,9% var)`), comparando silueta media, inercia intra-clúster, Adjusted Rand Index (`ari_vs_base`) y varianza explicada por las dos primeras componentes principales.
 * **Linaje:** Generado por [`scripts/04_clustering_kmeans.R`](../../scripts/04_clustering_kmeans.R); consumido por la Sección 3 de [`notebook/metodologia/02_modelado_clustering_sentometrics.qmd`](../../notebook/metodologia/02_modelado_clustering_sentometrics.qmd).
 
 | Campo | Tipo (`readr`) | Nulabilidad | Dominio / Valores observados | Descripción |
 | :--- | :---: | :---: | :--- | :--- |
 | `espacio` | `character` | No nula (`0 NA`) | `5` especificaciones de preprocesamiento | Nombre de la transformación evaluada sobre las 3 tasas de hurto. |
-| `silueta_media` | `numeric` | No nula (`0 NA`) | `[0,4155, 0,5819]` | Coeficiente promedio de silueta obtenido en ese espacio. |
-| `n_silueta_neg` | `numeric` | No nula (`0 NA`) | `[0, 1]` | Cantidad de localidades con silueta negativa ($S_i < 0$). |
-| `wss` | `numeric` | No nula (`0 NA`) | `[1,0136, 15,3351]` | Suma total de cuadrados intra-clúster en la escala respectiva. |
-| `ari_vs_base` | `numeric` | No nula (`0 NA`) | `[0,3725, 1]` | Índice de Rand Ajustado respecto al modelo base `Z-score`. |
-| `pca_var_pc1` | `numeric` | No nula (`0 NA`) | `0,7065` | Proporción de varianza explicada por la componente principal 1. |
-| `pca_var_pc2` | `numeric` | No nula (`0 NA`) | `0,2573` | Proporción de varianza explicada por la componente principal 2. |
-| `pca_var_acum_2d` | `numeric` | No nula (`0 NA`) | `0,9638` | Varianza acumulada capturada en 2 dimensiones (`PC1 + PC2`). |
+| `silueta_media` | `numeric` | No nula (`0 NA`) | `[0,4442, 0,5614]` (`base = 0,5211`) | Coeficiente promedio de silueta obtenido en ese espacio. |
+| `n_silueta_neg` | `numeric` | No nula (`0 NA`) | `[0, 1]` (`base = 0`) | Cantidad de localidades con silueta negativa ($S_i < 0$). |
+| `wss` | `numeric` | No nula (`0 NA`) | `[1,0106, 15,5923]` (`base = 13,6532`) | Suma total de cuadrados intra-clúster en la escala respectiva. |
+| `ari_vs_base` | `numeric` | No nula (`0 NA`) | `[0,3380, 1]` | Índice de Rand Ajustado respecto al modelo base `Z-score`. |
+| `pca_var_pc1` | `numeric` | No nula (`0 NA`) | `0,7331` | Proporción de varianza explicada por la componente principal 1. |
+| `pca_var_pc2` | `numeric` | No nula (`0 NA`) | `0,2358` | Proporción de varianza explicada por la componente principal 2. |
+| `pca_var_acum_2d` | `numeric` | No nula (`0 NA`) | `0,9689` | Varianza acumulada capturada en 2 dimensiones (`PC1 + PC2`). |
 
 ---
 
@@ -208,11 +208,11 @@ muestra_val <- readr::read_csv(
 | :--- | :---: | :---: | :--- | :--- |
 | `modelo` | `character` | No nula (`0 NA`) | `4` familias (`K-Means (base)`, `PAM (Medoides)`, `AGNES (Ward.D2)`, `GMM (Mezcla Gauss.)`) | Algoritmo de agrupamiento evaluado. |
 | `distancia` | `character` | No nula (`0 NA`) | `"Euclidiana"`, `"Manhattan"`, `"Mahalanobis / EM"` | Métrica de disimilaridad empleada. |
-| `silueta_media` | `numeric` | No nula (`0 NA`) | `[0,4811, 0,5416]` | Coeficiente de silueta medio en el espacio Z-score base. |
-| `n_silueta_neg` | `numeric` | No nula (`0 NA`) | `[0, 2]` | Número de localidades con silueta negativa. |
-| `tamanios_grupo` | `character` | No nula (`0 NA`) | `"12 / 5 / 2"`, `"13 / 5 / 1"`, `"11 / 6 / 2"` | Conteo ordenado de localidades asignadas a cada uno de los 3 grupos. |
-| `ari_vs_kmeans` | `numeric` | No nula (`0 NA`) | `[0,7859, 1]` | Concordia (Adjusted Rand Index) frente a la partición base K-Means. |
-| `gap_k3` | `numeric` | No nula (`0 NA`) | `0,1545` | Estadístico *Gap* en $K = 3$ obtenido sobre la matriz estandarizada. |
+| `silueta_media` | `numeric` | No nula (`0 NA`) | `[0,4099, 0,5398]` (`K-Means = 0,5211`) | Coeficiente de silueta medio en el espacio Z-score base. |
+| `n_silueta_neg` | `numeric` | No nula (`0 NA`) | `[0, 1]` (`K-Means = 0`) | Número de localidades con silueta negativa. |
+| `tamanios_grupo` | `character` | No nula (`0 NA`) | `"13 / 5 / 1"`, `"11 / 7 / 1"`, `"11 / 5 / 3"` | Conteo ordenado de localidades asignadas a cada uno de los 3 grupos. |
+| `ari_vs_kmeans` | `numeric` | No nula (`0 NA`) | `[0,6269, 1]` | Concordia (Adjusted Rand Index) frente a la partición base K-Means. |
+| `gap_k3` | `numeric` | No nula (`0 NA`) | `0,1256` | Estadístico *Gap* en $K = 3$ obtenido sobre la matriz estandarizada. |
 
 ---
 
@@ -238,7 +238,7 @@ muestra_val <- readr::read_csv(
 | `agnes_manhattan` | `numeric` | No nula (`0 NA`) | `{1, 2, 3}` | Etiqueta en AGNES (`Ward.D2`) con distancia Manhattan. |
 | `gmm_3` | `numeric` | No nula (`0 NA`) | `{1, 2, 3}` | Etiqueta en Modelo de Mezclas Gaussianas ($G = 3$). |
 | `cluster_nombre` | `character` | No nula (`0 NA`) | `3` perfiles territoriales | Etiqueta semántica del clúster final elegido. |
-| `silueta_localidad` | `numeric` | No nula (`0 NA`) | `[-0,2116, 0,7615]` | Coeficiente de silueta individual de la localidad en el modelo final. |
+| `silueta_localidad` | `numeric` | No nula (`0 NA`) | `[0,0000, 0,7176]` (`0` negativas) | Coeficiente de silueta individual de la localidad en el modelo final. |
 
 ---
 

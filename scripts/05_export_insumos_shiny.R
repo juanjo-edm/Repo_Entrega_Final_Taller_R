@@ -72,15 +72,20 @@ if (file.exists(archivo_geo)) {
   geo_simplificada <- NULL
 }
 
-# 4. Carga de los 8 Artefactos S3 de Sentometrics (T-07 a T-17) ----
+# 4. Carga del Artefacto Consolidado S3 de Sentometrics ----
 
-corpus_sento      <- readRDS(file.path(ruta_datos_clean, "01_sento_corpus.rds"))
-lexicons_es       <- readRDS(file.path(ruta_datos_clean, "02_lexicons_es.rds"))
-sentiment_scores  <- readRDS(file.path(ruta_datos_clean, "03_sentiment_scores.rds"))
-peak_docs_obj     <- readRDS(file.path(ruta_datos_clean, "04_peak_docs.rds"))
-measures_long_obj <- readRDS(file.path(ruta_datos_clean, "06_measures_long.rds"))
-global_index_obj  <- readRDS(file.path(ruta_datos_clean, "07_global_index.rds"))
-attributions_obj  <- readRDS(file.path(ruta_datos_clean, "08_attributions.rds"))
+archivo_pipeline <- file.path(ruta_datos_clean, "sentometrics_pipeline.rds")
+if (!file.exists(archivo_pipeline)) {
+  stop("No se encontró '", archivo_pipeline, "'. Ejecute primero scripts/03_analisis_sentometrics.R")
+}
+pipeline_sento    <- readRDS(archivo_pipeline)
+corpus_sento      <- pipeline_sento$corpus_sento
+lexicons_es       <- pipeline_sento$lexicons_es
+sentiment_scores  <- pipeline_sento$sentiment_scores
+peak_docs_obj     <- pipeline_sento$peak_docs
+measures_long_obj <- pipeline_sento$measures_long
+global_index_obj  <- pipeline_sento$global_index
+attributions_obj  <- pipeline_sento$attributions
 
 ## 4.1 Estadísticos de evolución del corpus (T-08: corpus_summarize) ----
 resumen_corpus_mes  <- suppressWarnings(sentometrics::corpus_summarize(corpus_sento, by = "month"))
@@ -113,6 +118,7 @@ bundle_shiny <- list(
     coeficientes    = attributions_obj$coeficientes,
     metricas_modelo = attributions_obj$metricas_modelo
   ),
+  meta_pipeline     = pipeline_sento$meta,
   fecha_generacion  = Sys.time(),
   horizonte         = "2022-2026"
 )

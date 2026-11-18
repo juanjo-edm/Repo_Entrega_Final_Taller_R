@@ -22,22 +22,22 @@ t_inicio <- Sys.time()
 
 # 2. Etapa de Procesamiento de Datos Crudos a Limpios (Sub-equipo 1) ----
 
-## 2.1 Procesamiento de delitos oficiales (SIEDCO / SDSCJ) ----
-cat("[1/6] Procesando registros oficiales de delitos (SIEDCO / SDSCJ)...\n")
+## 2.1 Procesamiento de delitos oficiales mensuales (SIEDCO / SDSCJ) ----
+cat("[1/6] Procesando microdatos mensuales oficiales de delitos (SIEDCO.csv)...\n")
 source(
   here::here("scripts", "02_procesamiento", "01_delitos", "procesamiento_delitos.R"),
   local = new.env()
 )
 
-## 2.2 Procesamiento demográfico y cálculo de tasas por 100k hab. (SDS) ----
-cat("[2/6] Integrando proyecciones de población (SDS) y tasas por 100k hab...\n")
+## 2.2 Procesamiento demográfico y cálculo de tasas mensuales por 100k hab. (SDS) ----
+cat("[2/6] Integrando proyecciones de población (SDS) y tasas mensuales por 100k hab...\n")
 source(
   here::here("scripts", "02_procesamiento", "02_poblacion", "procesamiento_poblacion.R"),
   local = new.env()
 )
 
-## 2.3 Limpieza NLP del corpus de noticias y clasificación 11 DAI ----
-cat("[3/6] Procesando corpus de prensa y clasificación oficial de 11 DAI...\n")
+## 2.3 Limpieza NLP del corpus de noticias y clasificación DAI ----
+cat("[3/6] Procesando corpus de prensa y clasificación DAI (SDSCJ)...\n")
 source(
   here::here("scripts", "02_procesamiento", "03_noticias", "procesamiento_noticias.R"),
   local = new.env()
@@ -52,15 +52,15 @@ source(
   local = new.env()
 )
 
-## 3.2 Pipeline cuantitativo de Sentometrics y modelo Elastic Net ----
-cat("[5/6] Ejecutando pipeline completo de Sentometrics (01 a 08 .rds)...\n")
+## 3.2 Pipeline cuantitativo de Sentometrics (993 docs x 36 series) y Elastic Net ----
+cat("[5/6] Ejecutando pipeline de Sentometrics (sentometrics_pipeline.rds)...\n")
 source(
   here::here("scripts", "03_analisis_sentometrics.R"),
   local = new.env()
 )
 
 ## 3.3 Descriptivos del corpus (T-08) y empaquetado de insumos Shiny ----
-cat("[6/6] Generando descriptivos del corpus (T-08) y bundle Shiny (.rds)...\n")
+cat("[6/6] Generando descriptivos del corpus (T-08) y bundle Shiny (datos_consolidados_shiny.rds)...\n")
 source(
   here::here("scripts", "06_descriptivos_corpus.R"),
   local = new.env()
@@ -70,8 +70,11 @@ source(
   local = new.env()
 )
 
-# Control de auditoría: verificar que el bundle consolidado de Shiny exista
-stopifnot(file.exists(here::here("data", "processed", "datos_consolidados_shiny.rds")))
+# Control de auditoría: verificar exactamente los 2 artefactos .rds vigentes
+stopifnot(
+  file.exists(here::here("data", "processed", "sentometrics_pipeline.rds")),
+  file.exists(here::here("data", "processed", "datos_consolidados_shiny.rds"))
+)
 
 t_fin <- Sys.time()
 duracion_seg <- round(as.numeric(difftime(t_fin, t_inicio, units = "secs")), 1)

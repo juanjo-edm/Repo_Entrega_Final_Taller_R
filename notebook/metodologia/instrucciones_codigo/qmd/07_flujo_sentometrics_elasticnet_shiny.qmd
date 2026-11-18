@@ -74,9 +74,9 @@ Este documento explica línea por línea cómo operan los cuatro scripts que cie
   filebox/.style={rectangle, rounded corners=2pt, draw=NavyBlue!70, fill=GraySoft, dashed, text width=12.0cm, align=center, inner sep=4pt},
   arrow/.style={-{Stealth[length=2.6mm, width=1.8mm]}, thick, draw=NavyBlue}
 ]
-\node[filebox] (in) {\textbf{Entradas}: \texttt{noticias\_procesadas.parquet} (3.916 noticias) + \texttt{panel\_delitos\_poblacion\_localidad.parquet} (95 filas) + \texttt{clusters\_localidades\_kmeans.parquet}};
-\node[stepbox, below=of in] (s1) {\textbf{1. Pipeline NLP y Elastic Net (\texttt{03\_analisis\_sentometrics.R})}: 26 features sin `\texttt{-}`, léxicos \texttt{nrc\_es}/\texttt{crimen\_es}, 364 series (\texttt{lag = 6}) y \texttt{sento\_model()}};
-\node[filebox, below=of s1] (f1) {\textbf{Artefactos}: \texttt{01\_sento\_corpus.rds} \ldots{} \texttt{08\_attributions.rds} + \texttt{panel\_consolidado\_localidad\_anual.parquet}};
+\node[filebox] (in) {\textbf{Entradas}: \texttt{noticias\_procesadas.parquet} (3.916 recopiladas $\rightarrow$ 993 objetivo) + \texttt{panel\_delitos\_poblacion\_mensual.parquet} (1.083) + \texttt{clusters\_localidades\_kmeans.parquet}};
+\node[stepbox, below=of in] (s1) {\textbf{1. Pipeline NLP y Elastic Net (\texttt{03\_analisis\_sentometrics.R})}: 6 features sin `\texttt{-}`, léxicos \texttt{nrc\_es}/\texttt{crimen\_es}, 36 series (\texttt{lag = 6}) y \texttt{sento\_model()}};
+\node[filebox, below=of s1] (f1) {\textbf{Artefactos}: \texttt{sentometrics\_pipeline.rds} (bundle S3 único) + \texttt{panel\_consolidado\_localidad\_anual.parquet}};
 \node[stepbox, below=of f1] (s2) {\textbf{2. Descriptivos (\texttt{06\_descriptivos\_corpus.R})}: Figuras 3 a 9 (\texttt{corpus\_summarize}) y tabla anual \texttt{tabla\_descriptivos\_corpus.csv}};
 \node[stepbox, below=of s2] (s3) {\textbf{3. Empaquetado (\texttt{05\_export\_insumos\_shiny.R})}: Une panel, simplifica polígonos WGS84 y serializa \texttt{datos\_consolidados\_shiny.rds}};
 \node[filebox, below=of s3] (out) {\textbf{Orquestación y Tablero}: \texttt{scripts/master.R} ejecuta los 6 pasos en secuencia y habilita \texttt{app/app.R}};
@@ -88,11 +88,12 @@ Este documento explica línea por línea cómo operan los cuatro scripts que cie
 \end{tikzpicture}
 \end{center}
 
-- **Regla de nomenclatura sin guiones medios (`-`):** `sentometrics` concatena diccionario, característica y esquema temporal usando doble guion (`--`), por ejemplo `crimen_es--loc_kennedy--exponential0.5`. Si el nombre de una localidad tuviera un guion medio, rompería el parseo interno; por ello normalizamos todas las *features* a `snake_case` con guion bajo (`_`).
-- **Léxico dual y modificadores de valencia (`valenceIn`):** combinamos el diccionario general NRC en español (`nrc_es`) con un léxico local de criminalidad bogotana (`crimen_es`: *fleteo, cosquilleo, sicariato, captura, desarticulación*) y una tabla de 30 modificadores contextuales ($t = 1$ negadores, $t = 2$ amplificadores, $t = 3$ atenuadores, $t = 4$ adversativos) para evitar errores como puntuar positivamente *"operativo sin capturas"*.
-- **Agregación tridimensional ($L \times F \times T = 364$ series):** dentro de cada noticia normalizamos por palabras polares (`howWithin = "proportionalPol"`), dentro de cada mes ponderamos por extensión del texto (`howDocs = "proportional"`, ignorando ceros puros) y en el tiempo aplicamos 7 curvas de memoria sobre 6 meses (`lag = 6`): $2 \times 26 \times 7 = 364$ series continuas rellenadas con `measures_fill(..., fill = "zero")`.
-- **Modelo Elastic Net y atribuciones (`sento_model` + `attributions`):** como tenemos $M = 364$ series para $N = 51$ meses efectivos ($h = 1$), la regresión penalizada Elastic Net (calibrada vía BIC sobre $\alpha \in \{0{,}2; 0{,}5; 0{,}8\}$) selecciona las series activas ($\beta_m \neq 0$) y descompone aditivamente cuánto aporta cada diccionario, característica o memoria temporal al pronóstico.
-- **Desacoplamiento hacia R Shiny (`datos_consolidados_shiny.rds`):** para que `app/app.R` responda en milisegundos, `05_export_insumos_shiny.R` pre-simplifica los polígonos en WGS84 (`EPSG:4326`) y consolida en un solo `.rds` todas las tablas, geometrías y objetos S3 producidos previamente.
+- **Regla de nomenclatura sin guiones medios (`-`):** `sentometrics` concatena diccionario, característica y esquema temporal usando doble guion (`--`), por ejemplo `crimen_es--c_centro--exponential0.5`. Si el nombre de una característica tuviera un guion medio, rompería el parseo interno; por ello normalizamos todas las *features* a `snake_case` con guion bajo (`_`).
+- **Corpus objetivo de `993` noticias y `6` covariables:** filtramos el corpus analítico a las tres modalidades comparables con `SIEDCO.csv` (*Hurto a personas*, *Hurto a residencias* y *Hurto de motocicletas*), evitando que notas de otros delitos o de cobertura general introduzcan ruido. Las covariables se reducen a 6 indicadores: 3 clústeres territoriales (`c_centro`, `c_comercial`, `c_residencial`) y 3 modalidades objetivo (`tema_*`).
+- **Léxico dual y modificadores de valencia (`valenceIn`):** combinamos el diccionario general NRC en español (`nrc_es`) con un léxico local de criminalidad bogotana (`crimen_es`, `105` términos: *fleteo, cosquilleo, sicariato, captura, desarticulación*) y una tabla de 30 modificadores contextuales ($t = 1$ negadores, $t = 2$ amplificadores, $t = 3$ atenuadores, $t = 4$ adversativos) para evitar errores como puntuar positivamente *"operativo sin capturas"*.
+- **Agregación parsimoniosa ($L \times F \times T = 36$ series):** dentro de cada noticia normalizamos por palabras polares (`howWithin = "proportionalPol"`), dentro de cada mes ponderamos por extensión del texto (`howDocs = "proportional"`, ignorando ceros puros) y en el tiempo aplicamos 3 curvas representativas sobre 6 meses (`linear`, `exponential0.5`, `beta22`, `lag = 6`): $2 \times 6 \times 3 = 36$ series continuas rellenadas con `measures_fill(..., fill = "zero")`.
+- **Modelo Elastic Net y atribuciones (`sento_model` + `attributions`):** con el diseño parsimonioso de $M = 36$ series menor que los $N = 51$ meses efectivos ($h = 1$), ajustamos la tasa mensual observada de `SIEDCO.csv` mediante Elastic Net (BIC sobre $\alpha \in \{0{,}2; 0{,}5; 0{,}8\}$) y descomponemos aditivamente el aporte de cada diccionario, característica o memoria temporal.
+- **Desacoplamiento hacia R Shiny (`sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds`):** todo el flujo S3 se consolida en un único archivo `sentometrics_pipeline.rds`, que luego `05_export_insumos_shiny.R` combina con polígonos WGS84 simplificados en `datos_consolidados_shiny.rds` para que `app/app.R` responda sin demoras.
 
 ---
 
@@ -134,7 +135,7 @@ conflict_prefer("first",  "dplyr", quiet = TRUE)
 ## 1.3 Rutas relativas ----
 ruta_proc          <- here::here("data", "processed")
 archivo_noticias   <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
-archivo_delitos    <- file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_localidad.parquet")
+archivo_delitos    <- file.path(ruta_proc, "02_poblacion", "panel_delitos_poblacion_mensual.parquet")
 archivo_clusters   <- file.path(ruta_proc, "clusters_localidades_kmeans.parquet")
 
 stopifnot(file.exists(archivo_noticias))
@@ -145,46 +146,51 @@ stopifnot(file.exists(archivo_delitos))
 
 ::: {}
 
-- **L22–23**: Desactiva la notación científica y fija la semilla global (`20261014`) para que la estimación de Elastic Net sea reproducible.
-- **L26–42**: Carga los paquetes de manejo de datos (`arrow`, `dplyr`, `data.table`), texto (`stringr`, `stringi`), diccionarios y modelado (`syuzhet`, `sentometrics`, `glmnet`), resolviendo con `{conflicted}` las colisiones de nombres como `filter` o `lag`.
-- **L45–51**: Define las rutas relativas con `{here}` y detiene de inmediato el script con `stopifnot()` si falta el corpus de noticias o el panel de tasas delictivas. *Preparamos el entorno y verificamos que existan los datos limpios antes de empezar.*
+- **L14–15**: Desactiva la notación científica y fija la semilla global (`20261014`) para que la estimación de Elastic Net sea reproducible.
+- **L18–35**: Carga los paquetes de manejo de datos (`arrow`, `dplyr`, `data.table`), texto (`stringr`, `stringi`), diccionarios y modelado (`syuzhet`, `sentometrics`, `glmnet`), resolviendo con `{conflicted}` las colisiones de nombres como `filter` o `lag`.
+- **L38–44**: Define las rutas relativas con `{here}` (apuntando al panel mensual oficial `panel_delitos_poblacion_mensual.parquet`) y detiene de inmediato el script con `stopifnot()` si falta el corpus o el panel de delitos. *Preparamos el entorno y verificamos los insumos antes de empezar.*
 
 :::
 ::::
 
-## Fase 1: construcción del `sento_corpus` y sus 26 *features* binarias (`T-05` a `T-07`)
+## Fase 1: corpus objetivo (`993` noticias) y `6` *features* binarias (`T-05` a `T-07`)
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="53"}
+```{.r .numberLines startFrom="46"}
 # 2. Fase 1: Corpus y Construcción de Features (T-05, T-06, T-07) ----
 
-## 2.1 Carga de noticias depuradas y clústeres K-Means ----
+## 2.1 Carga de noticias depuradas, panel mensual SIEDCO y clústeres K-Means ----
 df_noticias <- arrow::read_parquet(archivo_noticias)
-panel_delitos <- arrow::read_parquet(archivo_delitos)
+panel_delitos_mensual <- arrow::read_parquet(archivo_delitos)
 
-if (!file.exists(archivo_clusters)) {
-  source(here::here("scripts", "04_clustering_kmeans.R"), local = new.env())
-}
-df_clusters <- arrow::read_parquet(archivo_clusters)
+panel_delitos <- panel_delitos_mensual |>
+  group_by(codigo_localidad, localidad, año) |>
+  summarise(
+    hurto_personas    = sum(hurto_personas, na.rm = TRUE),
+    hurto_residencias = sum(hurto_residencias, na.rm = TRUE),
+    hurto_motos       = sum(hurto_motos, na.rm = TRUE),
+    poblacion         = first(poblacion),
+    # ... calcula tasas anualizadas por 100k hab ...
+    .groups           = "drop"
+  )
 
-## 2.2 Función de normalización a snake_case sin guiones medios ('-') ----
-normalizar_nombre_feature <- function(x) {
-  x |>
-    stringi::stri_trans_general("Latin-ASCII") |>
-    str_to_lower() |>
-    str_replace_all("[\\s\\-]+", "_") |>
-    str_replace_all("[^a-z0-9_]", "")
-}
+modalidades_objetivo_noticias <- c(
+  "Hurto a personas",
+  "Hurto a residencias",
+  "Hurto de motocicletas"
+)
+df_noticias_modelo <- df_noticias |>
+  filter(delito_sdscj %in% modalidades_objetivo_noticias)
 ```
 
 :::
 
 ::: {}
 
-- **L56–62**: Lee las noticias depuradas y el panel de tasas; si aún no se ha ejecutado el clustering, invoca automáticamente `04_clustering_kmeans.R` en un entorno aislado.
-- **L65–71**: Define una función auxiliar que quita tildes (`Latin-ASCII`), pasa a minúsculas y sustituye espacios o guiones medios por guiones bajos (`_`). *Garantizamos que ningún nombre de localidad rompa el separador `--` de `sentometrics`.*
+- **L49–64**: Lee las `3.916` noticias recopiladas y el panel mensual `SIEDCO.csv`, anualizándolo en paralelo en `panel_delitos` para el tablero anual.
+- **L67–73**: Filtra estrictamente las **`993` noticias objetivo** cuya etiqueta `delito_sdscj` coincide exactamente con las tres modalidades de hurto medidas por SIEDCO. *Evitamos que artículos de homicidio, extorsión o política de seguridad contaminen la señal.*
 
 :::
 ::::
@@ -192,9 +198,9 @@ normalizar_nombre_feature <- function(x) {
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="73"}
-## 2.3 Construcción de textos e indicadores binarios [0, 1] (Localidades, Clústeres, Temas) ----
-df_base_corpus <- df_noticias |>
+```{.r .numberLines startFrom="86"}
+## 2.2 Construcción de textos y 6 indicadores binarios [0, 1] (Clústeres y Modalidades) ----
+df_base_corpus <- df_noticias_modelo |>
   select(-any_of(c("cluster_id", "cluster_nombre", "perfil_seguridad"))) |>
   left_join(
     df_clusters |> select(localidad, cluster_id, cluster_nombre),
@@ -209,50 +215,14 @@ df_base_corpus <- df_noticias |>
       str_sub(coalesce(cuerpo, ""), 1, 800),
       sep = ". "
     )),
-    txt_norm = stringi::stri_trans_general(str_to_lower(texts), "Latin-ASCII"),
-    # 3 features de clústeres K-Means
+    # 3 features de clústeres K-Means (partición exhaustiva y excluyente)
     c_centro      = as.numeric(cluster_nombre == "Céntrico e Institucional"),
     c_comercial   = as.numeric(cluster_nombre == "Comercial y Automotor"),
-    c_residencial = as.numeric(cluster_nombre == "Residencial y Periférico")
-```
-
-:::
-
-::: {}
-
-- **L74–79**: Remueve etiquetas previas de clúster para evitar columnas duplicadas y cruza cada noticia con su asignación vigente en `df_clusters`.
-- **L80–89**: Construye el `id` único (`doc_1`...), convierte `fecha` a `Date` y concatena titular + resumen + primeros 800 caracteres del cuerpo en la columna `texts`.
-- **L91–93**: Crea 3 indicadores binarios (`0`/`1`) para los clústeres territoriales de K-Means (`c_centro`, `c_comercial`, `c_residencial`). *Preparamos el texto de entrada y las tres variables espaciales.*
-
-:::
-::::
-
-:::: {layout="[54, -3, 43]" layout-valign="top"}
-::: {}
-
-```{.r .numberLines startFrom="94"}
-    # 4 features temáticas y de modalidades DAI (SDSCJ)
-    tema_hurto_personas = as.numeric(
-      delito_sdscj == "Hurto a personas" |
-        str_detect(txt_norm, "\\b(transmilenio|sitp|peaton|transeunte|celular|raponazo|cosquilleo|fleteo|escopolamina)\\b")
-    ),
-    tema_hurto_patrimonial = as.numeric(
-      delito_sdscj %in% c(
-        "Hurto a residencias", "Hurto a comercio", "Hurto de automotores",
-        "Hurto de motocicletas", "Hurto a entidades financieras",
-        "Hurto (modalidad no identificada)"
-      )
-    ),
-    tema_violencia_vida = as.numeric(
-      delito_sdscj %in% c(
-        "Homicidio", "Lesiones personales", "Extorsión",
-        "Delitos sexuales", "Violencia intrafamiliar"
-      )
-    ),
-    tema_institucional = as.numeric(
-      modalidad_dai %in% c("nodai_operatividad", "nodai_politica_seguridad") |
-        str_detect(txt_norm, "\\b(captur|desarticul|operativ|patrullaj|incaut|megatoma|secretaria de seguridad|policia)\\b")
-    )
+    c_residencial = as.numeric(cluster_nombre == "Residencial y Periférico"),
+    # 3 features temáticas exclusivas de las modalidades de hurto analizadas
+    tema_hurto_personas    = as.numeric(delito_sdscj == "Hurto a personas"),
+    tema_hurto_residencias = as.numeric(delito_sdscj == "Hurto a residencias"),
+    tema_hurto_motos       = as.numeric(delito_sdscj == "Hurto de motocicletas")
   )
 ```
 
@@ -260,7 +230,9 @@ df_base_corpus <- df_noticias |>
 
 ::: {}
 
-- **L94–115**: Genera los 4 indicadores temáticos combinando la categoría oficial `delito_sdscj` (y `modalidad_dai`) con búsquedas por expresiones regulares sobre `txt_norm` sin tildes (`transmilenio`, `fleteo`, `captur`, `operativ`). *Etiquetamos cada artículo con su foco delictivo o de acción institucional.*
+- **L87–92**: Remueve etiquetas previas de clúster y cruza cada noticia objetivo con su asignación vigente (`13 / 5 / 1`) en `df_clusters`.
+- **L93–101**: Construye el `id` único (`doc_1`...), convierte `fecha` a `Date` y concatena titular + resumen + primeros 800 caracteres del cuerpo en `texts`.
+- **L103–109**: Crea exactamente **`6` indicadores binarios `{0, 1}`**: `3` clústeres (`c_centro`, `c_comercial`, `c_residencial`) y `3` modalidades de hurto (`tema_hurto_personas`, `tema_hurto_residencias`, `tema_hurto_motos`). *Preparamos las dos dimensiones parsimoniosas que alimentan `sentometrics`.*
 
 :::
 ::::
@@ -268,31 +240,20 @@ df_base_corpus <- df_noticias |>
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="118"}
-# Añadir las 19 features binarias por localidad (prefijo loc_ sin guiones '-')
-localidades_unicas <- sort(unique(df_base_corpus$localidad))
-nombres_feat_loc   <- character(length(localidades_unicas))
-
-for (i in seq_along(localidades_unicas)) {
-  loc_actual <- localidades_unicas[i]
-  col_feat   <- paste0("loc_", normalizar_nombre_feature(loc_actual))
-  nombres_feat_loc[i] <- col_feat
-  df_base_corpus[[col_feat]] <- as.numeric(df_base_corpus$localidad == loc_actual)
-}
-
+```{.r .numberLines startFrom="112"}
 cols_features <- c(
   "c_centro", "c_comercial", "c_residencial",
-  "tema_hurto_personas", "tema_hurto_patrimonial",
-  "tema_violencia_vida", "tema_institucional",
-  nombres_feat_loc
+  "tema_hurto_personas", "tema_hurto_residencias", "tema_hurto_motos"
 )
 
-# Auditoría estricta de contrato T-01 / T-07: cero guiones '-' y cero NAs
+# Auditoría estricta de contrato T-01 / T-07: cero guiones '-', cero NAs y partición exacta
 stopifnot(!any(str_detect(cols_features, "-")))
 stopifnot(all(!is.na(df_base_corpus$date)))
 stopifnot(all(!is.na(df_base_corpus$texts)))
+stopifnot(all(rowSums(df_base_corpus[, c("c_centro", "c_comercial", "c_residencial")]) == 1))
+stopifnot(all(rowSums(df_base_corpus[, c("tema_hurto_personas", "tema_hurto_residencias", "tema_hurto_motos")]) == 1))
 
-## 2.4 Creación y guardado del objeto S3 sento_corpus (T-07) ----
+## 2.3 Creación del objeto S3 sento_corpus (T-07) ----
 df_sento_input <- df_base_corpus |>
   select(id, date, texts, all_of(cols_features)) |>
   as.data.frame()
@@ -301,19 +262,14 @@ corpus_sento <- sentometrics::sento_corpus(
   corpusdf = df_sento_input,
   do.clean = FALSE
 )
-
-archivo_01_corpus <- file.path(ruta_proc, "01_sento_corpus.rds")
-saveRDS(corpus_sento, archivo_01_corpus)
-message("✔ [T-07] 01_sento_corpus.rds guardado con ", length(cols_features), " features.")
 ```
 
 :::
 
 ::: {}
 
-- **L119–134**: Genera automáticamente las 19 columnas binarias de localidad con prefijo `loc_` y reúne las `26` características totales en `cols_features`.
-- **L137–139**: Audita el contrato de entrada exigido por `sentometrics`: cero guiones medios en nombres de columnas y cero valores faltantes en `date` o `texts`.
-- **L142–153**: Construye el objeto S3 `corpus_sento` desactivando la limpieza interna (`do.clean = FALSE`) para preservar la depuración previa en español y lo exporta como `01_sento_corpus.rds`. *Dejamos listo el contenedor textual que alimenta todo el análisis posterior.*
+- **L112–122**: Audita el contrato de entrada exigido por `sentometrics`: cero guiones medios (`-`), cero `NA` y verificación de que todo artículo pertenezca exactamente a `1` clúster territorial y `1` modalidad objetivo (`rowSums == 1`).
+- **L125–132**: Construye el objeto S3 `corpus_sento` desactivando la limpieza interna (`do.clean = FALSE`) para preservar la depuración previa en español. *Dejamos listo en memoria el corpus limpio de 993 documentos y 6 covariables.*
 
 :::
 ::::
@@ -363,7 +319,7 @@ lex_crimen_bogota <- tribble(
   "extorsion",      -0.9,  "secuestro",      -1.0,  "atraco",         -0.9,
   "fleteo",         -0.9,  "escopolamina",   -0.9,  "cosquilleo",     -0.7,
   "raponazo",       -0.7,  "rompevidrios",   -0.7,  "apartamenteros", -0.8,
-  # ... (73 términos de delitos, violencia y respuesta policial/judicial) ...
+  # ... (105 términos de delitos, violencia y respuesta policial/judicial) ...
   "captura",         0.7,  "desarticulacion", 0.9,  "recuperacion",    0.8,
   "incautacion",     0.7,  "rescate",         0.8,  "judicializacion", 0.8,
   "esclarecimiento", 0.8,  "reduccion",       0.8,  "patrullaje",      0.6
@@ -377,7 +333,7 @@ lex_crimen_bogota <- tribble(
 
 ::: {}
 
-- **L172–214**: Define mediante `tribble()` el vocabulario especializado bogotano (`lex_crimen_bogota`, con 73 términos en el script completo). Los hechos violentos y modalidades locales reciben pesos negativos ($-1{,}0$ a $-0{,}4$) y las acciones operativas o preventivas reciben pesos positivos ($+0{,}4$ a $+0{,}9$). *Capturamos la jerga de seguridad ciudadana que un diccionario general no conoce.*
+- **L155–194**: Define mediante `tribble()` el vocabulario especializado bogotano (`lex_crimen_bogota`, con `105` términos en el script completo). Los hechos violentos y modalidades locales reciben pesos negativos ($-1{,}0$ a $-0{,}4$) y las acciones operativas o preventivas reciben pesos positivos ($+0{,}4$ a $+0{,}9$). *Capturamos la jerga de seguridad ciudadana que un diccionario general no conoce.*
 
 :::
 ::::
@@ -385,7 +341,7 @@ lex_crimen_bogota <- tribble(
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="220"}
+```{.r .numberLines startFrom="197"}
 tabla_valence_es <- tribble(
   ~x,               ~y,   ~t,
   # Negadores (t = 1)
@@ -411,18 +367,13 @@ lexicons_es <- sentometrics::sento_lexicons(
   valenceIn = tabla_valence_es
 )
 attr(lexicons_es, "valence_table_full") <- tabla_valence_es
-
-archivo_02_lexicons <- file.path(ruta_proc, "02_lexicons_es.rds")
-saveRDS(lexicons_es, archivo_02_lexicons)
-message("✔ [T-09] 02_lexicons_es.rds guardado (nrc_es + crimen_es + valenceIn).")
 ```
 
 :::
 
 ::: {}
 
-- **L220–257**: Construye los 30 modificadores contextuales de valencia en español siguiendo la convención de `sentometrics`: `t = 1` (negadores), `t = 2` (amplificadores), `t = 3` (atenuadores) y `t = 4` (conectores adversativos).
-- **L259–270**: Compila los dos diccionarios junto con `valenceIn` en el objeto `lexicons_es`, adjunta la tabla completa como atributo para consulta en Shiny y guarda `02_lexicons_es.rds`. *Unimos qué palabras valen y cómo cambian según su contexto inmediato.*
+- **L197–238**: Construye los 30 modificadores contextuales de valencia en español (`t = 1..4`) y compila `nrc_es`, `crimen_es` y `valenceIn` en `lexicons_es`, adjuntando la tabla completa como atributo para Shiny (ya sin exportar `.rds` intermedios por separado). *Unimos qué palabras valen y cómo cambian según su contexto inmediato.*
 
 :::
 ::::
@@ -430,7 +381,7 @@ message("✔ [T-09] 02_lexicons_es.rds guardado (nrc_es + crimen_es + valenceIn)
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="272"}
+```{.r .numberLines startFrom="251"}
 ## 3.3 Cómputo de sentimiento a nivel documento: proportionalPol vs TFIDF (T-10) ----
 sentiment_scores <- sentometrics::compute_sentiment(
   x           = corpus_sento,
@@ -451,7 +402,7 @@ sentiment_tfidf <- sentometrics::compute_sentiment(
 
 ::: {}
 
-- **L273–285**: Puntúa las 3.916 noticias con `how = "proportionalPol"` (divide la suma polar solo entre palabras del diccionario encontradas) y calcula en paralelo `how = "TFIDF"` como control de robustez. *Evitamos que un artículo largo diluya la intensidad de su tono.*
+- **L252–264**: Puntúa las `993` noticias objetivo con `how = "proportionalPol"` (divide la suma polar solo entre palabras del diccionario encontradas) y calcula en paralelo `how = "TFIDF"` como control de robustez ($r = 0{,}7233$). *Evitamos que un artículo largo diluya la intensidad de su tono.*
 
 :::
 ::::
@@ -459,7 +410,7 @@ sentiment_tfidf <- sentometrics::compute_sentiment(
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="288"}
+```{.r .numberLines startFrom="267"}
 # Cálculo exacto del puntaje documental por léxico (los 3 clústeres son exhaustivos y excluyentes)
 df_sent_doc <- as_tibble(sentiment_scores) |>
   transmute(
@@ -474,41 +425,15 @@ df_sent_doc <- as_tibble(sentiment_scores) |>
       4
     ),
     sentimiento_score = round(0.5 * score_nrc_es + 0.5 * score_crimen_es, 4)
-  ) |>
-  left_join(
-    as_tibble(sentiment_tfidf) |>
-      transmute(
-        id = id,
-        score_tfidf_compuesto = round(
-          0.5 * (`nrc_es--c_centro` + `nrc_es--c_comercial` + `nrc_es--c_residencial`) +
-            0.5 * (`crimen_es--c_centro` + `crimen_es--c_comercial` + `crimen_es--c_residencial`),
-          4
-        )
-      ),
-    by = "id"
   )
-
-attr(sentiment_scores, "comparacion_metodologica") <- list(
-  correlacion_propPol_tfidf = cor(
-    df_sent_doc$sentimiento_score,
-    df_sent_doc$score_tfidf_compuesto,
-    use = "complete.obs"
-  ),
-  media_nrc_es      = mean(df_sent_doc$score_nrc_es, na.rm = TRUE),
-  media_crimen_es   = mean(df_sent_doc$score_crimen_es, na.rm = TRUE),
-  media_combinada   = mean(df_sent_doc$sentimiento_score, na.rm = TRUE)
-)
-
-archivo_03_scores <- file.path(ruta_proc, "03_sentiment_scores.rds")
-saveRDS(sentiment_scores, archivo_03_scores)
+# ... compara contra sentiment_tfidf y guarda estadísticos en comparacion_metodologica ...
 ```
 
 :::
 
 ::: {}
 
-- **L288–313**: Recupera el puntaje neto de cada documento sumando las tres columnas de clúster (exhaustivas y excluyentes) y promedia `nrc_es` y `crimen_es` en `sentimiento_score`.
-- **L315–327**: Guarda la correlación entre ambos métodos y las medias por léxico dentro del atributo `comparacion_metodologica` y exporta `03_sentiment_scores.rds`. *Consolidamos un indicador compuesto por artículo y auditamos su estabilidad frente a TF-IDF.*
+- **L267–304**: Recupera el puntaje neto de cada documento objetivo sumando las tres columnas de clúster (exhaustivas y excluyentes), promedia `nrc_es` y `crimen_es` en `sentimiento_score` y guarda las métricas de contraste frente a `TFIDF` en `attr(sentiment_scores, "comparacion_metodologica")`.
 
 :::
 ::::
@@ -516,31 +441,24 @@ saveRDS(sentiment_scores, archivo_03_scores)
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="330"}
-## 3.4 Enriquecimiento del dataset de noticias y extracción de peakdocs (T-11) ----
-df_noticias_enriquecida <- df_noticias |>
+```{.r .numberLines startFrom="307"}
+## 3.4 Enriquecimiento del dataset objetivo (993 docs) y actualización de noticias_procesadas.parquet ----
+# Se marca es_objetivo_3mod sobre las 3.916 notas recopiladas y se conserva su score de referencia;
+# sobre el subconjunto de 993 notas objetivo se extraen los picos extremos peakdocs().
+df_noticias_enriquecida <- df_noticias_modelo |>
   select(-any_of(c(
     "id", "word_count", "score_nrc_es", "score_crimen_es",
     "score_tfidf_compuesto", "sentimiento_score", "sentimiento_categoria",
-    "cluster_id", "cluster_nombre", "perfil_seguridad"
+    "cluster_id", "cluster_nombre", "perfil_seguridad", "es_objetivo_3mod"
   ))) |>
-  mutate(id = paste0("doc_", row_number())) |>
+  mutate(id = paste0("doc_", row_number()), es_objetivo_3mod = TRUE) |>
   left_join(df_sent_doc, by = "id") |>
-  left_join(
-    df_clusters |> select(localidad, cluster_id, cluster_nombre, perfil_seguridad),
-    by = "localidad"
-  ) |>
-  mutate(
-    sentimiento_categoria = case_when(
-      sentimiento_score < -0.02 ~ "Negativo",
-      sentimiento_score >  0.02 ~ "Positivo",
-      TRUE                      ~ "Neutro"
-    )
-  )
+  left_join(df_clusters |> select(localidad, cluster_id, cluster_nombre, perfil_seguridad), by = "localidad")
 
-arrow::write_parquet(df_noticias_enriquecida, archivo_noticias)
+# L331–384 evalúan score auxiliar en las 3.916 notas y actualizan noticias_procesadas.parquet
+arrow::write_parquet(df_noticias_completo, archivo_noticias)
 
-# Extracción oficial con peakdocs() (T-11)
+# Extracción oficial con peakdocs() sobre las 993 noticias objetivo (T-11)
 ids_peak_both <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "both")
 ids_peak_neg  <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "neg")
 ids_peak_pos  <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "pos")
@@ -550,83 +468,30 @@ ids_peak_pos  <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "pos")
 
 ::: {}
 
-- **L331–351**: Clasifica cada noticia como `Negativo` ($< -0{,}02$), `Positivo` ($> +0{,}02$) o `Neutro` y actualiza `noticias_procesadas.parquet` con los puntajes y clústeres.
-- **L355–357**: Usa `sentometrics::peakdocs()` para identificar los 25 artículos de sentimiento más extremo (negativos, positivos y ambos) en todo el corpus. *Enriquecemos la tabla de noticias y localizamos los titulares más extremos.*
+- **L308–384**: Enriquece las `993` noticias objetivo en memoria (`df_noticias_enriquecida`) y marca `es_objetivo_3mod` en el archivo completo (`noticias_procesadas.parquet`, `3.916` filas) manteniendo un puntaje auxiliar para la referencia distrital.
+- **L387–424**: Aplica `peakdocs()` sobre `sentiment_scores` (`993` docs) e identifica `208` noticias críticas (`25` picos positivos/negativos globales + extremos locales P5/P95 por localidad) en `objeto_04_peak_docs`. *Enriquecemos la tabla maestra y aislamos los titulares más extremos del corpus objetivo.*
 
 :::
 ::::
 
-:::: {layout="[54, -3, 43]" layout-valign="top"}
-::: {}
-
-```{.r .numberLines startFrom="360"}
-# Tabla de consulta de documentos pico globales y por localidad
-peak_por_localidad <- df_noticias_enriquecida |>
-  group_by(localidad) |>
-  arrange(sentimiento_score) |>
-  slice(unique(c(1:5, (n() - 4):n()))) |>
-  ungroup()
-
-tabla_peak_docs <- df_noticias_enriquecida |>
-  mutate(
-    es_pico_global = id %in% unique(c(ids_peak_both, ids_peak_neg, ids_peak_pos)),
-    tipo_pico = case_when(
-      id %in% ids_peak_neg ~ "Pico Negativo Global",
-      id %in% ids_peak_pos ~ "Pico Positivo Global",
-      id %in% peak_por_localidad$id & sentimiento_score < 0 ~ "Extremo Negativo Local",
-      id %in% peak_por_localidad$id & sentimiento_score > 0 ~ "Extremo Positivo Local",
-      TRUE ~ "Regular"
-    )
-  ) |>
-  select(
-    id, fecha, año, mes, localidad, cluster_nombre, fuente,
-    delito_sdscj, modalidad_dai, es_dai_estricto, confianza_dai,
-    titulo, resumen, enlace, word_count,
-    score_nrc_es, score_crimen_es, sentimiento_score,
-    sentimiento_categoria, es_pico_global, tipo_pico
-  ) |>
-  arrange(sentimiento_score)
-
-objeto_04_peak_docs <- list(
-  peak_ids_both   = ids_peak_both,
-  peak_ids_neg    = ids_peak_neg,
-  peak_ids_pos    = ids_peak_pos,
-  tabla_completa  = as.data.table(tabla_peak_docs),
-  top_criticas    = as.data.table(tabla_peak_docs |> filter(tipo_pico != "Regular"))
-)
-
-archivo_04_peaks <- file.path(ruta_proc, "04_peak_docs.rds")
-saveRDS(objeto_04_peak_docs, archivo_04_peaks)
-```
-
-:::
-
-::: {}
-
-- **L360–364**: Selecciona las 5 noticias más negativas y las 5 más positivas de cada localidad urbana para respaldar las fichas locales del tablero.
-- **L366–395**: Etiqueta cada artículo según su tipo de extremo (`Pico Global` o `Extremo Local`) y guarda el catálogo completo junto con `top_criticas` en `04_peak_docs.rds`. *Aislamos los titulares críticos para auditoría cualitativa y consulta en Shiny.*
-
-:::
-::::
-
-## Fase 3: series temporales multidimensionales y `peakdates()` (`T-13` a `T-15`)
+## Fase 3: series temporales parsimoniosas (`36` series) y `peakdates()` (`T-13` a `T-15`)
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="398"}
+```{.r .numberLines startFrom="428"}
 # 4. Fase 3: Series de Tiempo Multidimensionales (T-13, T-14, T-15) ----
 
-## 4.1 Configuración de ctr_agg y cálculo de sento_measures (T-13) ----
+## 4.1 Configuración parsimoniosa de ctr_agg y cálculo de sento_measures (36 series) ----
 control_agg <- sentometrics::ctr_agg(
   howWithin      = "proportionalPol",
   howDocs        = "proportional",
   howTime        = c("linear", "exponential", "beta"),
   by             = "month",
   lag            = 6,
-  alphasExp      = c(0.2, 0.5),
-  aBeta          = c(1, 2),
-  bBeta          = c(2, 3),
+  alphasExp      = 0.5,
+  aBeta          = 2,
+  bBeta          = 2,
   do.ignoreZeros = TRUE,
   fill           = "zero"
 )
@@ -638,17 +503,15 @@ medidas_sento <- sentometrics::sento_measures(
 )
 
 medidas_sento <- sentometrics::measures_fill(medidas_sento, fill = "zero")
-
-archivo_05_measures <- file.path(ruta_proc, "05_sento_measures.rds")
-saveRDS(medidas_sento, archivo_05_measures)
+stopifnot(ncol(medidas_sento$measures) - 1L == 36L)
 ```
 
 :::
 
 ::: {}
 
-- **L401–412**: Configura los tres niveles de agregación: palabras polares (`within`), ponderación por tamaño de artículo ignorando ceros (`docs`) y 7 curvas de memoria en una ventana móvil de 6 meses (`time`).
-- **L414–423**: Genera las `364` series mensuales ($2 \times 26 \times 7$), garantiza continuidad sin `NA` mediante `measures_fill(..., fill = "zero")` (resultando 52 meses efectivos tras descartar los primeros 5 de calentamiento) y guarda `05_sento_measures.rds`. *Convertimos miles de noticias sueltas en un panel mensual continuo de 364 series.*
+- **L431–442**: Configura el diseño parsimonioso de agregación en tres niveles: palabras polares (`within`), ponderación por tamaño de artículo ignorando ceros (`docs`) y `3` curvas representativas en ventana de `6` meses (`linear`, `exponential0.5`, `beta22`).
+- **L444–451**: Genera exactas **`36` series mensuales** ($2 \text{ léxicos} \times 6 \text{ features} \times 3 \text{ curvas}$) para los `52` meses efectivos (`2022-06-01` a `2026-09-01`) tras el calentamiento de `lag = 6`, verificando con `stopifnot()` la dimensión exacta. *Evitamos explotar la dimensionalidad manteniendo solo 36 series interpretables.*
 
 :::
 ::::
@@ -656,7 +519,7 @@ saveRDS(medidas_sento, archivo_05_measures)
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="426"}
+```{.r .numberLines startFrom="454"}
 ## 4.2 Remodelado en formato Long y Wide para Shiny (T-14) ----
 dt_measures_wide <- data.table::as.data.table(medidas_sento)
 
@@ -664,21 +527,17 @@ mapa_etiquetas_features <- c(
   c_centro               = "Clúster: Céntrico e Institucional",
   c_comercial            = "Clúster: Comercial y Automotor",
   c_residencial          = "Clúster: Residencial y Periférico",
-  tema_hurto_personas    = "Tema: Hurto a Personas y Transporte",
-  tema_hurto_patrimonial = "Tema: Hurto Patrimonial y Vehículos",
-  tema_violencia_vida    = "Tema: Violencia, Homicidio y Extorsión",
-  tema_institucional     = "Tema: Operatividad y Política de Seguridad"
+  tema_hurto_personas    = "Modalidad: Hurto a Personas",
+  tema_hurto_residencias = "Modalidad: Hurto a Residencias",
+  tema_hurto_motos       = "Modalidad: Hurto de Motocicletas"
 )
-for (i in seq_along(localidades_unicas)) {
-  mapa_etiquetas_features[nombres_feat_loc[i]] <- localidades_unicas[i]
-}
 ```
 
 :::
 
 ::: {}
 
-- **L427–441**: Extrae la matriz mensual ancha (`52 × 365`) y construye el diccionario `mapa_etiquetas_features` para traducir los 26 identificadores técnicos a nombres legibles en español en los filtros del tablero. *Preparamos las etiquetas descriptivas de cada serie.*
+- **L455–465**: Extrae la matriz mensual ancha (`52 × 37`) y construye `mapa_etiquetas_features` para mapear las 6 covariables binarias a nombres legibles en español en Shiny. *Preparamos las etiquetas descriptivas de cada serie.*
 
 :::
 ::::
@@ -686,15 +545,14 @@ for (i in seq_along(localidades_unicas)) {
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="443"}
+```{.r .numberLines startFrom="467"}
 df_measures_long <- as_tibble(dt_measures_wide) |>
   pivot_longer(cols = -date, names_to = "serie_id", values_to = "valor") |>
   separate(col = serie_id, into = c("lexicon", "feature", "time"), sep = "--", remove = FALSE) |>
   mutate(
     grupo_feature = case_when(
       str_starts(feature, "c_")    ~ "Clúster Territorial",
-      str_starts(feature, "tema_") ~ "Tópico / Modalidad DAI",
-      str_starts(feature, "loc_")  ~ "Localidad",
+      str_starts(feature, "tema_") ~ "Modalidad de Hurto",
       TRUE                         ~ "Otro"
     ),
     feature_label = coalesce(unname(mapa_etiquetas_features[feature]), feature),
@@ -706,16 +564,14 @@ df_measures_long <- as_tibble(dt_measures_wide) |>
   )
 
 stopifnot(all(df_measures_long$grupo_feature != "Otro"))
-saveRDS(list(long = as.data.table(df_measures_long), wide = dt_measures_wide), file.path(ruta_proc, "06_measures_long.rds"))
-saveRDS(dt_measures_wide, file.path(ruta_proc, "06_measures_wide.rds"))
+objeto_06_measures_long <- list(long = as.data.table(df_measures_long), wide = dt_measures_wide)
 ```
 
 :::
 
 ::: {}
 
-- **L443–468**: Convierte la matriz ancha a formato largo (`18.928` filas: $52 \times 364$), separa `serie_id` usando el delimitador `--` en `lexicon`, `feature` y `time`, y clasifica cada serie por dominio.
-- **L471–481**: Audita con `stopifnot()` que ninguna serie quede sin categoría y guarda `06_measures_long.rds` y `06_measures_wide.rds`. *Dejamos las 364 series listas para graficar en Shiny.*
+- **L467–498**: Convierte la matriz ancha a formato largo (`1.872` filas: $52 \times 36$), separa `serie_id` usando el delimitador `--`, clasifica las series en `"Clúster Territorial"` o `"Modalidad de Hurto"` y valida con `stopifnot()` antes de almacenar en memoria. *Dejamos las 36 series listas para graficar en Shiny.*
 
 :::
 ::::
@@ -735,65 +591,42 @@ fechas_pico_pos   <- sentometrics::peakdates(medidas_sento, n = 8, type = "pos")
 
 ::: {}
 
-- **L485–510**: Colapsa las 364 series en un índice distrital único con `aggregate(..., do.global = TRUE)`, detecta los 8 meses de mayor alarma con `peakdates()` y exporta `07_global_index.rds`. *Identificamos los meses más críticos de toda Bogotá.*
+- **L502–525**: Colapsa las `36` series en un índice distrital único con `aggregate(..., do.global = TRUE)` y detecta los 8 meses de mayor alarma con `peakdates()`, manteniendo el resultado en `objeto_07_global_index`. *Identificamos los meses más críticos de toda Bogotá.*
 
 :::
 ::::
 
-## Fase 4 y 5: modelo Elastic Net, atribuciones y panel consolidado (`T-17`)
+## Fase 4 y 5: modelo Elastic Net (`SIEDCO.csv` mensual), atribuciones y `sentometrics_pipeline.rds`
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="514"}
-## 5.1 Construcción de la serie mensual empírica real de intensidad delictiva (y_t) ----
-tasas_anuales_distrito <- panel_delitos |>
-  group_by(año) |>
+```{.r .numberLines startFrom="527"}
+# 5. Fase 4: Modelado Econométrico Elastic Net y Atribuciones (T-17) ----
+
+## 5.1 Serie mensual empírica real SIEDCO (alineada mes a mes con las noticias) ----
+tasas_mensuales_distrito <- panel_delitos_mensual |>
+  group_by(date_mes = as.Date(fecha_mes)) |>
   summarise(
-    hurto_personas_total = sum(hurto_personas, na.rm = TRUE),
-    hurto_total_denuncias = sum(hurto_personas + hurto_residencias + hurto_motos, na.rm = TRUE),
-    poblacion_distrito   = sum(poblacion, na.rm = TRUE),
-    tasa_anual_personas  = (hurto_personas_total / poblacion_distrito) * 100000,
-    tasa_anual_total     = (hurto_total_denuncias / poblacion_distrito) * 100000,
-    .groups = "drop"
-  )
+    hurto_personas_total  = sum(hurto_personas, na.rm = TRUE),
+    hurto_resid_total     = sum(hurto_residencias, na.rm = TRUE),
+    hurto_motos_total     = sum(hurto_motos, na.rm = TRUE),
+    hurto_total_denuncias = hurto_personas_total + hurto_resid_total + hurto_motos_total,
+    poblacion_distrito    = sum(poblacion, na.rm = TRUE),
+    y_tasa_hurto_mensual  = round((hurto_total_denuncias / poblacion_distrito) * 100000, 2),
+    .groups               = "drop"
+  ) |>
+  arrange(date_mes)
 
-pesos_mensuales_dai <- df_noticias_enriquecida |>
-  mutate(date_mes = as.Date(format(as.Date(fecha), "%Y-%m-01")), año = as.integer(format(date_mes, "%Y"))) |>
-  group_by(año, date_mes) |>
-  summarise(n_noticias_mes = n(), n_dai_mes = sum(es_dai_estricto, na.rm = TRUE), .groups = "drop") |>
-  group_by(año) |>
-  mutate(prop_mensual_dai = (n_dai_mes + 1) / sum(n_dai_mes + 1)) |>
-  ungroup()
-```
+fechas_esperadas_mes <- seq.Date(as.Date("2022-01-01"), as.Date("2026-09-01"), by = "month")
+stopifnot(identical(tasas_mensuales_distrito$date_mes, fechas_esperadas_mes))
 
-:::
+fechas_medidas     <- as.Date(sentometrics::get_dates(medidas_sento))
+fechas_medidas_mes <- as.Date(format(fechas_medidas, "%Y-%m-01"))
+stopifnot(all(fechas_medidas_mes %in% tasas_mensuales_distrito$date_mes))
 
-::: {}
-
-- **L517–526**: Agrega las denuncias y población de las 19 localidades para calcular la tasa anual distrital de hurto total por cada 100.000 habitantes.
-- **L528–543**: Calcula la participación mensual observada de noticias DAI estrictas dentro de cada año aplicando suavizamiento de Laplace (`+ 1`) para evitar ceros. *Obtenemos la ponderación mensual de la actividad delictiva cubierta.*
-
-:::
-::::
-
-:::: {layout="[54, -3, 43]" layout-valign="top"}
-::: {}
-
-```{.r .numberLines startFrom="545"}
-fechas_medidas <- as.Date(sentometrics::get_dates(medidas_sento))
-
-serie_objetivo_mensual <- tibble(
-  date = fechas_medidas, date_mes = as.Date(format(fechas_medidas, "%Y-%m-01")),
-  año  = as.integer(format(fechas_medidas, "%Y"))
-) |>
-  left_join(tasas_anuales_distrito, by = "año") |>
-  left_join(pesos_mensuales_dai, by = c("año", "date_mes")) |>
-  mutate(
-    prop_mensual_dai     = coalesce(prop_mensual_dai, 1 / 12),
-    y_tasa_hurto_mensual = round(tasa_anual_total * prop_mensual_dai, 2),
-    y_tasa_pers_mensual  = round(tasa_anual_personas * prop_mensual_dai, 2)
-  )
+serie_objetivo_mensual <- tibble(date = fechas_medidas, date_mes = fechas_medidas_mes) |>
+  left_join(tasas_mensuales_distrito, by = "date_mes")
 
 y_vector <- serie_objetivo_mensual$y_tasa_hurto_mensual
 stopifnot(length(y_vector) == nrow(medidas_sento$measures), all(!is.na(y_vector)))
@@ -803,7 +636,8 @@ stopifnot(length(y_vector) == nrow(medidas_sento$measures), all(!is.na(y_vector)
 
 ::: {}
 
-- **L545–563**: Mensualiza la tasa anual multiplicándola por ese peso intra-anual (`prop_mensual_dai`) y verifica que el vector objetivo `y_vector` coincida fila por fila con las 52 fechas de `medidas_sento`. *Construimos la variable dependiente mensualizada para emparejarla con las series de prensa.*
+- **L530–545**: Suma cada mes las denuncias de las 3 modalidades en `SIEDCO.csv` y la población de las 19 localidades para calcular la tasa distrital mensual real `y_tasa_hurto_mensual`, verificando la secuencia completa de `57` meses (`2022-01` a `2026-09`).
+- **L547–559**: Empareja exactamente las `52` fechas de `medidas_sento` con su mes observado en `SIEDCO.csv` sin requerir ponderaciones sintéticas. *Construimos la variable dependiente mensual observada en la misma frecuencia que las series de prensa.*
 
 :::
 ::::
@@ -811,7 +645,7 @@ stopifnot(length(y_vector) == nrow(medidas_sento$measures), all(!is.na(y_vector)
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="565"}
+```{.r .numberLines startFrom="561"}
 ## 5.2 Estimación de sento_model con penalización Elastic Net (h = 1 y contemporáneo) ----
 control_modelo <- sentometrics::ctr_model(
   model = "gaussian", type = "BIC",
@@ -853,9 +687,9 @@ df_coeficientes <- tibble(variable = rownames(coefs_sparse), coeficiente = as.nu
 
 ::: {}
 
-- **L566–579**: Configura Elastic Net gaussiano con selección de $\alpha$ y $\lambda$ vía criterio de información BIC y horizonte predictivo de un mes adelante ($h = 1$, dejando $51$ observaciones efectivas).
-- **L582–594**: Calcula las atribuciones aditivas crudas (en puntos de tasa) y normalizadas en $[-1, 1]$ con `attributions()`.
-- **L597–624**: Alinea los predictores en $t$ con la tasa observada en $t + 1$, obtiene los valores predichos, calcula residuales y extrae únicamente las variables activas cuyo $|\beta| > 0$. *Estimamos el modelo regularizado y abrimos la caja negra para saber qué empuja la predicción cada mes.*
+- **L562–575**: Configura Elastic Net gaussiano con selección de $\alpha$ y $\lambda$ vía criterio BIC y horizonte predictivo de un mes adelante ($h = 1$, $51$ observaciones frente a $36$ series).
+- **L578–590**: Calcula las atribuciones aditivas crudas (en puntos de tasa) y normalizadas en $[-1, 1]$ con `attributions()`.
+- **L593–624**: Alinea los predictores en $t$ con la tasa observada en $t + 1$, obtiene predicciones y residuales, y extrae únicamente las `25` variables activas cuyo $|\beta| > 0$. *Estimamos el modelo parsimonioso y abrimos la caja negra para medir qué impulsa la predicción mensual.*
 
 :::
 ::::
@@ -863,35 +697,29 @@ df_coeficientes <- tibble(variable = rownames(coefs_sparse), coeficiente = as.nu
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="643"}
-df_attr_long_raw <- bind_rows(
-  convertir_attr_long(atribuciones_raw, "features"),
-  convertir_attr_long(atribuciones_raw, "lexicons"),
-  convertir_attr_long(atribuciones_raw, "time")
+```{.r .numberLines startFrom="672"}
+sentometrics_pipeline <- list(
+  corpus_sento = corpus_sento, lexicons_es = lexicons_es,
+  sentiment_scores = sentiment_scores, peak_docs = objeto_04_peak_docs,
+  sento_measures = medidas_sento, measures_long = objeto_06_measures_long,
+  global_index = objeto_07_global_index, attributions = objeto_08_attributions,
+  meta = list(
+    n_noticias_recopiladas = nrow(df_noticias),
+    n_noticias_modelo      = nrow(df_noticias_enriquecida),
+    n_features = length(cols_features), n_series = ncol(medidas_sento$measures) - 1L
+  )
 )
-# ... (se replica en df_attr_long_norm, se empaquetan métricas y se guarda 08_attributions.rds) ...
+saveRDS(sentometrics_pipeline, file.path(ruta_proc, "sentometrics_pipeline.rds"))
 
 # 6. Fase 5: Consolidación del Panel Anual Localidad × Año (2022–2026) ----
 noticias_agg <- df_noticias_enriquecida |>
   filter(año >= 2022 & año <= 2026) |>
   group_by(localidad, año) |>
-  summarise(
-    noticias_conteo      = n(),
-    noticias_dai_conteo  = sum(es_dai_estricto, na.rm = TRUE),
-    sentimiento_promedio = round(mean(sentimiento_score, na.rm = TRUE), 4),
-    sentimiento_nrc      = round(mean(score_nrc_es, na.rm = TRUE), 4),
-    sentimiento_crimen   = round(mean(score_crimen_es, na.rm = TRUE), 4),
-    sentimiento_mediana  = round(median(sentimiento_score, na.rm = TRUE), 4),
-    prop_negativas       = round(mean(sentimiento_categoria == "Negativo", na.rm = TRUE) * 100, 2),
-    prop_positivas       = round(mean(sentimiento_categoria == "Positivo", na.rm = TRUE) * 100, 2),
-    prop_neutras         = round(mean(sentimiento_categoria == "Neutro", na.rm = TRUE) * 100, 2),
-    .groups = "drop"
-  )
+  summarise(noticias_conteo = n(), noticias_dai_conteo = sum(es_dai_estricto, na.rm = TRUE),
+            sentimiento_promedio = round(mean(sentimiento_score, na.rm = TRUE), 4), .groups = "drop")
 
 panel_consolidado <- panel_delitos |>
-  left_join(noticias_agg, by = c("localidad", "año")) |>
-  mutate(across(c(noticias_conteo, noticias_dai_conteo), ~replace_na(., 0L))) # + replace_na en promedios y %
-
+  left_join(noticias_agg, by = c("localidad", "año"))
 stopifnot(nrow(panel_consolidado) == 95)
 arrow::write_parquet(panel_consolidado, file.path(ruta_proc, "panel_consolidado_localidad_anual.parquet"))
 ```
@@ -900,8 +728,8 @@ arrow::write_parquet(panel_consolidado, file.path(ruta_proc, "panel_consolidado_
 
 ::: {}
 
-- **L643–678**: Convierte a formato largo las atribuciones por dimensión (`features`, `lexicons`, `time`), calcula $R^2$ dentro de muestra y RMSE, y serializa el paquete completo en `08_attributions.rds`.
-- **L683–718**: Agrega el sentimiento y la proporción de noticias negativas/positivas/neutras por `(localidad, año)`, las cruza con el panel demográfico y delictivo oficial (`panel_delitos`), verifica exactamente `95` filas ($19 \times 5$) y guarda `panel_consolidado_localidad_anual.parquet`. *Cerramos el pipeline generando el panel anual unificado que consumen los mapas y Shiny.*
+- **L672–697**: Empaqueta los 8 bloques analíticos de `sentometrics` más `meta` en un único archivo consolidado `data/processed/sentometrics_pipeline.rds` ($\alpha^* = 0{,}5$, $R^2 = 0{,}8899$, `25/36` activas).
+- **L702–737**: Agrega sobre las `993` noticias objetivo las métricas anuales de sentimiento y conteo, las cruza con el panel demográfico y delictivo oficial (`panel_delitos`), verifica `95` filas ($19 \times 5$) y guarda `panel_consolidado_localidad_anual.parquet`. *Evitamos dispersar múltiples `.rds` y cerramos el panel anual unificado.*
 
 :::
 ::::
@@ -910,7 +738,7 @@ arrow::write_parquet(panel_consolidado, file.path(ruta_proc, "panel_consolidado_
 
 # Descriptivos del corpus y gráficos S3: `06_descriptivos_corpus.R`
 
-Su ruta es `scripts/06_descriptivos_corpus.R`. Lee `noticias_procesadas.parquet` y `01_sento_corpus.rds`, produce las Figuras `3` a `9` en `output/figures/` y exporta el resumen anual en `output/tables/tabla_descriptivos_corpus.csv`.
+Su ruta es `scripts/06_descriptivos_corpus.R`. Lee `noticias_procesadas.parquet` y `sentometrics_pipeline.rds`, produce las Figuras `3` a `9` en `output/figures/` (distinguiendo entre `3.916` notas recopiladas y `993` objetivo) y exporta `output/tables/tabla_descriptivos_corpus.csv`.
 
 ## Corte a septiembre de 2026, gráficos exploratorios y tabla resumen
 
@@ -919,34 +747,28 @@ Su ruta es `scripts/06_descriptivos_corpus.R`. Lee `noticias_procesadas.parquet`
 
 ```{.r .numberLines startFrom="50"}
 tema_limpio <- theme_minimal(base_size = 11) +
-  theme(
-    panel.grid.major = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.line        = element_line(color = "#cccccc", linewidth = 0.4),
-    plot.title       = element_text(face = "bold")
-  )
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.line = element_line(color = "#cccccc", linewidth = 0.4), plot.title = element_text(face = "bold"))
 
 noticias_df  <- arrow::read_parquet(archivo_noticias)
-corpus_sento <- readRDS(archivo_corpus)
-stopifnot(nrow(noticias_df) > 0, length(unique(noticias_df$localidad)) == 19)
-
-## 3.1 Número de noticias por año (corte septiembre 2026) ----
-noticias_df <- noticias_df |>
-  mutate(año = as.integer(año), mes = as.integer(mes)) |>
-  filter(!(año == 2026 & mes > 9))
-# ... (se construyen y exportan p_fig3 anual, p_fig4 por localidad, p_fig5 heatmap,
-#      p_fig6 histograma de palabras y p_fig7 proporción anual de tono) ...
+pipeline_obj <- readRDS(archivo_pipeline)
+corpus_sento <- pipeline_obj$corpus_sento
+noticias_obj <- if ("es_objetivo_3mod" %in% names(noticias_df)) {
+  noticias_df |> filter(es_objetivo_3mod)
+} else {
+  noticias_df |> filter(delito_sdscj %in% c("Hurto a personas", "Hurto a residencias", "Hurto de motocicletas"))
+}
 
 ## 4.1 Construcción y exportación de estadísticos anuales (2022–2026) ----
 tabla_resumen <- noticias_df |>
+  mutate(es_3mod = if ("es_objetivo_3mod" %in% names(noticias_df)) es_objetivo_3mod else FALSE) |>
   group_by(año) |>
   summarise(
-    noticias         = n(),
-    noticias_dai     = sum(es_dai_estricto, na.rm = TRUE),
-    localidades      = n_distinct(localidad),
-    media_palabras   = round(mean(palabras_cuerpo, na.rm = TRUE), 1),
-    mediana_palabras = round(median(palabras_cuerpo, na.rm = TRUE), 1),
-    sentimiento_prom = round(mean(sentimiento_score, na.rm = TRUE), 4),
+    noticias = n(), noticias_3mod = sum(es_3mod, na.rm = TRUE),
+    localidades = n_distinct(localidad[es_3mod]),
+    media_palabras = round(mean(palabras_cuerpo[es_3mod], na.rm = TRUE), 1),
+    mediana_palabras = round(median(palabras_cuerpo[es_3mod], na.rm = TRUE), 1),
+    sentimiento_prom = round(mean(sentimiento_score[es_3mod], na.rm = TRUE), 4),
     .groups = "drop"
   )
 
@@ -958,9 +780,9 @@ write_csv(tabla_resumen, file.path(ruta_tab, "tabla_descriptivos_corpus.csv"))
 
 ::: {}
 
-- **L50–70**: Define el tema minimalista común (`tema_limpio`), carga las noticias enriquecidas junto con `01_sento_corpus.rds` y valida la cobertura de las 19 localidades urbanas.
-- **L75–248**: Restringe la ventana hasta septiembre de 2026 (homologando con SIEDCO) y genera con `ggplot2` y `ggsave()` las figuras de volumen anual (`figura3`), cobertura territorial (`figura4`), mapa de calor Localidad $\times$ Año (`figura5`), histograma de palabras (`figura6`) y composición porcentual anual del tono (`figura7`).
-- **L253–266**: Resume año por año el total de artículos, los estrictos en 11 DAI, la media y mediana de palabras y el sentimiento promedio, exportando las 5 filas en `tabla_descriptivos_corpus.csv`. *Auditamos la cobertura y extensión del corpus antes de pasar a las gráficas nativas S3.*
+- **L50–76**: Define `tema_limpio`, lee `noticias_procesadas.parquet` y extrae `corpus_sento` (`993` noticias objetivo) desde `sentometrics_pipeline.rds`.
+- **L81–256**: Genera con corte a septiembre 2026 las figuras `figura3` a `figura6` sobre las noticias recopiladas y `figura7` (proporción anual de tono) específicamente sobre el corpus objetivo de `993` noticias.
+- **L261–281**: Resume año por año `noticias` totales, `noticias_3mod` objetivo, localidades, longitud y sentimiento medio, exportando `tabla_descriptivos_corpus.csv`.
 
 :::
 ::::
@@ -970,7 +792,7 @@ write_csv(tabla_resumen, file.path(ruta_tab, "tabla_descriptivos_corpus.csv"))
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="270"}
+```{.r .numberLines startFrom="286"}
 ## 5.1 Resumen mensual y anual del objeto sento_corpus ----
 summary_mes  <- suppressWarnings(sentometrics::corpus_summarize(corpus_sento, by = "month"))
 summary_anio <- suppressWarnings(sentometrics::corpus_summarize(corpus_sento, by = "year"))
@@ -1000,16 +822,16 @@ if (!is.null(summary_mes$plots$doc_plot)) {
     dpi      = 300
   )
 }
-# L300–326 repite la personalización sobre summary_mes$plots$feature_plot -> figura9_corpus_summarize_features.png
+# L315–345 repite la personalización facetada (6 covariables en ncol = 3) -> figura9_corpus_summarize_features.png
 ```
 
 :::
 
 ::: {}
 
-- **L271–272**: Ejecuta el método diagnóstico `corpus_summarize()` en frecuencia mensual y anual sobre el objeto `sento_corpus`.
-- **L274–298**: Toma el gráfico `doc_plot` generado internamente por el paquete, traduce títulos y ejes sobrescribiendo las escalas existentes (`get_scales()`) y exporta `figura8_corpus_summarize_documentos.png`.
-- **L300–326**: Aplica el mismo esquema de limpieza sobre `feature_plot` para generar `figura9_corpus_summarize_features.png` (que en el Cuaderno 02 se separa con `facet_wrap(~ variable, ncol = 4, scales = "free_y")` para leer las 26 series sin superposición). *Extraemos los diagnósticos temporales del paquete en formato listo para publicación.*
+- **L286–287**: Ejecuta `corpus_summarize()` en frecuencia mensual y anual sobre el objeto `sento_corpus` (`993` docs $\times$ `6` *features*).
+- **L289–313**: Traduce títulos y ejes de `doc_plot` sobrescribiendo las escalas existentes y exporta `figura8_corpus_summarize_documentos.png`.
+- **L315–345**: Personaliza `feature_plot` con facetas independientes para las `6` covariables (`ncol = 3`) generando `figura9_corpus_summarize_features.png`.
 
 :::
 ::::
@@ -1020,12 +842,12 @@ if (!is.null(summary_mes$plots$doc_plot)) {
 
 ## Consolidación cartográfica y serialización en `05_export_insumos_shiny.R`
 
-Su ruta es `scripts/05_export_insumos_shiny.R`. Reúne los paneles Parquet, los polígonos oficiales simplificados en WGS84 y los objetos S3 de `sentometrics` en un único archivo `data/processed/datos_consolidados_shiny.rds`.
+Su ruta es `scripts/05_export_insumos_shiny.R`. Reúne los paneles Parquet, los polígonos oficiales simplificados en WGS84 y el artefacto `sentometrics_pipeline.rds` en un único archivo `data/processed/datos_consolidados_shiny.rds`.
 
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="34"}
+```{.r .numberLines startFrom="36"}
 # 2. Cruce y Armonización de Paneles Territoriales y K-Means ----
 panel_consolidado <- arrow::read_parquet(file.path(ruta_datos_clean, "panel_consolidado_localidad_anual.parquet"))
 df_clusters <- arrow::read_parquet(file.path(ruta_datos_clean, "clusters_localidades_kmeans.parquet"))
@@ -1062,8 +884,8 @@ if (file.exists(archivo_geo)) {
 
 ::: {}
 
-- **L37–50**: Lee `panel_consolidado_localidad_anual.parquet` y le une de forma limpia el clúster territorial y el ancho de silueta de cada localidad.
-- **L55–73**: Carga el GeoJSON oficial de la SDSCJ, excluye Sumapaz (`"20"`) y sin localidad (`"99"`), reproyecta a WGS84 (`EPSG:4326`, requerido por Leaflet) y simplifica vértices con `st_simplify()` preservando topología para aligerar el renderizado web. *Preparamos los datos tabulares y los polígonos ligeros para el mapa interactivo.*
+- **L37–50**: Lee `panel_consolidado_localidad_anual.parquet` (`95` filas con métricas de las `993` noticias objetivo) y le une el clúster territorial y la silueta de cada localidad.
+- **L55–72**: Carga el GeoJSON oficial, excluye Sumapaz (`"20"`) y sin localidad (`"99"`), reproyecta a WGS84 (`EPSG:4326`) y simplifica vértices preservando topología para Leaflet. *Preparamos las tablas y polígonos ligeros para el mapa interactivo.*
 
 :::
 ::::
@@ -1072,15 +894,21 @@ if (file.exists(archivo_geo)) {
 ::: {}
 
 ```{.r .numberLines startFrom="75"}
-# 4. Carga de los 8 Artefactos S3 de Sentometrics (T-07 a T-17) ----
-corpus_sento      <- readRDS(file.path(ruta_datos_clean, "01_sento_corpus.rds"))
-lexicons_es       <- readRDS(file.path(ruta_datos_clean, "02_lexicons_es.rds"))
-sentiment_scores  <- readRDS(file.path(ruta_datos_clean, "03_sentiment_scores.rds"))
-peak_docs_obj     <- readRDS(file.path(ruta_datos_clean, "04_peak_docs.rds"))
-measures_long_obj <- readRDS(file.path(ruta_datos_clean, "06_measures_long.rds"))
-global_index_obj  <- readRDS(file.path(ruta_datos_clean, "07_global_index.rds"))
-attributions_obj  <- readRDS(file.path(ruta_datos_clean, "08_attributions.rds"))
+# 4. Carga del Artefacto Consolidado S3 de Sentometrics ----
+archivo_pipeline <- file.path(ruta_datos_clean, "sentometrics_pipeline.rds")
+if (!file.exists(archivo_pipeline)) {
+  stop("No se encontró '", archivo_pipeline, "'. Ejecute primero scripts/03_analisis_sentometrics.R")
+}
+pipeline_sento    <- readRDS(archivo_pipeline)
+corpus_sento      <- pipeline_sento$corpus_sento
+lexicons_es       <- pipeline_sento$lexicons_es
+sentiment_scores  <- pipeline_sento$sentiment_scores
+peak_docs_obj     <- pipeline_sento$peak_docs
+measures_long_obj <- pipeline_sento$measures_long
+global_index_obj  <- pipeline_sento$global_index
+attributions_obj  <- pipeline_sento$attributions
 
+## 4.1 Estadísticos de evolución del corpus (T-08: corpus_summarize) ----
 resumen_corpus_mes  <- suppressWarnings(sentometrics::corpus_summarize(corpus_sento, by = "month"))
 resumen_corpus_anio <- suppressWarnings(sentometrics::corpus_summarize(corpus_sento, by = "year"))
 ```
@@ -1089,7 +917,7 @@ resumen_corpus_anio <- suppressWarnings(sentometrics::corpus_summarize(corpus_se
 
 ::: {}
 
-- **L77–89**: Carga en memoria los artefactos `.rds` del pipeline `sentometrics` y pre-calcula las tablas resumen mensuales y anuales mediante `corpus_summarize()`. *Preparamos los insumos estadísticos antes del empaquetado final.*
+- **L77–92**: Carga el único artefacto maestro `sentometrics_pipeline.rds` y pre-calcula las tablas resumen mensuales y anuales mediante `corpus_summarize()` sobre las `993` noticias objetivo. *Evitamos lecturas dispersas y preparamos los insumos del tablero.*
 
 :::
 ::::
@@ -1097,7 +925,7 @@ resumen_corpus_anio <- suppressWarnings(sentometrics::corpus_summarize(corpus_se
 :::: {layout="[54, -3, 43]" layout-valign="top"}
 ::: {}
 
-```{.r .numberLines startFrom="99"}
+```{.r .numberLines startFrom="102"}
 # 5. Empaquetado y Serialización del Bundle Consolidado ----
 bundle_shiny <- list(
   panel_localidades = panel_con_clusters,
@@ -1105,12 +933,7 @@ bundle_shiny <- list(
   geometrias        = geo_simplificada,
   corpus_stats_mes  = as_tibble(resumen_corpus_mes$stats),
   corpus_stats_anio = as_tibble(resumen_corpus_anio$stats),
-  lexicos_info      = list(
-    nrc_es             = as_tibble(lexicons_es$nrc_es),
-    crimen_es          = as_tibble(lexicons_es$crimen_es),
-    valence_shifters   = as_tibble(attr(lexicons_es, "valence_table_full")),
-    comparacion_metodo = attr(sentiment_scores, "comparacion_metodologica")
-  ),
+  lexicos_info      = lexicos_info,
   peak_docs         = peak_docs_obj,
   measures_long     = as_tibble(measures_long_obj$long),
   global_index      = global_index_obj,
@@ -1121,6 +944,7 @@ bundle_shiny <- list(
     coeficientes    = attributions_obj$coeficientes,
     metricas_modelo = attributions_obj$metricas_modelo
   ),
+  meta_pipeline     = pipeline_sento$meta,
   fecha_generacion  = Sys.time(),
   horizonte         = "2022-2026"
 )
@@ -1132,7 +956,7 @@ saveRDS(bundle_shiny, file.path(ruta_datos_clean, "datos_consolidados_shiny.rds"
 
 ::: {}
 
-- **L99–128**: Empaqueta paneles, geometrías simplificadas, diccionarios, `peak_docs`, 364 series y atribuciones en una sola lista `datos_consolidados_shiny.rds`. Así `app/app.R` ejecuta una única lectura al arrancar y responde al instante sin recalcular modelos. *Concentramos toda la analítica en un único archivo listo para el tablero.*
+- **L104–127**: Empaqueta paneles, geometrías simplificadas, diccionarios, `peak_docs`, las `36` series, atribuciones y `meta_pipeline` en una sola lista `datos_consolidados_shiny.rds` (`13` componentes). Así `app/app.R` ejecuta una única lectura al arrancar. *Concentramos toda la analítica en un único archivo listo para el tablero.*
 
 :::
 ::::
@@ -1147,7 +971,7 @@ saveRDS(bundle_shiny, file.path(ruta_datos_clean, "datos_consolidados_shiny.rds"
 cat("[1/6] Procesando registros oficiales de delitos (SIEDCO / SDSCJ)...\n")
 source(here::here("scripts", "02_procesamiento", "01_delitos", "procesamiento_delitos.R"), local = new.env())
 
-cat("[2/6] Integrando proyecciones de población (SDS) y tasas por 100k hab...\n")
+cat("[2/6] Integrando proyecciones de población (SDS) y tasas mensuales por 100k hab...\n")
 source(here::here("scripts", "02_procesamiento", "02_poblacion", "procesamiento_poblacion.R"), local = new.env())
 
 cat("[3/6] Procesando corpus de prensa y clasificación oficial de 11 DAI...\n")
@@ -1157,24 +981,27 @@ source(here::here("scripts", "02_procesamiento", "03_noticias", "procesamiento_n
 cat("[4/6] Ejecutando agrupamiento territorial K-Means (K* = 3)...\n")
 source(here::here("scripts", "04_clustering_kmeans.R"), local = new.env())
 
-cat("[5/6] Ejecutando pipeline completo de Sentometrics (01 a 08 .rds)...\n")
+cat("[5/6] Ejecutando pipeline de Sentometrics (sentometrics_pipeline.rds)...\n")
 source(here::here("scripts", "03_analisis_sentometrics.R"), local = new.env())
 
-cat("[6/6] Generando descriptivos del corpus (T-08) y bundle Shiny (.rds)...\n")
+cat("[6/6] Generando descriptivos del corpus (T-08) y bundle Shiny (datos_consolidados_shiny.rds)...\n")
 source(here::here("scripts", "06_descriptivos_corpus.R"), local = new.env())
 source(here::here("scripts", "05_export_insumos_shiny.R"), local = new.env())
 
-# Control de auditoría: verificar que el bundle consolidado de Shiny exista
-stopifnot(file.exists(here::here("data", "processed", "datos_consolidados_shiny.rds")))
+# Control de auditoría: verificar exactamente los 2 artefactos .rds vigentes
+stopifnot(
+  file.exists(here::here("data", "processed", "sentometrics_pipeline.rds")),
+  file.exists(here::here("data", "processed", "datos_consolidados_shiny.rds"))
+)
 ```
 
 :::
 
 ::: {}
 
-- **L26–44**: Ejecuta en orden los tres scripts de transformación de datos crudos a limpios (`delitos` $\rightarrow$ `poblacion` $\rightarrow$ `noticias`), aislando cada script en un `new.env()` propio para que sus variables temporales no contaminen el resto del pipeline.
-- **L49–71**: Corre secuencialmente K-Means (`[4/6]`), Sentometrics + Elastic Net (`[5/6]`), descriptivos y exportación final para Shiny (`[6/6]`).
-- **L74–82**: Valida que `datos_consolidados_shiny.rds` exista en disco y reporta el tiempo total de ejecución. *Un único comando `source(here::here("scripts", "master.R"))` reconstruye todo el proyecto de cero.*
+- **L23–44**: Ejecuta en orden los tres scripts de transformación de datos crudos a limpios (`SIEDCO.csv` mensual $\rightarrow$ `poblacion` mensual $\rightarrow$ `noticias`), aislando cada script en un `new.env()` propio para evitar colisiones de variables.
+- **L46–71**: Corre secuencialmente K-Means (`[4/6]`), Sentometrics + Elastic Net (`[5/6]`), descriptivos y exportación final para Shiny (`[6/6]`).
+- **L73–77**: Valida que existan exactamente los 2 artefactos `.rds` consolidados (`sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds`) y reporta la duración total. *Un único comando `source(here::here("scripts", "master.R"))` reconstruye todo el proyecto de cero.*
 
 :::
 ::::

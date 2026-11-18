@@ -59,12 +59,18 @@ tema_limpio <- theme_minimal(base_size = 11) +
 
 ## 2.1 Lectura del corpus de noticias y objeto sento_corpus ----
 archivo_noticias <- file.path(ruta_proc, "03_noticias", "noticias_procesadas.parquet")
-archivo_corpus   <- file.path(ruta_proc, "01_sento_corpus.rds")
+archivo_pipeline <- file.path(ruta_proc, "sentometrics_pipeline.rds")
 
-stopifnot(file.exists(archivo_noticias), file.exists(archivo_corpus))
+stopifnot(file.exists(archivo_noticias), file.exists(archivo_pipeline))
 
-noticias_df  <- arrow::read_parquet(archivo_noticias)
-corpus_sento <- readRDS(archivo_corpus)
+noticias_df   <- arrow::read_parquet(archivo_noticias)
+pipeline_obj  <- readRDS(archivo_pipeline)
+corpus_sento  <- pipeline_obj$corpus_sento
+noticias_obj  <- if ("es_objetivo_3mod" %in% names(noticias_df)) {
+  noticias_df |> filter(es_objetivo_3mod)
+} else {
+  noticias_df |> filter(delito_sdscj %in% c("Hurto a personas", "Hurto a residencias", "Hurto de motocicletas"))
+}
 
 # Control de auditoría: verificar cobertura de las 19 localidades urbanas
 stopifnot(nrow(noticias_df) > 0, length(unique(noticias_df$localidad)) == 19)
@@ -207,9 +213,11 @@ ggsave(
   dpi      = 300
 )
 
-## 3.5 Proporción de tono (sentimiento) por año ----
-if ("sentimiento_categoria" %in% colnames(noticias_df)) {
-  tono_por_anio <- noticias_df |>
+## 3.5 Proporción de tono (sentimiento) por año sobre las 3 modalidades objetivo ----
+if ("sentimiento_categoria" %in% colnames(noticias_obj)) {
+  tono_por_anio <- noticias_obj |>
+    mutate(año = as.integer(año), mes = as.integer(mes)) |>
+    filter(!(año == 2026 & mes > 9)) |>
     group_by(año, sentimiento_categoria) |>
     summarise(conteo = n(), .groups = "drop") |>
     group_by(año) |>
@@ -229,10 +237,10 @@ if ("sentimiento_categoria" %in% colnames(noticias_df)) {
     ) +
     scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
     labs(
-      title    = "Distribución Anual del Tono de las Noticias sobre Seguridad",
-      subtitle = "Porcentaje de artículos según categoría de polaridad (2022–sep. 2026)",
+      title    = "Distribución Anual del Tono en las 3 Modalidades Objetivo",
+      subtitle = "Porcentaje por polaridad en noticias de hurto a personas, residencias y motos (2022–sep. 2026)",
       x        = "Año",
-      y        = "% de noticias",
+      y        = "% de noticias objetivo",
       fill     = "Polaridad",
       caption  = "Fuente: Cálculos con sentometrics (nrc_es + crimen_es)."
     ) +
@@ -251,14 +259,21 @@ if ("sentimiento_categoria" %in% colnames(noticias_df)) {
 
 ## 4.1 Construcción y exportación de estadísticos anuales (2022–2026) ----
 tabla_resumen <- noticias_df |>
+  mutate(
+    es_3mod = if ("es_objetivo_3mod" %in% names(noticias_df)) {
+      es_objetivo_3mod
+    } else {
+      delito_sdscj %in% c("Hurto a personas", "Hurto a residencias", "Hurto de motocicletas")
+    }
+  ) |>
   group_by(año) |>
   summarise(
     noticias         = n(),
-    noticias_dai     = sum(es_dai_estricto, na.rm = TRUE),
-    localidades      = n_distinct(localidad),
-    media_palabras   = round(mean(palabras_cuerpo, na.rm = TRUE), 1),
-    mediana_palabras = round(median(palabras_cuerpo, na.rm = TRUE), 1),
-    sentimiento_prom = round(mean(sentimiento_score, na.rm = TRUE), 4),
+    noticias_3mod    = sum(es_3mod, na.rm = TRUE),
+    localidades      = n_distinct(localidad[es_3mod]),
+    media_palabras   = round(mean(palabras_cuerpo[es_3mod], na.rm = TRUE), 1),
+    mediana_palabras = round(median(palabras_cuerpo[es_3mod], na.rm = TRUE), 1),
+    sentimiento_prom = round(mean(sentimiento_score[es_3mod], na.rm = TRUE), 4),
     .groups = "drop"
   )
 
@@ -299,15 +314,16 @@ if (!is.null(summary_mes$plots$doc_plot)) {
 
 if (!is.null(summary_mes$plots$feature_plot)) {
   p_fig9 <- summary_mes$plots$feature_plot +
+    facet_wrap(~ variable, ncol = 3, scales = "free_y") +
     labs(
-      title    = "Evolución Mensual de Frecuencia por Feature en el Corpus",
-      subtitle = "Menciones mensuales por localidad y categoría delictiva (2022–sep. 2026)",
+      title    = "Evolución Mensual de Frecuencia por Feature en el Corpus Objetivo",
+      subtitle = "6 indicadores binarios (3 clústeres territoriales + 3 modalidades de hurto, 2022–sep. 2026)",
       x        = "Fecha (mes)",
       y        = "Conteo mensual por feature",
-      color    = "Feature",
       caption  = "Fuente: Diagnóstico S3 con sentometrics::corpus_summarize()."
     ) +
-    tema_limpio
+    tema_limpio +
+    theme(legend.position = "none")
 
   sc_x9 <- p_fig9$scales$get_scales("x")
   sc_y9 <- p_fig9$scales$get_scales("y")

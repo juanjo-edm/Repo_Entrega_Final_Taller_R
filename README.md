@@ -54,7 +54,7 @@ Si necesitas revisar los detalles de alguna parte del proyecto, aquí tienes los
 | **Pipeline y scripts de R** | [**`scripts/README.md`**](scripts/README.md) | Flujo secuencial y descripción de módulos de ingesta, procesamiento, clustering, `sentometrics` y Shiny. |
 | **Ingesta de delitos y población** | [**`scripts/01_ingesta/01_delitos/`**](scripts/01_ingesta/01_delitos/README.md) · [**`02_poblacion/`**](scripts/01_ingesta/02_poblacion/README.md) | Descarga de la capa cartográfica/delictiva SDSCJ y proyecciones poblacionales de la SDS. |
 | **Scraping de Google News RSS** | [**`scripts/01_ingesta/03_noticias/README.md`**](scripts/01_ingesta/03_noticias/README.md) | Extracción RSS por localidad, filtros contra homonimias y deduplicación dual (3.916 noticias). |
-| **Estructura de las bases de datos** | [**`data/README.md`**](data/README.md) · [**`data/processed/README.md`**](data/processed/README.md) | Detalle de `data/raw/`, `data/processed/` (Parquet y artefactos `.rds` `01`–`08`). |
+| **Estructura de las bases de datos** | [**`data/README.md`**](data/README.md) · [**`data/processed/README.md`**](data/processed/README.md) | Detalle de `data/raw/`, `data/processed/` (Parquet y 2 artefactos `.rds` consolidados). |
 | **Cuadernos Quarto (PDF/HTML)** | [**`notebook/README.md`**](notebook/README.md) | Entrega 1, Cuaderno metodológico `02`, guía de estudio `05` y guías de código `03`–`07`. |
 | **Aplicación interactiva Shiny** | [**`app/README.md`**](app/README.md) | Cómo ejecutar y navegar las 6 pestañas del tablero interactivo. |
 
@@ -88,23 +88,23 @@ Repo_Entrega_Final_Taller_R/
 │   └── diccionario_datos/                    # Diccionario de datos completo (4 capas)
 │       ├── README.md                         # Índice maestro, llaves PK/FK y diagrama ER
 │       ├── 01_datos_crudos.md                # Fuentes primarias en data/raw/
-│       ├── 02_tablas_procesadas.md           # Paneles anuales y microdatos Parquet
-│       ├── 03_artefactos_sentometrics_shiny.md # Artefactos .rds (01..08) y bundle Shiny
+│       ├── 02_tablas_procesadas.md           # Paneles mensuales/anuales y microdatos Parquet
+│       ├── 03_artefactos_sentometrics_shiny.md # Artefactos .rds consolidados y bundle Shiny
 │       └── 04_tablas_salida.md               # Tablas CSV de perfiles, sensibilidad y auditoría
 │
 ├── data/                                     # Bases de datos
 │   ├── README.md                             # Explicación de los datos y formatos
 │   ├── raw/                                  # Insumos crudos organizados por fuente
-│   │   ├── delitos/                          # Capa SDSCJ (localidades_bogota_raw.geojson)
+│   │   ├── delitos/                          # Microdatos SIEDCO (SIEDCO.csv) y polígonos SDSCJ (localidades_bogota_raw.geojson)
 │   │   ├── poblacion/                        # Proyecciones SDS (poblacion_localidades_raw.parquet)
 │   │   └── noticias/                         # Noticias consolidadas (noticias_google_news_consolidado.*)
 │   └── processed/                            # Bases limpias listas para analizar
 │       ├── README.md                         # Diccionario de datos y objetos S3 (.rds)
-│       ├── 01_delitos/                       # Conteo anual de delitos (delitos_localidad_anual.parquet)
-│       ├── 02_poblacion/                     # Tasas por 100k hab (panel_delitos_poblacion_localidad.parquet)
-│       ├── 03_noticias/                      # Corpus depurado con 11 DAI (noticias_procesadas.parquet)
-│       ├── 01_sento_corpus.rds .. 08_attributions.rds # Artefactos S3 (incl. 06_measures_wide.rds)
-│       ├── panel_consolidado_localidad_anual.parquet  # Fusión de tasas delictivas y sentimiento
+│       ├── 01_delitos/                       # Conteo mensual de hurtos (delitos_localidad_mensual.parquet)
+│       ├── 02_poblacion/                     # Panel mensual y tasas/100k (panel_delitos_poblacion_mensual.parquet)
+│       ├── 03_noticias/                      # Corpus depurado (noticias_procesadas.parquet: 3.916 notas, 993 objetivo)
+│       ├── sentometrics_pipeline.rds         # Bundle S3 único de sentometrics (corpus objetivo, 36 series y Elastic Net)
+│       ├── panel_consolidado_localidad_anual.parquet  # Fusión anual de tasas delictivas y sentimiento objetivo
 │       ├── clusters_localidades_kmeans.parquet        # Asignaciones de clústeres K-means (K* = 3)
 │       └── datos_consolidados_shiny.rds               # Insumo consolidado para la aplicación Shiny
 │
@@ -120,10 +120,10 @@ Repo_Entrega_Final_Taller_R/
 │   │   ├── 02_poblacion/                     # Ingesta de proyecciones demográficas (SDS)
 │   │   └── 03_noticias/                      # Ingesta y scraping de prensa (Google News RSS)
 │   ├── 02_procesamiento/                     # Transformación de datos raw a processed
-│   │   ├── 01_delitos/                       # Procesamiento de delitos SDSCJ
-│   │   ├── 02_poblacion/                     # Procesamiento demográfico y cálculo de tasas
+│   │   ├── 01_delitos/                       # Procesamiento de delitos SIEDCO
+│   │   ├── 02_poblacion/                     # Procesamiento demográfico y cálculo mensual de tasas
 │   │   └── 03_noticias/                      # Limpieza de texto y depuración DAI
-│   ├── 03_analisis_sentometrics.R            # Pipeline completo sentometrics (Fases 1 a 4: 01 a 08 .rds)
+│   ├── 03_analisis_sentometrics.R            # Pipeline completo sentometrics (corpus 993 docs, 36 series, Elastic Net -> sentometrics_pipeline.rds)
 │   ├── 04_clustering_kmeans.R                # Clustering K-means (K* = 3) y sensibilidad Tidymodels
 │   ├── 05_export_insumos_shiny.R             # Empaquetado de artefactos para Shiny
 │   └── 06_descriptivos_corpus.R              # Estadísticos descriptivos del corpus (corpus_summarize)

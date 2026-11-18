@@ -1,17 +1,22 @@
-# Ingesta de Delitos de Alto Impacto y Cartografía Distrital (SDSCJ)
+# Ingesta de Delitos de Alto Impacto y Cartografía Distrital (SDSCJ / SIEDCO)
 
-Este submódulo gestiona la descarga y extracción reproducible de la capa espacial y estadística oficial de **Delitos de Alto Impacto (DAI)** publicada por la Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) en articulación con el Sistema de Información Estadístico, Delincuencial, Contravencional y Operativo (SIEDCO) de la Policía Nacional.
+Este submódulo gestiona la descarga y verificación reproducible de dos insumos oficiales publicados por la Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) en articulación con el Sistema de Información Estadístico, Delincuencial, Contravencional y Operativo (SIEDCO) de la Policía Nacional:
+
+1. **`SIEDCO.csv`**: registro mensual de microdatos de criminalidad desagregado por localidad, modalidad (`HECHO`), fecha y perfil operativo (insumo base para los cálculos mensuales y tasas).
+2. **`localidades_bogota_raw.geojson`**: capa cartográfica oficial de las localidades urbanas para mapas en `{sf}` y `{leaflet}`.
 
 ---
 
 ## 1. Ficha Técnica del Conjunto de Datos
 
-* **Entidad Emisora:** Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ) / Policía Nacional (SIEDCO).
-* **Portal Oficial:** [Datos Abiertos Bogotá — Delito de Alto Impacto](https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c).
-* **Recurso de Origen:** Paquete comprimido `dai_geojson.zip` con geometrías y tablas agregadas.
-* **Archivo de Salida:** [`data/raw/delitos/localidades_bogota_raw.geojson`](../../../data/raw/delitos/localidades_bogota_raw.geojson).
+* **Entidad Emisora:** Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ / OAIEE) / Policía Nacional (SIEDCO).
+* **Origen Microdatos SIEDCO:** `https://oaiee.scj.gov.co/DatosDescarga/SIEDCO.csv`.
+* **Portal Cartografía:** [Datos Abiertos Bogotá — Delito de Alto Impacto](https://datosabiertos.bogota.gov.co/dataset/delito-de-alto-impacto-bogota-d-c) (`dai_geojson.zip`).
+* **Archivos de Salida:**
+  * [`data/raw/delitos/SIEDCO.csv`](../../../data/raw/delitos/SIEDCO.csv) (`376.185` registros × `12` columnas, separador `;`, codificación `UTF-8`).
+  * [`data/raw/delitos/localidades_bogota_raw.geojson`](../../../data/raw/delitos/localidades_bogota_raw.geojson).
 * **Sistema de Coordenadas:** WGS 84 (`EPSG:4326`), compatible directamente con `{sf}` y mapas interactivos `{leaflet}`.
-* **Corte Temporal Oficial:** Enero de 2018 a Septiembre de 2026 (Atributo de metadato: `CMMES: Ene-Sep (2018vs2026)`).
+* **Corte Temporal Analizado:** Enero de 2022 a Septiembre de 2026 (`57` meses efectivos sobre `19` localidades urbanas).
 
 ---
 

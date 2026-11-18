@@ -66,13 +66,13 @@ Este cuaderno funciona como la guía principal para estudiar y replicar paso a p
 
 1. **Tasas delictivas por 100.000 habitantes:** estandarización demográfica de los registros de la Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ / SIEDCO) y la Secretaría Distrital de Salud (SDS), junto con la intuición económica del efecto de población flotante.
 2. **Agrupamiento territorial no supervisado ($K$-Means):** réplica completa de `scripts/04_clustering_kmeans.R`, desde la normalización $Z$-score y la búsqueda del número óptimo de grupos ($K^* = 3$) hasta el etiquetado determinístico de centroides y su inspección tridimensional.
-3. **Descriptivos del corpus y análisis de sentimiento (`sentometrics`):** réplica en vivo de `scripts/06_descriptivos_corpus.R` y de las tres primeras fases de `scripts/03_analisis_sentometrics.R`, acompañada de una explicación intuitiva de cada ecuación antes de mostrar el código que construye el `sento_corpus`, los diccionarios en español, los modificadores de valencia, las noticias pico y las 364 series mensuales.
-4. **Modelado econométrico supervisado (Elastic Net) y atribuciones:** réplica de la cuarta fase de `scripts/03_analisis_sentometrics.R`, mensualizando la tasa distrital de hurto para estimar `sento_model()` y descomponer el aporte marginal de cada dimensión con `attributions()`.
-5. **Cartografía espacial (`sf`), panel consolidado e integración hacia R Shiny:** representación cartográfica de los clústeres de $K$-Means y comparación por modalidad entre las tasas oficiales de hurto y las tasas de cobertura noticiosa por cada 100.000 habitantes, más una síntesis de cómo el tablero interactivo consume los resultados finales.
+3. **Descriptivos del corpus y análisis de sentimiento (`sentometrics`):** réplica en vivo de `scripts/06_descriptivos_corpus.R` y de las tres primeras fases de `scripts/03_analisis_sentometrics.R`, acompañada de una explicación intuitiva de cada ecuación antes de mostrar el código que filtra el corpus hacia las **3 modalidades objetivo** (`993` noticias), construye el `sento_corpus`, los diccionarios en español, los modificadores de valencia, las noticias pico y las **36 series mensuales** (`2 diccionarios × 6 filtros × 3 curvas de memoria`).
+4. **Modelado econométrico supervisado (Elastic Net) y atribuciones:** réplica de la cuarta fase de `scripts/03_analisis_sentometrics.R`, usando directamente la **tasa mensual empírica de delitos SIEDCO** (`panel_delitos_poblacion_mensual.parquet`) para estimar `sento_model()` un mes adelante ($h = 1$) y descomponer el aporte marginal de cada dimensión con `attributions()`.
+5. **Cartografía espacial (`sf`), panel consolidado e integración hacia R Shiny:** representación cartográfica de los clústeres de $K$-Means y comparación por modalidad entre las tasas oficiales de hurto y las tasas de cobertura noticiosa por cada 100.000 habitantes, más una síntesis de cómo el tablero interactivo consume los dos archivos `.rds` finales (`sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds`).
 
 ::: {.callout-note}
 ## Punto de partida y ejecución autocontenida
-Los scripts previos de descarga (`scripts/01_ingesta/`) y depuración (`scripts/02_procesamiento/`) ya dejaron listos dos archivos base: el panel anual de delitos y población (`panel_delitos_poblacion_localidad.parquet`) y el corpus depurado de noticias (`noticias_procesadas.parquet`). La documentación línea por línea de estos flujos de ingesta, procesamiento y clustering se encuentra en `notebook/metodologia/instrucciones_codigo/`. En este cuaderno descartamos al inicio cualquier columna de clúster o sentimiento que pudiera existir en disco dentro de ese archivo de noticias, de modo que cada cálculo posterior se ejecute desde cero en memoria.
+Los scripts previos de descarga (`scripts/01_ingesta/`) y depuración (`scripts/02_procesamiento/`) ya dejaron listos dos archivos base: el panel mensual oficial de delitos y población (`panel_delitos_poblacion_mensual.parquet`, con `1.083` observaciones de `19` localidades por `57` meses desde `SIEDCO.csv`) y el corpus depurado de prensa (`noticias_procesadas.parquet`, `3.916` notas recopiladas, de las cuales `993` corresponden exactamente a las 3 modalidades objetivo evaluadas en el modelado). La documentación línea por línea de estos flujos reside en `notebook/metodologia/instrucciones_codigo/`. En este cuaderno descartamos al inicio cualquier columna de clúster o sentimiento que pudiera existir en disco dentro de ese archivo de noticias, de modo que cada cálculo posterior se ejecute desde cero en memoria.
 :::
 
 ## Diagrama de arquitectura del flujo analítico {.unnumbered}
@@ -128,8 +128,8 @@ digraph pipeline {
 
     {
       rank=same;
-      in_panel [label="panel_delitos_poblacion_localidad.parquet\n19 localidades urbanas x 5 años (95 filas)"];
-      in_news  [label="noticias_procesadas.parquet\n3.916 noticias limpias y clasificadas por DAI"];
+      in_panel [label="panel_delitos_poblacion_mensual.parquet\n19 localidades x 57 meses (1.083 filas)"];
+      in_news  [label="noticias_procesadas.parquet\n3.916 recopiladas -> 993 en 3 modalidades"];
       in_geo   [label="localidades_bogota_raw.geojson\nPolígonos oficiales SDSCJ"];
       in_panel -> in_news -> in_geo [style=invis, weight=10];
     }
@@ -155,7 +155,7 @@ digraph pipeline {
         color="#15803d"
       ];
       m_sento [
-        label="03_analisis_sentometrics.R (Secc. 4 y 5)\nsento_corpus + nrc_es / crimen_es + Elastic Net",
+        label="03_analisis_sentometrics.R (Secc. 4 y 5)\nsento_corpus (993) + 36 series + Elastic Net",
         fillcolor="#ffffff",
         color="#15803d"
       ];
@@ -290,7 +290,7 @@ El proyecto parte de una pregunta central de economía aplicada y seguridad urba
 
 1. **Delitos patrimoniales cotidianos en lugar de homicidios (SDSCJ / SIEDCO):** la literatura empírica para Bogotá demuestra que el miedo ciudadano al delito diverge de la tendencia de los homicidios y responde con mucha mayor fuerza a los delitos patrimoniales de exposición diaria (Restrepo & Moreno, 2007, *"Bogotá: ¿más crimen?, ¿más miedo?"*, *Desarrollo y Sociedad* 59, DOI: `10.13043/dys.59.5`; Encuesta de Percepción y Victimización de la CCB; ECSC del DANE). Por ello, dentro de los **11 Delitos de Alto Impacto (DAI)** priorizamos **hurto a personas**, **hurto a residencias** y **hurto a motocicletas**.
 2. **Proyecciones demográficas oficiales para pasar de volumen a riesgo (SDS):** usar conteos absolutos de denuncias confunde tamaño poblacional con intensidad delictiva (localidades cercanas al millón de habitantes como Suba o Kennedy lideran en volumen bruto, aunque su tasa por habitante sea moderada). Las proyecciones oficiales de la Secretaría Distrital de Salud permiten expresar cada delito como **tasa por cada 100.000 habitantes**, haciendo comparables a las **19 localidades urbanas** (y excluyendo a Sumapaz rural, `"20"`, por su escala de páramo no comparable).
-3. **Corpus propio de prensa local geolocalizada y clasificada por DAI (Google News RSS):** los índices generales de opinión pública no desagregan por localidad ni distinguen entre un hurto real, un accidente de tránsito o una noticia deportiva homónima (*Santa Fe* fútbol, *Bosa* Italia, *San Cristóbal* Venezuela). Construir un corpus mensual (`2022-01` a `2026-09`) con filtros de homonimia, limpieza NLP y clasificación en los **11 DAI** permite alinear exactamente la agenda mediática con el calendario oficial (`CMMES: Ene-Sep` para `2026`).
+3. **Corpus propio de prensa local geolocalizada y filtrada hacia las tres modalidades objetivo (Google News RSS):** los índices generales de opinión pública no desagregan por localidad ni distinguen entre un hurto real, un accidente de tránsito o una noticia deportiva homónima (*Santa Fe* fútbol, *Bosa* Italia, *San Cristóbal* Venezuela). Recopilamos `3.916` notas mensuales (`2022-01` a `2026-09`) con filtros de homonimia, limpieza NLP y clasificación jerárquica, y en la etapa de modelado con `sentometrics` restringimos el corpus a las **`993` noticias comparables de las 3 modalidades objetivo** (*hurto a personas*, *hurto a residencias* y *hurto de motocicletas*).
 
 ## Delitos oficiales (Observatorio SCJ / SIEDCO): microdatos y panel mensual
 
@@ -326,21 +326,21 @@ pob_anual <- pob_raw |>
   group_by(codigo_localidad = sprintf("%02d", as.integer(codigo_localidad)), año) |>
   summarise(poblacion = sum(poblacion, na.rm = TRUE), .groups = "drop")
 
-# 2) Cruce con delitos y cálculo de tasas por 100.000 habitantes
-panel_final <- delitos_anual |>
-  inner_join(pob_anual, by = c("codigo_localidad", "año")) |>
+# 2) Cruce mensual con delitos y cálculo de tasas por 100.000 habitantes (1.083 filas)
+panel_final <- delitos_mensual |>
+  left_join(pob_anual, by = c("codigo_localidad", "año")) |>
   mutate(
-    tasa_hurto_personas    = (hurto_personas    / poblacion) * 100000,
-    tasa_hurto_residencias = (hurto_residencias / poblacion) * 100000,
-    tasa_hurto_motos       = (hurto_motos       / poblacion) * 100000,
-    tasa_hurto_total       = tasa_hurto_personas + tasa_hurto_residencias + tasa_hurto_motos
+    tasa_hurto_personas    = round((hurto_personas    / poblacion) * 100000, 2),
+    tasa_hurto_residencias = round((hurto_residencias / poblacion) * 100000, 2),
+    tasa_hurto_motos       = round((hurto_motos       / poblacion) * 100000, 2),
+    tasa_hurto_total       = round(((hurto_personas + hurto_residencias + hurto_motos) / poblacion) * 100000, 2)
   )
 ```
 
-## Prensa digital (Google News RSS), limpieza NLP y clasificador 11 DAI
+## Prensa digital (Google News RSS), limpieza NLP y clasificación hacia las 3 modalidades
 
-- **Lógica de scraping RSS/XML (`scraping_google_news.R`):** en lugar de automatizar un navegador sujeto a CAPTCHAs, consulta el canal oficial RSS en una malla de `19` localidades × `57` meses (`2022-01` a `2026-09`) donde haya déficit (`< 4` notas), cruzando con `5` familias booleanas de los 11 DAI y exclusiones negativas contra homonimias (`-futbol` en Santa Fe, `-venezuela` en San Cristóbal/Ciudad Bolívar, `-universidad` en Antonio Nariño, `-italia` en Bosa). Parsea el XML con `xml2` (`parsear_rss()`), aplica **deduplicación dual** (por URL canónica sin `?utm_...` y por titular normalizado sin tildes/mayúsculas) y valida `confianza_geografica` por mención de barrios $\rightarrow$ **`3.916` noticias únicas**.
-- **Lógica NLP y clasificador jerárquico (`procesamiento_noticias.R`):** genera `localidad_slug` en *snake_case* sin guiones medios (ya que `sentometrics` reserva `--` como separador interno entre diccionario, característica y tiempo); aplica `limpiar_cuerpo_web()` en cadena con `purrr::reduce()` para remover HTML, *cookies* y bloques *"Lea también..."*; y clasifica en cascada **título $\rightarrow$ resumen $\rightarrow$ cuerpo** exigiendo cercanía de 4 palabras, *negative lookaheads* (`rob(?!(ust|ot...))`) y filtro de siniestros viales, homologando con `mapa_sdscj` (`2.588` DAI estrictos, `538` hurto s/i, `790` No DAI).
+- **Lógica de scraping RSS/XML (`scraping_google_news.R`):** en lugar de automatizar un navegador sujeto a CAPTCHAs, consulta el canal oficial RSS en una malla de `19` localidades × `57` meses (`2022-01` a `2026-09`) donde haya déficit (`< 4` notas), cruzando con `5` familias booleanas de búsqueda y exclusiones negativas contra homonimias (`-futbol` en Santa Fe, `-venezuela` en San Cristóbal/Ciudad Bolívar, `-universidad` en Antonio Nariño, `-italia` en Bosa). Parsea el XML con `xml2` (`parsear_rss()`), aplica **deduplicación dual** (por URL canónica sin `?utm_...` y por titular normalizado sin tildes/mayúsculas) y valida `confianza_geografica` por mención de barrios $\rightarrow$ **`3.916` noticias únicas**.
+- **Lógica NLP y filtro comparable (`procesamiento_noticias.R`):** genera `localidad_slug` en *snake_case* sin guiones medios (ya que `sentometrics` reserva `--` como separador interno entre diccionario, característica y tiempo); aplica `limpiar_cuerpo_web()` en cadena con `purrr::reduce()` para remover HTML, *cookies* y bloques *"Lea también..."*; y clasifica en cascada **título $\rightarrow$ resumen $\rightarrow$ cuerpo** exigiendo cercanía de 4 palabras, *negative lookaheads* (`rob(?!(ust|ot...))`) y filtro de siniestros viales. De las `3.916` notas recopiladas, `03_analisis_sentometrics.R` selecciona estrictamente las **`993` noticias de las 3 modalidades objetivo** (*hurto a personas*: `736`, *hurto a residencias*: `141`, *hurto de motocicletas*: `116`).
 
 ```{r}
 #| label: resumen-codigo-noticias
@@ -395,7 +395,7 @@ tibble::tibble(
   ),
   Cobertura = c(
     "19 loc. × 57 meses (2022-01 a 2026-09)",
-    "2022-01 a 2026-09 (11 DAI + No DAI)",
+    "2022-01 a 2026-09 (3.916 totales -> 993 en 3 hurtos objetivo)",
     "Polígonos oficiales Bogotá D.C."
   )
 ) |>
@@ -1175,7 +1175,7 @@ knitr::kable(
 )
 ```
 
-En la @tbl-sensibilidad-escalamientos, `Z-score`, `Robusto (Mediana / IQR)` y `PCA 2D` (`96,38 %` de varianza acumulada en `PC1 + PC2`) producen exactamente la misma asignación ($\text{ARI} = 1{,}0000$). Conservamos `Z-score` sobre las tres tasas porque mantiene una lectura directa en tasas de hurto a personas, residencias y motocicletas sin transformar a ejes latentes ni comprimir escalas con `log(1 + x)` (que reduce el $\text{ARI}$ a `0,3725` al atenuar la separación extrema del centro).
+En la @tbl-sensibilidad-escalamientos, `Z-score`, `Min-Max [0, 1]` y `PCA 2D` (`r round(var_pca[3, 2] * 100, 2)`% de varianza acumulada en `PC1 + PC2`) producen exactamente la misma asignación ($\text{ARI} = 1{,}0000$, con cero siluetas negativas). Conservamos `Z-score` sobre las tres tasas porque mantiene una lectura directa en tasas de hurto a personas, residencias y motocicletas sin transformar a ejes latentes ni comprimir escalas con `log(1 + x)` (cuyo $\text{ARI}$ cae frente al centro al atenuar las brechas extremas).
 
 ```{r}
 #| label: tbl-comparacion-modelos
@@ -1222,7 +1222,7 @@ knitr::kable(
 )
 ```
 
-Como muestra la @tbl-comparacion-modelos, `K-Means` logra la silueta media más alta (`0,5416`). Tanto `PAM` Euclidiano como `AGNES (Ward.D2)` (Euclidiano y Manhattan) replican la asignación en **18 de las 19 localidades** ($\text{ARI} = 0{,}8484$), separando únicamente a **Antonio Nariño** hacia el grupo residencial y dejando a Los Mártires solo en su grupo (`13 / 5 / 1`). La @tbl-asignaciones-modelos permite auditar esa coincidencia localidad por localidad (los enteros `1`, `2`, `3` reflejan el código numérico interno que asigna cada algoritmo al correr, mientras que la equivalencia exacta entre particiones se mide en el $\text{ARI}$).
+Como muestra la @tbl-comparacion-modelos, `K-Means` logra una partición limpia ($\bar{S} = `r tabla_comparacion_modelos$silueta_media[1]`$ con `0` siluetas negativas y tamaños `13 / 5 / 1`) y coincide **exactamente en las 19 localidades** ($\text{ARI} = 1{,}0000$) con el agrupamiento jerárquico **AGNES (`Ward.D2`)** tanto en distancia Euclidiana como Manhattan ($\bar{S} = `r tabla_comparacion_modelos$silueta_media[5]`$). La @tbl-asignaciones-modelos permite auditar esa coincidencia localidad por localidad (los enteros `1`, `2`, `3` reflejan el código numérico interno que asigna cada algoritmo al correr, mientras que la equivalencia exacta entre particiones se mide en el $\text{ARI}$).
 
 ```{r}
 #| label: tbl-asignaciones-modelos
@@ -1304,11 +1304,11 @@ knitr::kable(
 )
 ```
 
-Como resume la @tbl-sensibilidad-temporal, con $N = 19$ localidades la membresía del grupo *Céntrico e Institucional* ($n = 5$) permanece intacta en las tres ventanas, mientras que la ubicación de **Antonio Nariño** junto a Los Mártires en `2022-2026` y `2023-2026` ($K^* = 3$, $\bar{S} = 0{,}5416$ y $0{,}5520$) depende de incluir los nueve meses disponibles de `2026`; al restringir a años completos (`2022-2025`), Antonio Nariño pasa al grupo residencial (`13 / 5 / 1`, $\bar{S} = 0{,}5062$).
+Como resume la @tbl-sensibilidad-temporal, con los microdatos mensuales de `SIEDCO.csv` la partición **`13 / 5 / 1`** se mantiene invariante en las tres ventanas temporales: *Céntrico e Institucional* ($n = 5$), *Comercial y Automotor* ($n = 1$, Los Mártires) y *Residencial y Periférico* ($n = 13$, incluyendo a Antonio Nariño) conservan exactamente los mismos miembros con `0` siluetas negativas y sin depender del cierre parcial de `2026`.
 
 # Diagnóstico del corpus y análisis de sentimiento con `sentometrics` {#sec-sentometrics}
 
-Esta sección integra en vivo el código de `scripts/06_descriptivos_corpus.R` y las tres primeras fases de `scripts/03_analisis_sentometrics.R`. Primero auditamos la cobertura temporal, geográfica y léxica de las 3.916 noticias; luego explicamos con intuición cotidiana las ecuaciones con que `sentometrics` puntúa y agrega esas noticias; y por último replicamos en R la construcción del corpus, los léxicos en español, las puntuaciones documentales, las noticias pico y las 364 series temporales.
+Esta sección integra en vivo el código de `scripts/06_descriptivos_corpus.R` y las tres primeras fases de `scripts/03_analisis_sentometrics.R`. Primero auditamos la cobertura de recolección de las `3.916` noticias recopiladas; luego filtramos el subconjunto comparable de las **3 modalidades de hurto objetivo** (`993` noticias) y explicamos paso a paso cómo `sentometrics` puntúa los textos, los pondera mensualmente y construye un diseño parsimonioso de **36 series** (`2 diccionarios × 6 filtros binarios × 3 curvas de memoria`).
 
 ## Cobertura temporal, geográfica y extensión léxica del corpus
 
@@ -1531,7 +1531,7 @@ La lógica de la @eq-sent-docs responde a dos criterios de sentido común:
 
 ### Paso 3: ¿Cómo capturamos que el miedo y la agenda noticiosa persisten varios meses?
 
-La opinión pública no borra su memoria el primer día de cada mes. Una ola de atracos cubierta en abril sigue pesando sobre la percepción ciudadana y la respuesta policial en mayo o junio, aunque ese efecto cambie de intensidad con el paso de las semanas. Por eso la @eq-sent-agg suaviza el termómetro mensual mediante un promedio ponderado sobre una ventana móvil de 6 meses (el mes actual más los 5 anteriores, configurado en R con `lag = 6`):
+La opinión pública no borra su memoria el primer día de cada mes. Una ola de atracos cubierta en abril sigue pesando sobre la percepción ciudadana en mayo o junio, aunque ese efecto cambie de intensidad con el paso de las semanas. Por eso la @eq-sent-agg suaviza el termómetro mensual mediante un promedio ponderado sobre una ventana móvil de 6 meses (el mes actual más los 5 anteriores, configurado en R con `lag = 6`):
 
 $$
 S_t^{(\ell, k, \tau)} = \sum_{j=0}^{5} b_j^{(\tau)} \, \bar{S}_{t-j}^{(\ell, k)}
@@ -1539,67 +1539,66 @@ $$ {#eq-sent-agg}
 
 Cada término y parámetro de la @eq-sent-agg cumple un papel específico:
 
-* $S_t^{(\ell, k, \tau)}$ (el índice suavizado del mes): es la serie final que entra al modelo econométrico de la Sección 5. Resume el clima mediático acumulado hasta el mes $t$ para el diccionario $\ell$ (`nrc_es` o `crimen_es`), la característica $k$ (una de las 19 localidades, 3 clústeres o 4 temas) y la curva de memoria $\tau$.
-* $t$ y $j$ (el reloj del mes actual y el rezago): $t$ marca el mes que se está calculando (por ejemplo, junio de 2024) y $j$ recorre cuántos meses atrás mira la ventana, desde $j = 0$ (el mes presente) hasta $j = 5$ (cinco meses atrás, es decir, enero de 2024). Al sumar de $j = 0$ a $5$ se cubren exactamente 6 meses continuos.
-* $\bar{S}_{t-j}^{(\ell, k)}$ (el termómetro mensual sin suavizar): es el puntaje del mes $t - j$ obtenido en el Paso 2 (@eq-sent-docs). Si $t$ es junio y $j = 2$, corresponde al sentimiento promedio de abril.
-* $\tau$ (el esquema de memoria): identifica cuál de las 7 curvas temporales seleccionadas en `ctr_agg()` define la forma de recordar el pasado.
-* $b_j^{(\tau)}$ (el peso temporal de cada mes del semestre): indica qué fracción de la lectura actual proviene del mes situado $j$ meses atrás. En las 7 curvas, los seis pesos cumplen $\sum_{j=0}^{5} b_j^{(\tau)} = 1$, de modo que la escala original del sentimiento se conserva sin inflar ni encoger el índice.
+* **$S_t^{(\ell, k, \tau)}$ (el índice suavizado del mes):** es la serie final que entra al modelo econométrico de la Sección 5. Resume el clima mediático acumulado hasta el mes $t$ para el diccionario $\ell$, el filtro $k$ y la curva de memoria $\tau$.
+* **$t$ y $j$ (el reloj del mes actual y el rezago):** $t$ marca el mes que se está calculando (por ejemplo, junio de 2024) y $j$ recorre cuántos meses atrás mira la ventana, desde $j = 0$ (el mes presente) hasta $j = 5$ (cinco meses atrás, es decir, enero de 2024). Al sumar de $j = 0$ a $5$ se cubren exactamente 6 meses continuos.
+* **$\bar{S}_{t-j}^{(\ell, k)}$ (el termómetro mensual sin suavizar):** es el puntaje del mes $t - j$ obtenido en el Paso 2 (@eq-sent-docs). Si $t$ es junio y $j = 2$, corresponde al sentimiento promedio de abril.
+* **$\tau$ (el esquema de memoria):** identifica cuál de las 3 curvas temporales seleccionadas en `ctr_agg()` define la forma de recordar el pasado.
+* **$b_j^{(\tau)}$ (el peso temporal de cada mes del semestre):** indica qué fracción de la lectura actual proviene del mes situado $j$ meses atrás. En las 3 curvas, los seis pesos cumplen $\sum_{j=0}^{5} b_j^{(\tau)} = 1$, de modo que la escala original del sentimiento se conserva sin inflar ni encoger el índice.
 
-En `ctr_agg()` generamos **7 curvas de memoria ($\tau$)** para probar distintas velocidades de reacción y persistencia sobre los mismos 6 meses:
+La elección de una ventana de **6 meses (`lag = 6`)** responde a tres criterios complementarios. En primer lugar, la literatura sobre establecimiento de agenda (*agenda-setting*) muestra que la influencia de la prensa escrita sobre la percepción pública de un problema persiste durante semanas y se extiende hasta horizontes de 26 semanas, es decir, alrededor de medio año (Wanta y Hu, 1994). En segundo lugar, dentro del diseño de series mixtas implementado en `sentometrics` (Ardia et al., 2021, siguiendo a Ghysels, Sinko y Valkanov, 2007), `lag = 6` fija un techo semestral y permite combinar curvas de memoria corta, uniforme e intermedia sin obligar a que todos los meses pesen igual. Por último, en una serie de 57 meses (enero de 2022 a septiembre de 2026), usar `lag = 6` descarta solo los primeros 5 meses y conserva 52 meses efectivos ($N = 51$ pares al proyectar $h = 1$ mes adelante), mientras que ampliar la ventana a 12 meses sacrificaría casi una quinta parte de la muestra disponible.
 
-1. **Lineal (`linear`, 1 esquema):** asigna el mayor peso al mes actual ($b_0 = 28{,}6\%$) y descuenta de forma pareja hasta hace cinco meses ($b_1 = 23{,}8\%$, $b_2 = 19{,}0\%$, $b_3 = 14{,}3\%$, $b_4 = 9{,}5\%$ y $b_5 = 4{,}8\%$). Representa un olvido uniforme mes a mes.
-2. **Exponencial (`alphasExp = c(0.2, 0.5)`, 2 esquemas):** concentra la atención en los meses más recientes y deja una cola decreciente. Con $\alpha = 0{,}5$ (`exponential0.5`), más de la mitad del peso recae en el mes presente ($b_0 = 56{,}9\%$) y casi una cuarta parte en el mes anterior ($b_1 = 24{,}7\%$), reduciendo el peso de hace cinco meses a $b_5 = 0{,}9\%$. Con $\alpha = 0{,}2$ (`exponential0.2`), la caída es más lenta ($b_0 = 32{,}8\%$ hasta $b_5 = 6{,}2\%$).
-3. **Curvas Beta (`aBeta = c(1, 2)` x `bBeta = c(2, 3)`, 4 esquemas):** siguen la densidad Beta normalizada implementada en `sentometrics`, donde $a$ controla el peso hacia el presente y $b$ hacia los rezagos anteriores dentro de la ventana de 6 meses. En las combinaciones elegidas ($b > a$), estas curvas asignan $0\%$ al mes presente ($b_0 = 0\%$) y trasladan la carga hacia los meses rezagados ($j = 1, \dots, 5$): `beta22` forma una campana simétrica centrada hacia la mitad del semestre ($25{,}7\%$ en $j = 3$), `beta23` alcanza su pico cuatro meses atrás ($30{,}5\%$ en $j = 4$), y `beta12` junto con `beta13` cargan su mayor peso sobre los rezagos de cuatro y cinco meses ($33{,}3\%$ y $45{,}5\%$ en $j = 5$). De este modo, las 7 curvas cubren desde impactos casi inmediatos (`exponential0.5`) hasta efectos intermedios o retardados (`beta22`, `beta13`).
+#### Qué entra exactamente a la @tbl-arquitectura-agregacion: 2 diccionarios, 6 filtros y 3 curvas ($36$ series)
 
-Por ejemplo, si en mayo ($j = 1$) una racha de hurtos llevó el sentimiento de Chapinero a $\bar{S}_{\text{mayo}} = -0{,}60$ y en junio ($j = 0$) las noticias bajaron a $\bar{S}_{\text{junio}} = -0{,}20$, la serie `exponential0.5` reflejará sobre todo el alivio reciente de junio (porque pondera ese mes con $56{,}9\%$), mientras `linear` o `beta22` seguirán arrastrando el choque de mayo y los meses previos.
+Para que el modelo sea parsimonioso y fácil de auditar frente a nuestros `51` meses efectivos de estimación ($M = 36 < N = 51$), evitamos multiplicar combinaciones redundantes y definimos tres ejes limpios que se cruzan entre sí:
 
-La elección de una ventana de **6 meses (`lag = 6`)** responde a tres criterios complementarios. En primer lugar, la literatura sobre establecimiento de agenda (*agenda-setting*) muestra que la influencia de la prensa escrita sobre la percepción pública de un problema persiste durante semanas y se extiende hasta horizontes de 26 semanas, es decir, alrededor de medio año (Wanta y Hu, 1994). En segundo lugar, desde el diseño econométrico de series mixtas que implementa `sentometrics` (Ardia et al., 2021, siguiendo a Ghysels, Sinko y Valkanov, 2007), el parámetro `lag = 6` fija un techo máximo y no obliga a que los seis meses pesen igual: las curvas rápidas (`exponential0.5`, `exponential0.2` y `linear`) concentran la señal en el presente o el último bimestre, mientras las curvas Beta (`beta12`, `beta13`, `beta22`, `beta23`) capturan rezagos más profundos para que Elastic Net seleccione la dinámica que mejor ajusta los datos. Por último, existe una restricción práctica de muestra: en una serie de 57 meses (enero de 2022 a septiembre de 2026), usar `lag = 6` descarta los primeros 5 meses y conserva 52 meses efectivos ($N = 51$ observaciones al proyectar $h = 1$ mes adelante), mientras que ampliar la ventana a 12 meses sacrificaría casi una quinta parte de la serie histórica disponible.
+1. **Los 2 diccionarios ($\ell$):** combinamos **`nrc_es`** (léxico general del español para capturar miedo, tristeza o calma en el tono periodístico) y **`crimen_es`** (léxico especializado en criminalidad bogotana con 73 términos locales de delito y operatividad policial).
+2. **Los 6 filtros binarios ($k$):** agrupamos las `993` noticias de las tres modalidades objetivo en **3 clústeres territoriales** obtenidos en la Sección 3 (`c_centro`, `c_comercial`, `c_residencial`) y **3 modalidades temáticas exclusivas de los hurtos estudiados** (`tema_hurto_personas`, `tema_hurto_residencias`, `tema_hurto_motos`). Excluimos tanto las variables individuales por localidad (colineales con los clústeres) como los tópicos de otros delitos ajenos al análisis.
+3. **Los 3 esquemas de memoria temporal ($\tau$, con `lag = 6`):** evaluamos tres velocidades distintas sobre el semestre móvil:
+   * **Lineal (`linear`):** asigna peso creciente y uniforme desde hace cinco meses hasta el presente ($b_5 = 4{,}8\%$, $b_4 = 9{,}5\%$, $b_3 = 14{,}3\%$, $b_2 = 19{,}0\%$, $b_1 = 23{,}8\%$ y $b_0 = 28{,}6\%$). Modela un olvido parejo mes a mes.
+   * **Exponencial rápido (`exponential0.5`, $\alpha_{\text{Exp}} = 0{,}5$):** concentra más de cuatro quintas partes del peso en el último bimestre ($b_0 = 56{,}9\%$ en el mes presente y $b_1 = 24{,}7\%$ en el anterior, cayendo hasta $b_5 = 0{,}9\%$). Captura reacciones casi inmediatas tras titulares recientes.
+   * **Campana Beta intermedia (`beta22`, $a = 2, b = 2$):** concentra el peso en los meses intermedios del semestre ($b_3 = 25{,}7\%$ hace tres meses, $b_2 = b_4 = 22{,}9\%$ y $b_1 = b_5 = 14{,}3\%$) y asigna $b_0 = 0\%$ al mes presente porque $(1 - u_6)^{b-1} = 0$ cuando $u_6 = 1$. Sirve para aislar efectos puramente rezagados.
 
-Al combinar **2 diccionarios** ($\ell$) x **26 filtros binarios** ($k$) x **7 esquemas de memoria** ($\tau$), construimos $2 \times 26 \times 7 = 364$ series mensuales que resumen la narrativa mediática desde ángulos complementarios. La @tbl-arquitectura-agregacion sintetiza cómo se traduce cada uno de estos tres pasos matemáticos a las funciones y parámetros de `sentometrics` que ejecutamos en las subsecciones siguientes. Luego, en la Sección 5, Elastic Net se encarga de seleccionar cuáles de esas memorias ayudan realmente a predecir la dinámica del hurto.
+Al cruzar **$2$ diccionarios** ($\ell$) $\times$ **$6$ filtros binarios** ($k$) $\times$ **$3$ curvas de memoria** ($\tau$), construimos exactamente **$36$ series mensuales** que resumen el clima mediático desde ángulos complementarios sin saturar los grados de libertad de la regresión. La @tbl-arquitectura-agregacion resume cómo se traduce cada paso matemático a las funciones y parámetros de `sentometrics`.
 
 | Etapa / Nivel de agregación | Función o parámetro en `sentometrics` | Estructura y formulación matemática | Propósito analítico en el modelo |
 | :--- | :--- | :--- | :--- |
 | **Paso 1: Nivel intradocumental (`within`)** | `sento_lexicons(lexiconsIn, valenceIn)` y `compute_sentiment(..., how = "proportionalPol")` (o `ctr_agg(howWithin = "proportionalPol")`) | Evalúa la @eq-sent-doc en cada noticia $d_i$: multiplica el peso léxico $m_w^{(\ell)}$ por el modificador contextual $v_w$ ($t \in \{1, 2, 3, 4\}$), divide entre el total de palabras con carga polar $N_{\text{pol}}(d_i)$ y activa el filtro binario $f_{i,k} \in \{0, 1\}$. | Evitar que los artículos extensos vean diluida su polaridad por incluir vocabulario descriptivo neutro y corregir el signo o la intensidad ante negaciones, amplificadores, atenuadores y conectores adversativos. |
 | **Paso 2: Nivel mensual entre documentos (`docs`)** | `ctr_agg(howDocs = "proportional", by = "month", do.ignoreZeros = TRUE)` y `measures_fill(..., fill = "zero")` | Evalúa la @eq-sent-docs en cada mes $t$: pondera las noticias con polaridad distinta de cero según su participación $\theta_{i,t}$ en el volumen mensual de palabras y asigna $0$ únicamente cuando ninguna noticia menciona la característica $k$ en todo el mes. | Otorgar mayor peso dentro del mes a los reportajes de mayor desarrollo informativo frente a despachos breves, impidiendo que artículos puramente neutros ($s = 0$) arrastren artificialmente el promedio hacia cero. |
-| **Paso 3: Nivel intertemporal (`time`)** | `ctr_agg(howTime = c("linear", "exponential", "beta"), lag = 6, alphasExp = c(0.2, 0.5), aBeta = c(1, 2), bBeta = c(2, 3))` dentro de `sento_measures()` | Evalúa la @eq-sent-agg sobre una ventana móvil de 6 meses ($j = 0, \dots, 5$) bajo 7 curvas de ponderación $b_j^{(\tau)}$ que suman $1$: 1 lineal, 2 exponenciales y 4 curvas Beta, generando $2 \times 26 \times 7 = 364$ series continuas. | Modelar la persistencia del clima mediático y del temor ciudadano a lo largo de varios meses, permitiendo que la regresión regularizada identifique si la relación con las denuncias responde a choques inmediatos o a rezagos acumulados. |
+| **Paso 3: Nivel intertemporal (`time`)** | `ctr_agg(howTime = c("linear", "exponential", "beta"), lag = 6, alphasExp = 0.5, aBeta = 2, bBeta = 2)` dentro de `sento_measures()` | Evalúa la @eq-sent-agg sobre una ventana móvil de 6 meses ($j = 0, \dots, 5$) bajo 3 curvas de ponderación $b_j^{(\tau)}$ que suman $1$ (`linear`, `exponential0.5` y `beta22`), generando $2 \times 6 \times 3 = 36$ series continuas. | Modelar la persistencia del clima mediático a corto, medio y uniforme alcance temporal, permitiendo que Elastic Net distinga entre impactos inmediatos y rezagos acumulados. |
 
 : Síntesis de los tres niveles de puntuación y agregación temporal en `sentometrics` y su correspondencia funcional en R {#tbl-arquitectura-agregacion}
 
-En términos aplicados a nuestro corpus de Bogotá, las tres etapas de la @tbl-arquitectura-agregacion operan en cadena sobre cada noticia:
+En nuestro corpus de las 3 modalidades de hurto en Bogotá, estas tres etapas operan en cadena sobre cada noticia:
 
-**Etapa 1 (Dentro de la noticia):** cuando llega un artículo sobre un fleteo en Chapinero o una captura en Bosa, el algoritmo no cuenta todas sus palabras por igual. Busca los términos presentes en `nrc_es` y `crimen_es`, ajusta su signo o fuerza si aparecen junto a modificadores como *"sin"* o *"brutalmente"*, y divide únicamente por las palabras con carga polar (`proportionalPol`). Así, un despacho breve de 25 palabras y una crónica de 600 palabras quedan medidos en la misma escala de intensidad y asignados solo a su localidad, clúster y modalidad delictiva ($f_{i,k} = 1$).
+**Etapa 1 (Dentro de la noticia):** cuando llega un artículo sobre un fleteo en Chapinero o un hurto de motocicleta en Kennedy, el algoritmo busca los términos presentes en `nrc_es` y `crimen_es`, ajusta su signo o fuerza si aparecen junto a modificadores como *"sin"* o *"brutalmente"*, y divide únicamente entre las palabras con carga polar (`proportionalPol`). Así un despacho breve de 25 palabras y una crónica de 600 palabras quedan en la misma escala de intensidad y asignados solo a su clúster territorial y su modalidad de hurto ($f_{i,k} = 1$).
 
-**Etapa 2 (Dentro del mes):** al cerrar cada mes entre 2022 y septiembre de 2026, las noticias calificadas en la etapa anterior se agrupan por localidad, clúster y tema. Si en Kennedy se publicaron ese mes un reportaje extenso de 500 palabras y una nota corta de 50 palabras, ambos conservan su puntaje justo del Paso 1, pero el reportaje pesa diez veces más en el promedio mensual porque ocupó mayor espacio informativo (`howDocs = "proportional"`). Las notas sin coincidencias léxicas no diluyen ese promedio (`do.ignoreZeros = TRUE`), y si una localidad no tuvo menciones en todo el mes la serie se completa con cero (`fill = "zero"`).
+**Etapa 2 (Dentro del mes):** al cerrar cada mes entre enero de 2022 y septiembre de 2026, las noticias calificadas se agrupan por clúster y modalidad. Si en un mes se publican un reportaje extenso de 500 palabras y una nota corta de 50 palabras, ambos conservan su intensidad del Paso 1, pero el reportaje pesa diez veces más en el promedio mensual porque ocupó mayor espacio informativo (`howDocs = "proportional"`). Las notas sin coincidencias léxicas no diluyen el promedio (`do.ignoreZeros = TRUE`), y si una categoría no tuvo menciones en todo el mes la serie se completa con cero (`fill = "zero"`).
 
-**Etapa 3 (Entre meses):** por último, el promedio mensual suelto se proyecta sobre una ventana móvil de 6 meses (`lag = 6`) con siete perfiles de memoria distintos. Esto evita que un pico de noticias sobre homicidios o atracos desaparezca de los datos al cambiar de hoja en el calendario y deja listas las 364 series para que Elastic Net pruebe si las denuncias de hurto en Bogotá responden más al tono inmediato del último mes (`exponential0.5`) o a la acumulación mediática de varios meses atrás (`linear` o curvas `beta`).
+**Etapa 3 (Entre meses):** el promedio mensual se proyecta sobre una ventana móvil de 6 meses (`lag = 6`) con las tres curvas de memoria (`linear`, `exponential0.5` y `beta22`). Esto deja listas las `36` series para que Elastic Net evalúe si las denuncias mensuales de hurto registradas en `SIEDCO.csv` responden más a la coyuntura reciente (`exponential0.5`), a una memoria uniforme (`linear`) o a rezagos intermedios del semestre (`beta22`).
 
-## Construcción del `sento_corpus` y diagnósticos de `corpus_summarize()`
+## Construcción del `sento_corpus` objetivo (`993` noticias) y diagnósticos de `corpus_summarize()`
 
-En este primer bloque de la subsección 4.3 transformamos la tabla depurada de 3.916 noticias en un objeto formal de clase `sento_corpus`, que es la estructura base exigida por `sentometrics` para cruzar textos, fechas y metadatos. Este paso resulta necesario dentro del flujo metodológico porque el paquete necesita saber no solo qué dice cada artículo y cuándo se publicó, sino también a qué territorios y temáticas pertenece mediante 26 indicadores binarios ($0$ o $1$): los 3 clústeres de $K$-Means obtenidos en la Sección 3, 4 grandes tópicos delictivos o institucionales y las 19 localidades urbanas. Además, este bloque resuelve un requisito estructural del paquete: `sentometrics` reserva el doble guion (`--`) para concatenar el nombre del diccionario, la característica y el esquema de memoria temporal, por lo que cualquier tilde, espacio o guion medio en los nombres de las columnas rompería la creación de las series posteriores.
+En esta subsección preparamos el objeto formal `sento_corpus` que alimenta todo el modelado posterior. Para asegurar coherencia estricta entre lo que miden las tasas de delitos y lo que lee el modelo de texto, filtramos primero las **`3.916` noticias recopiladas** para quedarnos únicamente con las **`993` noticias clasificadas en las 3 modalidades de hurto objetivo** (`Hurto a personas`, `Hurto a residencias` y `Hurto de motocicletas`), descartando otros delitos como homicidios, hurto a comercio o notas generales (*No DAI*).
 
-Para construir esta estructura se combinan cuatro grupos de funciones principales:
-
-* `stringi::stri_trans_general(..., "Latin-ASCII")` y `stringr::str_replace_all()`: limpian las cadenas de texto eliminando tildes y reemplazando espacios o guiones por guiones bajos (`_`), de modo que nombres como *"Antonio Nariño"* o *"San Cristóbal"* se conviertan en identificadores seguros (`loc_antonio_narino`, `loc_san_cristobal`).
-* `dplyr::left_join()` y `dplyr::mutate()`: integran la clasificación territorial de `df_clusters` con cada noticia y generan las columnas requeridas (`id`, `date`, `texts`) junto con las variables indicadoras de clúster y tema.
-* `dplyr::coalesce()`, `stringr::str_sub()` y `stringr::str_squish()`: unen en una sola cadena el titular, el resumen y los primeros 800 caracteres del cuerpo de la noticia, reemplazando posibles valores vacíos por texto en blanco y eliminando espacios repetidos para concentrar la señal informativa principal del artículo.
-* `stringr::str_detect()` y `sentometrics::sento_corpus()`: la primera busca patrones de palabras clave mediante expresiones regulares (como nombres de modalidades de hurto o acciones policiales) para encender en $1$ el indicador temático correspondiente; la segunda empaqueta la tabla resultante en el contenedor S3 `corpus_sento` con `do.clean = FALSE`, conservando intacta la limpieza lingüística previa.
+Sobre ese subconjunto limpio definimos **6 variables binarias ($0$ o $1$)** sin guiones medios en sus nombres (`sentometrics` reserva `--` como separador interno): los **3 clústeres territoriales** de $K$-Means (`c_centro`, `c_comercial`, `c_residencial`) y las **3 variables temáticas** validadas directamente sobre la etiqueta `delito_sdscj` (`tema_hurto_personas`, `tema_hurto_residencias`, `tema_hurto_motos`), verificando por código que toda noticia pertenezca exactamente a un clúster y a una modalidad de interés.
 
 ```{r}
 #| label: build-sento-corpus
-## 4.3 Construcción del objeto sento_corpus y sus 26 características binarias ----
+## 4.3 Construcción del objeto sento_corpus (993 noticias x 6 features objetivo) ----
 
-# Función de normalización a snake_case sin tildes ni guiones medios '-'
-normalizar_nombre_feature <- function(x) {
-  x |>
-    stringi::stri_trans_general("Latin-ASCII") |>
-    str_to_lower() |>
-    str_replace_all("[\\s\\-]+", "_") |>
-    str_replace_all("[^a-z0-9_]", "")
-}
+modalidades_objetivo_noticias <- c(
+  "Hurto a personas",
+  "Hurto a residencias",
+  "Hurto de motocicletas"
+)
+
+# Filtramos estrictamente las noticias que corresponden a las 3 modalidades SIEDCO
+df_noticias_modelo <- df_noticias_base |>
+  filter(delito_sdscj %in% modalidades_objetivo_noticias)
 
 # Cruzamos cada noticia con el clúster territorial calculado en la Sección 3
 # y creamos el texto combinado (titular + resumen + primeros 800 caracteres del cuerpo)
-df_base_corpus <- df_noticias_base |>
+df_base_corpus <- df_noticias_modelo |>
   left_join(
     df_clusters |> select(localidad, cluster_id, cluster_nombre),
     by = "localidad"
@@ -1613,69 +1612,28 @@ df_base_corpus <- df_noticias_base |>
       str_sub(coalesce(cuerpo, ""), 1, 800),
       sep = ". "
     )),
-    txt_norm = stringi::stri_trans_general(str_to_lower(texts), "Latin-ASCII"),
     # 3 variables binarias para los clústeres de K-Means
     c_centro      = as.numeric(cluster_nombre == "Céntrico e Institucional"),
     c_comercial   = as.numeric(cluster_nombre == "Comercial y Automotor"),
     c_residencial = as.numeric(cluster_nombre == "Residencial y Periférico"),
-    # 4 variables binarias temáticas basadas en la clasificación DAI y palabras clave
-    tema_hurto_personas = as.numeric(
-      delito_sdscj == "Hurto a personas" |
-        str_detect(
-          txt_norm,
-          paste0(
-            "\\b(transmilenio|sitp|peaton|transeunte|celular|",
-            "raponazo|cosquilleo|fleteo|escopolamina)\\b"
-          )
-        )
-    ),
-    tema_hurto_patrimonial = as.numeric(
-      delito_sdscj %in% c(
-        "Hurto a residencias", "Hurto a comercio", "Hurto de automotores",
-        "Hurto de motocicletas", "Hurto a entidades financieras",
-        "Hurto (modalidad no identificada)"
-      )
-    ),
-    tema_violencia_vida = as.numeric(
-      delito_sdscj %in% c(
-        "Homicidio", "Lesiones personales", "Extorsión",
-        "Delitos sexuales", "Violencia intrafamiliar"
-      )
-    ),
-    tema_institucional = as.numeric(
-      modalidad_dai %in% c("nodai_operatividad", "nodai_politica_seguridad") |
-        str_detect(
-          txt_norm,
-          paste0(
-            "\\b(captur|desarticul|operativ|patrullaj|incaut|",
-            "megatoma|secretaria de seguridad|policia)\\b"
-          )
-        )
-    )
+    # 3 variables binarias temáticas exclusivas de las modalidades de hurto de interés
+    tema_hurto_personas    = as.numeric(delito_sdscj == "Hurto a personas"),
+    tema_hurto_residencias = as.numeric(delito_sdscj == "Hurto a residencias"),
+    tema_hurto_motos       = as.numeric(delito_sdscj == "Hurto de motocicletas")
   )
-
-# Añadimos las 19 variables binarias por localidad con prefijo loc_
-localidades_unicas <- sort(unique(df_base_corpus$localidad))
-nombres_feat_loc   <- character(length(localidades_unicas))
-
-for (i in seq_along(localidades_unicas)) {
-  loc_actual <- localidades_unicas[i]
-  col_feat   <- paste0("loc_", normalizar_nombre_feature(loc_actual))
-  nombres_feat_loc[i] <- col_feat
-  df_base_corpus[[col_feat]] <- as.numeric(df_base_corpus$localidad == loc_actual)
-}
 
 cols_features <- c(
   "c_centro", "c_comercial", "c_residencial",
-  "tema_hurto_personas", "tema_hurto_patrimonial",
-  "tema_violencia_vida", "tema_institucional",
-  nombres_feat_loc
+  "tema_hurto_personas", "tema_hurto_residencias", "tema_hurto_motos"
 )
 
-# Controles de contrato para sentometrics: cero guiones '-' y cero valores faltantes
+# Validación estricta de contrato y de cobertura temática exclusiva
 stopifnot(!any(str_detect(cols_features, "-")))
 stopifnot(all(!is.na(df_base_corpus$date)))
 stopifnot(all(!is.na(df_base_corpus$texts)))
+stopifnot(all(df_base_corpus$delito_sdscj %in% modalidades_objetivo_noticias))
+stopifnot(all(rowSums(df_base_corpus[, c("c_centro", "c_comercial", "c_residencial")]) == 1))
+stopifnot(all(rowSums(df_base_corpus[, c("tema_hurto_personas", "tema_hurto_residencias", "tema_hurto_motos")]) == 1))
 
 # do.clean = FALSE preserva nuestra limpieza textual previa sin alterar tildes o tokens clave
 df_sento_input <- df_base_corpus |>
@@ -1688,20 +1646,19 @@ corpus_sento <- sentometrics::sento_corpus(
 )
 
 stopifnot(inherits(corpus_sento, "sento_corpus"))
-cat("Objeto sento_corpus creado en memoria con", nrow(df_sento_input), "documentos y", length(cols_features), "features.\n")
+cat(
+  "Objeto sento_corpus creado en memoria con", nrow(df_sento_input),
+  "noticias de las 3 modalidades objetivo y", length(cols_features), "features.\n"
+)
+print(table(Modalidad = df_base_corpus$delito_sdscj))
 ```
 
-Una vez creado `corpus_sento` en memoria, el siguiente bloque audita cómo se distribuyen los documentos a lo largo de los 57 meses de estudio (enero de 2022 a septiembre de 2026). Este control previo es indispensable antes de calcular puntajes de polaridad porque las series temporales de sentimiento promedian los artículos disponibles en cada mes; si hubiera meses sin cobertura o saltos bruscos de muestreo no detectados, el índice mensual reflejaría cambios en la disponibilidad de datos en lugar de variaciones reales en el tono de la prensa.
-
-Las funciones principales que intervienen en este diagnóstico son:
-
-* `sentometrics::corpus_summarize(corpus_sento, by = "month")` y `by = "year"`: recorren internamente el objeto `sento_corpus` y calculan tablas de conteo de documentos, longitud de vocabulario y gráficas diagnósticas listas para inspección en frecuencia mensual y anual.
-* `summary_mes$plots$doc_plot` junto con `ggplot2::labs()` y `get_scales()`: extraen el gráfico nativo de evolución mensual de documentos generado por el paquete y actualizan sus títulos, subtítulos y nombres de ejes al español bajo el formato visual unificado del cuaderno (`tema_limpio`).
+Con `corpus_sento` listo en memoria, el siguiente bloque audita la distribución mensual de esas `993` noticias objetivo a lo largo de los `57` meses de estudio (enero de 2022 a septiembre de 2026) mediante `corpus_summarize()`, verificando que la muestra filtrada no deje meses vacíos antes de construir las series temporales.
 
 ```{r}
 #| label: fig-corpus-summarize-docs
-#| fig-cap: "Evolución mensual del volumen de documentos en el objeto sento_corpus"
-#| fig-alt: "Serie de tiempo mensual entre enero de 2022 y septiembre de 2026 con el número de noticias ingresadas al objeto sento_corpus."
+#| fig-cap: "Evolución mensual del volumen de documentos objetivo en el objeto sento_corpus"
+#| fig-alt: "Serie de tiempo mensual entre enero de 2022 y septiembre de 2026 con el número de noticias de las tres modalidades objetivo ingresadas al objeto sento_corpus."
 #| fig-width: 9
 #| fig-height: 4.5
 ## 4.3.1 Diagnóstico mensual del volumen de documentos (corpus_summarize) ----
@@ -1710,8 +1667,8 @@ summary_anio <- suppressWarnings(sentometrics::corpus_summarize(corpus_sento, by
 
 p_fig8 <- summary_mes$plots$doc_plot +
   labs(
-    title    = "Evolución Mensual del Volumen de Documentos en el Corpus",
-    subtitle = "Diagnóstico temporal del objeto sento_corpus (enero 2022-septiembre 2026)",
+    title    = "Evolución Mensual del Corpus Objetivo (3 Modalidades de Hurto)",
+    subtitle = "Diagnóstico temporal del objeto sento_corpus (993 noticias, ene. 2022-sep. 2026)",
     x        = "Fecha (mes)",
     y        = "Número de documentos por mes",
     caption  = "Fuente: diagnóstico S3 con sentometrics::corpus_summarize()."
@@ -1727,27 +1684,20 @@ if (!is.null(sc_y8)) sc_y8$name <- "Número de documentos por mes"
 print(p_fig8)
 ```
 
-Además de verificar el total de noticias por mes, necesitamos comprobar que las 26 características binarias (las 19 localidades, los 3 clústeres territoriales y los 4 tópicos delictivos) registren menciones periódicas durante toda la ventana de análisis. Este segundo diagnóstico evita que alguna serie temática o territorial llegue vacía al modelo Elastic Net de la Sección 5 y permite comparar qué dimensiones concentran el mayor flujo informativo en cada coyuntura.
-
-En este bloque empleamos tres componentes gráficos sobre el resumen ya calculado:
-
-* `summary_mes$plots$feature_plot`: recupera del objeto `summary_mes` las 26 trayectorias mensuales de conteo de documentos por característica binaria.
-* `ggplot2::facet_wrap(~ variable, ncol = 4, scales = "free_y")` y `ggplot2::theme(legend.position = "none")`: separan las 26 series en una cuadrícula de paneles independientes de cuatro columnas con escala vertical propia para evitar superposiciones de líneas y prescindir de una leyenda extensa.
-* `p_fig9$scales$get_scales()`: accede a las escalas internas del objeto `ggplot` devuelto por `sentometrics` para sobrescribir los nombres de los ejes horizontal y vertical sin alterar los datos subyacentes.
+También auditamos la frecuencia mensual individual de cada una de las **6 características binarias** (3 clústeres territoriales y 3 modalidades de hurto) para comprobar que ninguna serie llegue vacía al cálculo de `sento_measures()` ni al modelo Elastic Net.
 
 ```{r}
 #| label: fig-corpus-summarize-features
-#| fig-cap: "Evolución mensual de menciones por característica (localidad, clúster y tema DAI)"
-#| fig-alt: "Cuadrícula de 26 paneles mensuales entre 2022 y 2026 mostrando el conteo mensual de documentos para cada característica binaria del corpus sin superposición."
-#| fig-width: 10
-#| fig-height: 10.2
-#| out-height: !expr 'if (knitr::is_latex_output()) "0.84\\textheight" else NULL'
+#| fig-cap: "Evolución mensual de menciones por característica (3 clústeres y 3 modalidades de hurto)"
+#| fig-alt: "Cuadrícula de 6 paneles mensuales entre 2022 y 2026 mostrando el conteo mensual de documentos para cada uno de los 3 clústeres y 3 modalidades de hurto objetivo."
+#| fig-width: 9.5
+#| fig-height: 5.8
 ## 4.3.2 Diagnóstico mensual de frecuencia por característica ----
 p_fig9 <- summary_mes$plots$feature_plot +
-  facet_wrap(~ variable, ncol = 4, scales = "free_y") +
+  facet_wrap(~ variable, ncol = 3, scales = "free_y") +
   labs(
-    title    = "Evolución Mensual de Frecuencia por Feature en el Corpus",
-    subtitle = "Paneles separados por localidad, clúster y categoría delictiva (2022-sep. 2026)",
+    title    = "Evolución Mensual de Frecuencia por Feature en el Corpus Objetivo",
+    subtitle = "6 paneles independientes: 3 clústeres K-Means y 3 modalidades objetivo (2022-sep. 2026)",
     x        = "Fecha (mes)",
     y        = "Conteo mensual por feature",
     caption  = "Fuente: diagnóstico S3 con sentometrics::corpus_summarize()."
@@ -1755,10 +1705,10 @@ p_fig9 <- summary_mes$plots$feature_plot +
   tema_limpio +
   theme(
     legend.position = "none",
-    strip.text      = element_text(size = 8.5, face = "bold"),
-    axis.text.x     = element_text(size = 7),
-    axis.text.y     = element_text(size = 7.5),
-    panel.spacing   = grid::unit(0.6, "lines")
+    strip.text      = element_text(size = 9.5, face = "bold"),
+    axis.text.x     = element_text(size = 8),
+    axis.text.y     = element_text(size = 8),
+    panel.spacing   = grid::unit(0.8, "lines")
   )
 
 sc_x9 <- p_fig9$scales$get_scales("x")
@@ -1779,20 +1729,19 @@ La subsección 4.4 implementa la Fase 2 de `scripts/03_analisis_sentometrics.R` 
 | `lex_crimen_bogota` (`crimen_es`) | Léxico especializado de dominio (seguridad urbana y crimen en Bogotá) | `data.frame` con 73 términos locales en columnas `x` e `y` ($y \in [-1{,}0, +0{,}9]$): asigna pesos negativos ($-1{,}0$ a $-0{,}4$) a delitos y violencia (*homicidio, sicariato, fleteo, escopolamina, cosquilleo, raponazo, rompevidrios, apartamenteros, extorsión*) y pesos positivos ($+0{,}4$ a $+0{,}9$) a acciones de control institucional (*captura, desarticulación, incautación, esclarecimiento, rescate, megatoma*). | Resolver la ceguera de los diccionarios traducidos frente a la jerga delictiva bogotana y distinguir en una misma cobertura entre hechos violentos (que restan al índice) y resultados operativos policiales o judiciales (que suman). |
 | `tabla_valence_es` (`valenceIn`) | Tabla de modificadores contextuales de valencia | `data.frame` de 30 conectores y adverbios en español con columnas `x` (término), `y` (factor multiplicador) y `t` (categoría entera $1\dots 4$): **negadores** ($t = 1, y = -1{,}0$: *no, nunca, jamás, sin, ni, ningún*), **amplificadores** ($t = 2, y \in \{1{,}5, 1{,}8\}$: *muy, gravemente, brutalmente, masivamente*), **atenuadores** ($t = 3, y \in \{0{,}2, 0{,}4\}$: *poco, apenas, levemente, casi*) y **adversativos** ($t = 4, y = -1{,}0$: *pero, aunque, obstante, embargo*). | Ajustar el signo y la magnitud de cada palabra polar según su vecindad sintáctica inmediata (como se formuló en la @eq-sent-doc), evitando errores frecuentes como puntuar positivamente *"operativo sin capturas"* o subestimar *"brutalmente atacado"*. |
 | `lexicons_es` | Contenedor compuesto de diccionarios y valencia (`sento_lexicons`) | Objeto S3 validado por `sentometrics::sento_lexicons()` que integra en una sola lista los dos diccionarios (`nrc_es` y `crimen_es`) acoplados a la regla contextual `valenceIn = tabla_valence_es`. | Garantizar la unicidad de tokens y suministrar a `compute_sentiment()` y `sento_measures()` el motor léxico dual listo para evaluar los documentos en paralelo bajo ambos vocabularios. |
-| `sentiment_scores` y `sentiment_tfidf` | Matrices documentales de polaridad (`sentiment`) | Objetos S3 (`data.table` de $3.916$ documentos $\times$ $54$ columnas: `id`, `date`, `word_count` y $2 \times 26$ combinaciones diccionario-característica) calculados respectivamente con `how = "proportionalPol"` (especificación principal) y `how = "TFIDF"` (prueba de sensibilidad). | Cuantificar la intensidad emocional de cada noticia controlando por el número de palabras polares (`proportionalPol`) y verificar que el ordenamiento relativo de los artículos se mantenga estable frente a un esquema de ponderación por rareza léxica (`TFIDF`). |
-| `df_sent_doc` y `df_noticias_enriquecida` | Tablas consolidadas de polaridad por artículo (`tibble`) | `tibble` de 3.916 filas que recupera el puntaje neto por documento en cada diccionario (`score_nrc_es`, `score_crimen_es`), su promedio equiponderado (`sentimiento_score`), el puntaje alternativo `score_tfidf_compuesto`, el clúster territorial y la clasificación `sentimiento_categoria` (`Negativo` si $< -0{,}02$, `Positivo` si $> +0{,}02$ y `Neutro` en $[-0{,}02, +0{,}02]$). | Unificar en una sola tabla maestra la información textual, geográfica y de sentimiento a nivel de noticia para alimentar los descriptivos anuales, la selección de titulares extremos y la vista por localidad del tablero Shiny. |
+| `sentiment_scores` y `sentiment_tfidf` | Matrices documentales de polaridad (`sentiment`) | Objetos S3 (`data.table` de $993$ documentos $\times$ $15$ columnas: `id`, `date`, `word_count` y $2 \times 6$ combinaciones diccionario-característica) calculados respectivamente con `how = "proportionalPol"` (especificación principal) y `how = "TFIDF"` (prueba de sensibilidad). | Cuantificar la intensidad emocional de cada noticia de hurto controlando por el número de palabras polares (`proportionalPol`) y verificar la estabilidad del ordenamiento frente a `TFIDF`. |
+| `df_sent_doc` y `df_noticias_enriquecida` | Tablas consolidadas de polaridad por artículo (`tibble`) | `tibble` de `993` filas (las 3 modalidades objetivo) que recupera `score_nrc_es`, `score_crimen_es`, su promedio equiponderado (`sentimiento_score`), `score_tfidf_compuesto`, el clúster territorial y la clasificación `sentimiento_categoria` (`Negativo` $< -0{,}02$, `Positivo` $> +0{,}02$, `Neutro` en $[-0{,}02, +0{,}02]$). | Unificar información textual, geográfica y de sentimiento de las noticias objetivo para alimentar los descriptivos anuales, la selección de titulares extremos y la app Shiny. |
 
 : Resumen de los recursos léxicos, modificadores contextuales y objetos de polaridad documental construidos en la Sección 4.4 {#tbl-recursos-lexicos}
 
-El siguiente bloque ejecuta la construcción de todos los insumos descritos en la @tbl-recursos-lexicos y calcula la polaridad individual de las 3.916 noticias. Este paso es necesario dentro del flujo metodológico porque transforma el texto no estructurado de cada noticia en puntajes numéricos comparables entre artículos cortos y extensos, combinando la sensibilidad emocional general de `nrc_es` con la precisión terminológica de `crimen_es`. Asimismo, aprovecha que los tres clústeres territoriales (`c_centro`, `c_comercial` y `c_residencial`) forman una partición exhaustiva y mutuamente excluyente de las 19 localidades: como cada noticia pertenece exactamente a un clúster, sumar las tres columnas correspondientes devuelve el puntaje documental completo de esa noticia en cada diccionario.
+El siguiente bloque construye los recursos de la @tbl-recursos-lexicos y calcula la polaridad individual de las `993` noticias objetivo contenidas en `corpus_sento`. Como los tres clústeres territoriales (`c_centro`, `c_comercial` y `c_residencial`) forman una partición exhaustiva y mutuamente excluyente de las 19 localidades, sumar esas tres columnas devuelve el puntaje documental completo de cada artículo en cada diccionario. Adicionalmente, evaluamos los mismos diccionarios sobre una tabla auxiliar (`df_noticias_ref_corpus`) de las `3.916` notas únicamente para mantener la columna de contraste global en las comparaciones espaciales de la Sección 6.3.
 
-Las funciones principales empleadas en este chunk cumplen las siguientes tareas:
+Las funciones principales empleadas en este bloque cumplen cuatro tareas:
 
-* `syuzhet::get_sentiment_dictionary("nrc", language = "spanish")`: descarga localmente el léxico base NRC en español para filtrar sus palabras de polaridad positiva y negativa, limpiar espacios y colapsar posibles duplicados mediante `group_by(x)` y `summarise(y = round(mean(y), 4))`.
-* `tibble::tribble()`: define fila por fila en el código tanto el diccionario especializado `lex_crimen_bogota` como la tabla de modificadores `tabla_valence_es`, dejando explícito y auditable el peso asignado a cada palabra y conector.
-* `sentometrics::sento_lexicons()`: valida que los diccionarios (`lexiconsIn`) y los modificadores de valencia (`valenceIn`) no tengan entradas ambiguas y los compila en el objeto S3 `lexicons_es`.
-* `sentometrics::compute_sentiment()`: recorre las 3.916 noticias de `corpus_sento`, aplica las reglas de vecindad de `valenceIn` y calcula la matriz de puntajes por documento y característica bajo `how = "proportionalPol"` (dividiendo entre palabras polares) y bajo `how = "TFIDF"` (ponderando por frecuencia inversa de documento).
-* `dplyr::transmute()`, `dplyr::left_join()`, `stats::cor()` y `dplyr::case_when()`: consolidan los puntajes por diccionario en `df_sent_doc`, miden la correlación de robustez entre `proportionalPol` y `TFIDF`, cruzan los resultados con la base original de noticias y clasifican cada artículo en `Negativo`, `Neutro` o `Positivo`.
+* `syuzhet::get_sentiment_dictionary("nrc", language = "spanish")`: carga el léxico general en español para depurar palabras simples con carga positiva o negativa neta.
+* `tibble::tribble()`: declara fila por fila el vocabulario especializado `lex_crimen_bogota` y los modificadores `tabla_valence_es`, dejando auditable el peso de cada palabra y conector.
+* `sentometrics::sento_lexicons()`: valida la unicidad de tokens y compila ambos diccionarios junto con `valenceIn`.
+* `sentometrics::compute_sentiment()`: puntúa las `993` noticias de `corpus_sento` aplicando reglas de vecindad sintáctica bajo `proportionalPol` y `TFIDF`, antes de calcular la correlación entre ambos métodos y etiquetar cada artículo como `Negativo`, `Neutro` o `Positivo`.
 
 ```{r}
 #| label: lexicos-y-sentimiento
@@ -1957,8 +1906,8 @@ comp_metodo <- list(
   media_combinada = mean(df_sent_doc$sentimiento_score, na.rm = TRUE)
 )
 
-# Enriquecemos las noticias en memoria con el puntaje neto, su categoría y su clúster
-df_noticias_enriquecida <- df_noticias_base |>
+# Enriquecemos las 993 noticias objetivo con su puntaje neto, su categoría y su clúster
+df_noticias_enriquecida <- df_noticias_modelo |>
   mutate(id = paste0("doc_", row_number())) |>
   left_join(df_sent_doc, by = "id") |>
   left_join(
@@ -1973,69 +1922,105 @@ df_noticias_enriquecida <- df_noticias_base |>
     )
   )
 
+# Cálculo auxiliar sobre las 3.916 recopiladas (únicamente para contraste de referencia en Sec. 6.3)
+df_ref_input <- df_noticias_base |>
+  mutate(
+    id    = paste0("ref_", row_number()),
+    date  = as.Date(fecha),
+    texts = str_squish(paste(
+      coalesce(titulo, ""), coalesce(resumen, ""),
+      str_sub(coalesce(cuerpo, ""), 1, 800), sep = ". "
+    )),
+    todas = 1.0
+  )
+corpus_ref_3916 <- sentometrics::sento_corpus(
+  as.data.frame(df_ref_input |> select(id, date, texts, todas)),
+  do.clean = FALSE
+)
+sent_ref_3916 <- sentometrics::compute_sentiment(
+  x = corpus_ref_3916, lexicons = lexicons_es,
+  how = "proportionalPol", do.sentence = FALSE
+)
+df_noticias_ref_corpus <- df_noticias_base |>
+  mutate(id = paste0("ref_", row_number())) |>
+  left_join(
+    as_tibble(sent_ref_3916) |>
+      transmute(
+        id = id,
+        sentimiento_score = round(0.5 * `nrc_es--todas` + 0.5 * `crimen_es--todas`, 4)
+      ),
+    by = "id"
+  )
+
 cat(
-  "Correlación entre proportionalPol y TFIDF:", round(comp_metodo$correlacion_propPol_tfidf, 4), "\n",
+  "Correlación entre proportionalPol y TFIDF (993 noticias):", round(comp_metodo$correlacion_propPol_tfidf, 4), "\n",
   "Media léxico general (nrc_es):", round(comp_metodo$media_nrc_es, 4), "\n",
   "Media léxico criminalidad (crimen_es):", round(comp_metodo$media_crimen_es, 4), "\n",
   "Media compuesta:", round(comp_metodo$media_combinada, 4), "\n"
 )
 ```
 
-Al comparar ambos diccionarios se aprecia por qué conviene mantenerlos juntos: el diccionario general `nrc_es` tiene una media cercana a la neutralidad (`r round(comp_metodo$media_nrc_es, 4)`), mientras que el vocabulario especializado `crimen_es` capta con mucha mayor nitidez el tono negativo de los hechos delictivos (`r round(comp_metodo$media_crimen_es, 4)`). A su vez, `proportionalPol` mantiene una correlación positiva de `r round(comp_metodo$correlacion_propPol_tfidf, 4)` frente al esquema alternativo `TFIDF`.
+Al comparar ambos diccionarios sobre las `993` noticias objetivo se aprecia por qué conviene mantenerlos juntos: el diccionario general `nrc_es` tiene una media cercana a la neutralidad (`r round(comp_metodo$media_nrc_es, 4)`), mientras que el vocabulario especializado `crimen_es` capta con nitidez el tono negativo de los hurtos (`r round(comp_metodo$media_crimen_es, 4)`). A su vez, `proportionalPol` mantiene una correlación positiva de `r round(comp_metodo$correlacion_propPol_tfidf, 4)` frente al esquema alternativo `TFIDF`.
 
-Una vez asignado el puntaje de polaridad a cada artículo en `df_noticias_enriquecida`, el siguiente bloque construye una tabla resumen anual entre 2022 y septiembre de 2026. Este paso es necesario dentro del flujo metodológico porque permite verificar en una sola vista que cada año cuente con cobertura en las 19 localidades urbanas, cuantificar qué proporción de la prensa trata específicamente sobre los 11 delitos de alto impacto (DAI) de la SDSCJ y observar cómo evoluciona el sentimiento promedio anual junto con la extensión de los artículos.
-
-Las funciones principales utilizadas en este resumen tabular son:
-
-* `dplyr::filter(!(año == 2026 & mes > 9))` y `dplyr::group_by(año)`: aseguran que el corte temporal de 2026 llegue hasta septiembre (alineado con el cierre estadístico oficial de SIEDCO) y agrupan las observaciones por año calendario.
-* `dplyr::summarise()` y `dplyr::n_distinct()`: calculan para cada año el conteo total de artículos (`n()`), la suma de noticias clasificadas estrictamente en los 11 DAI (`sum(es_dai_estricto)`), el número de localidades distintas con cobertura (`n_distinct(localidad)`), la media y mediana de palabras del cuerpo y el promedio del puntaje combinado `sentimiento_score`.
-* `knitr::kable()`: formatea el `tibble` resultante en una tabla limpia con encabezados descriptivos para el reporte.
+Con los puntajes individuales calculados, la siguiente tabla resume cada año entre `2022` y septiembre de `2026`. En lugar de agrupar las `11` categorías DAI generales del scraping, el resumen se enfoca en las **3 modalidades de hurto objetivo** que coinciden con `SIEDCO.csv` (*hurto a personas*, *hurto a residencias* y *hurto de motocicletas*), mostrando tanto el volumen total recopilado como el subconjunto exacto que entra a `sentometrics`, su cobertura en las 19 localidades, la extensión de texto y el sentimiento neto promedio.
 
 ```{r}
 #| label: tbl-descriptivos-corpus-anual
-#| tbl-cap: "Resumen anual del corpus de noticias de seguridad en Bogotá (2022-septiembre de 2026)"
-## 4.4.1 Tabla descriptiva anual del corpus ----
-tabla_corpus_anual <- df_noticias_enriquecida |>
-  mutate(año = as.integer(año), mes = as.integer(mes)) |>
+#| tbl-cap: "Resumen anual de las 3 modalidades objetivo dentro del corpus de noticias en Bogotá (2022-septiembre de 2026)"
+## 4.4.1 Tabla descriptiva anual sobre las 3 modalidades DAI objetivo ----
+tabla_corpus_anual <- df_noticias_base |>
+  mutate(
+    año     = as.integer(año),
+    mes     = as.integer(mes),
+    es_3mod = delito_sdscj %in% modalidades_objetivo_noticias
+  ) |>
   filter(!(año == 2026 & mes > 9)) |>
   group_by(año) |>
   summarise(
-    noticias         = n(),
-    noticias_dai     = sum(es_dai_estricto, na.rm = TRUE),
-    localidades      = n_distinct(localidad),
-    media_palabras   = round(mean(palabras_cuerpo, na.rm = TRUE), 1),
-    mediana_palabras = round(median(palabras_cuerpo, na.rm = TRUE), 1),
-    sentimiento_prom = round(mean(sentimiento_score, na.rm = TRUE), 4),
-    .groups = "drop"
+    noticias_recop   = n(),
+    noticias_pers    = sum(delito_sdscj == "Hurto a personas", na.rm = TRUE),
+    noticias_resid   = sum(delito_sdscj == "Hurto a residencias", na.rm = TRUE),
+    noticias_motos   = sum(delito_sdscj == "Hurto de motocicletas", na.rm = TRUE),
+    noticias_3mod    = sum(es_3mod, na.rm = TRUE),
+    .groups          = "drop"
+  ) |>
+  left_join(
+    df_noticias_enriquecida |>
+      mutate(año = as.integer(año), mes = as.integer(mes)) |>
+      filter(!(año == 2026 & mes > 9)) |>
+      group_by(año) |>
+      summarise(
+        localidades      = n_distinct(localidad),
+        media_palabras   = round(mean(palabras_cuerpo, na.rm = TRUE), 1),
+        mediana_palabras = round(median(palabras_cuerpo, na.rm = TRUE), 1),
+        sentimiento_prom = round(mean(sentimiento_score, na.rm = TRUE), 4),
+        .groups          = "drop"
+      ),
+    by = "año"
   )
 
 stopifnot(nrow(tabla_corpus_anual) == 5)
+stopifnot(sum(tabla_corpus_anual$noticias_3mod) == nrow(df_noticias_enriquecida))
 
 knitr::kable(
   tabla_corpus_anual,
   col.names = c(
-    "Año", "Noticias totales", "Noticias 11 DAI (estricto)",
-    "Localidades cubiertas", "Media palabras", "Mediana palabras",
-    "Sentimiento neto promedio"
+    "Año", "Recopiladas (total)", "Personas", "Residencias", "Motos",
+    "Total 3 mod. (modelo)", "Localidades", "Media palabras",
+    "Mediana palabras", "Sentimiento neto"
   )
 )
 ```
 
-Mientras la tabla anterior reporta el promedio anual del puntaje continuo, el siguiente bloque desagrega ese balance en términos porcentuales según las tres categorías de tono (`Negativo`, `Neutro` y `Positivo`) para cada año del periodo. Este paso es necesario porque un promedio negativo podría deberse tanto a unos pocos artículos extremos como a una mayoría sistemática de titulares adversos; graficar la composición porcentual confirma que alrededor de dos tercios de la cobertura sobre seguridad en Bogotá mantienen una carga negativa año tras año, frente a una fracción menor de notas positivas vinculadas a operativos o capturas.
-
-Las funciones principales que construyen esta visualización son:
-
-* `dplyr::group_by(año, sentimiento_categoria)` y `dplyr::summarise(conteo = n())`: cuentan cuántos artículos caen en cada categoría de polaridad dentro de cada año.
-* `dplyr::group_by(año)` seguido de `dplyr::mutate(pct = conteo / sum(conteo) * 100)`: transforma los conteos absolutos en porcentajes que suman 100% dentro de cada año, haciendo comparables años completos (2022 a 2025) con el corte parcial de 2026.
-* `ggplot2::geom_col(position = position_dodge())`, `ggplot2::geom_text()` y `ggplot2::scale_fill_manual()`: dibujan las barras agrupadas lado a lado por año, imprimen el porcentaje exacto sobre cada barra y asignan una paleta semántica intuitiva (rojo para tono negativo, gris para neutro y verde para positivo).
+El siguiente bloque desagrega el tono de esas `993` noticias objetivo en proporciones porcentuales (`Negativo`, `Neutro` y `Positivo`) por año, haciendo comparables los años completos (`2022–2025`) frente al corte a septiembre de `2026`.
 
 ```{r}
 #| label: fig-tono-anual
-#| fig-cap: "Distribución porcentual anual de noticias según categoría de polaridad (2022-septiembre de 2026)"
-#| fig-alt: "Gráfico de barras agrupadas por año que compara el porcentaje de noticias negativas, neutras y positivas entre 2022 y 2026."
+#| fig-cap: "Distribución porcentual anual de polaridad en las 993 noticias de las 3 modalidades objetivo (2022-septiembre de 2026)"
+#| fig-alt: "Gráfico de barras agrupadas por año que compara el porcentaje de noticias negativas, neutras y positivas entre 2022 y 2026 sobre las tres modalidades objetivo."
 #| fig-width: 9
 #| fig-height: 5
-## 4.4.2 Proporción anual del tono de las noticias ----
+## 4.4.2 Proporción anual del tono en las 3 modalidades objetivo ----
 tono_por_anio <- df_noticias_enriquecida |>
   mutate(año = as.integer(año), mes = as.integer(mes)) |>
   filter(!(año == 2026 & mes > 9)) |>
@@ -2058,10 +2043,10 @@ p_fig7 <- ggplot(tono_por_anio, aes(x = factor(año), y = pct, fill = sentimient
   ) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
   labs(
-    title    = "Distribución Anual del Tono de las Noticias sobre Seguridad",
-    subtitle = "Porcentaje de artículos según categoría de polaridad (2022-sep. 2026)",
+    title    = "Distribución Anual del Tono en las 3 Modalidades Objetivo",
+    subtitle = "Porcentaje de artículos según categoría de polaridad (993 noticias, 2022-sep. 2026)",
     x        = "Año",
-    y        = "% de noticias",
+    y        = "% de noticias objetivo",
     fill     = "Polaridad",
     caption  = "Fuente: cálculos con sentometrics (nrc_es + crimen_es)."
   ) +
@@ -2070,17 +2055,11 @@ p_fig7 <- ggplot(tono_por_anio, aes(x = factor(año), y = pct, fill = sentimient
 print(p_fig7)
 ```
 
-Como cierre de la subsección 4.4, el siguiente bloque extrae y audita los artículos que registran los puntajes de sentimiento más extremos, tanto en el conjunto de Bogotá como dentro de cada una de las 19 localidades. Este paso cumple una doble función metodológica: por un lado, sirve como validación cualitativa de lectura cercana (*close reading*) para comprobar que los valores más negativos correspondan efectivamente a hechos de alta gravedad (homicidios, sicariato o atracos violentos) y los más positivos a desarticulaciones o balances operativos favorables; por otro lado, deja estructurado el catálogo de titulares extremos que alimenta la tabla interactiva de la pestaña *Mi localidad* en la aplicación Shiny.
-
-Para realizar esta extracción se emplean las siguientes funciones clave:
-
-* `sentometrics::peakdocs(sentiment_scores, n = 25, type = "both" / "neg" / "pos")`: inspecciona el objeto S3 `sentiment_scores` y devuelve los identificadores (`id`) de los 25 documentos con mayor magnitud absoluta, los 25 más negativos y los 25 más positivos de todo el corpus.
-* `dplyr::group_by(localidad)`, `dplyr::arrange(sentimiento_score)` y `dplyr::slice(unique(c(1:5, (n() - 4):n())))`: ordenan las noticias de menor a mayor puntaje dentro de cada localidad y seleccionan las 5 más negativas (primeras 5 filas) y las 5 más positivas (últimas 5 filas) de cada territorio.
-* `dplyr::case_when()`, `data.table::as.data.table()` y `stringr::str_trunc()`: etiquetan cada documento según su tipo de extremo (`Pico Negativo Global`, `Pico Positivo Global`, `Extremo Negativo Local`, `Extremo Positivo Local` o `Regular`), empaquetan el resultado en `objeto_peak_docs` y recortan los titulares a 65 caracteres para presentarlos en tabla mediante `knitr::kable()`.
+Para cerrar la subsección 4.4, extraemos los artículos con puntajes de polaridad más extremos mediante `sentometrics::peakdocs()` sobre el corpus objetivo (`993` noticias) y validamos cualitativamente si los extremos negativos y positivos corresponden realmente a crónicas de violencia o a noticias de capturas y recuperación de bienes.
 
 ```{r}
 #| label: tbl-peakdocs
-#| tbl-cap: "Muestra de noticias con polaridad más extrema identificadas mediante peakdocs()"
+#| tbl-cap: "Muestra de noticias con polaridad más extrema identificadas mediante peakdocs() en las 3 modalidades objetivo"
 ## 4.4.3 Extracción de documentos extremos con peakdocs() ----
 stopifnot(min(table(df_noticias_enriquecida$localidad)) >= 5)
 
@@ -2137,20 +2116,95 @@ muestra_picos <- as_tibble(objeto_peak_docs$top_criticas) |>
 
 knitr::kable(
   muestra_picos,
-  col.names = c("Fecha", "Localidad", "Modalidad SDSCJ", "Titular", "Score neto", "Clasificación")
+  col.names = c("Fecha", "Localidad", "Modalidad objetivo", "Titular", "Score neto", "Clasificación")
 )
 ```
 
+Como complemento visual directo de la @tbl-peakdocs, la @fig-peakdocs-extremos compara en una sola vista los 6 titulares más negativos y los 6 titulares más positivos detectados por `peakdocs()` en el corpus de las 3 modalidades objetivo.
+
+```{r}
+#| label: fig-peakdocs-extremos
+#| fig-cap: "Titulares más negativos y más positivos detectados por peakdocs() en las 3 modalidades objetivo"
+#| fig-alt: "Gráfico divergente horizontal con los seis titulares de sentimiento más negativo a la izquierda en rojo y los seis más positivos a la derecha en verde."
+#| fig-width: 9.8
+#| fig-height: 5.4
+extremos_neg <- as_tibble(objeto_peak_docs$tabla_completa) |>
+  filter(id %in% ids_peak_neg) |>
+  slice_min(sentimiento_score, n = 6, with_ties = FALSE)
+
+extremos_pos <- as_tibble(objeto_peak_docs$tabla_completa) |>
+  filter(id %in% ids_peak_pos) |>
+  slice_max(sentimiento_score, n = 6, with_ties = FALSE)
+
+df_extremos_viz <- bind_rows(extremos_neg, extremos_pos) |>
+  distinct(id, .keep_all = TRUE) |>
+  mutate(
+    mod_corta = recode(
+      delito_sdscj,
+      "Hurto a personas"      = "Personas",
+      "Hurto a residencias"   = "Residencias",
+      "Hurto de motocicletas" = "Motos"
+    ),
+    etiqueta = paste0("[", localidad, " · ", mod_corta, "] ", str_trunc(titulo, 52)),
+    etiqueta = make.unique(etiqueta),
+    etiqueta_ord = reorder(etiqueta, sentimiento_score),
+    lado = ifelse(sentimiento_score < 0, "Negativo (alarma / violencia)", "Positivo (capturas / recuperación)")
+  )
+
+ggplot(df_extremos_viz, aes(x = sentimiento_score, y = etiqueta_ord, color = lado)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "grey45") +
+  geom_segment(aes(x = 0, xend = sentimiento_score, yend = etiqueta_ord), linewidth = 1.1) +
+  geom_point(size = 3.2) +
+  geom_text(
+    aes(
+      label = sprintf("%+.2f", sentimiento_score),
+      hjust = ifelse(sentimiento_score < 0, 1.35, -0.35)
+    ),
+    size = 3.1, fontface = "bold", show.legend = FALSE
+  ) +
+  scale_color_manual(
+    values = c(
+      "Negativo (alarma / violencia)"      = "#c0392b",
+      "Positivo (capturas / recuperación)" = "#27ae60"
+    ),
+    name = "Polos detectados"
+  ) +
+  scale_x_continuous(limits = c(-1.18, 1.18), breaks = seq(-1, 1, by = 0.5)) +
+  labs(
+    title    = "Extremos de Polaridad Documental en las 3 Modalidades (peakdocs)",
+    subtitle = "Comparación entre los 6 titulares más adversos y los 6 más favorables",
+    x        = "Puntaje neto compuesto (sentimiento_score)",
+    y        = NULL,
+    caption  = "Fuente: cómputo S3 con sentometrics::peakdocs() sobre 993 noticias."
+  ) +
+  tema_limpio +
+  theme(
+    legend.position = "bottom",
+    axis.text.y     = element_text(size = 8.4)
+  )
+```
+
+La lectura conjunta de la @tbl-peakdocs y la @fig-peakdocs-extremos confirma por qué combinamos `crimen_es` con modificadores de valencia (`valenceIn`). Del lado izquierdo aparecen titulares sobre atracos armados, fleteos, uso de escopolamina y hechos sin capturas, con puntajes cercanos a `-0,90`. Del lado derecho aparecen notas sobre rescates, recuperación de motocicletas hurtadas, incautaciones y capturas en flagrancia, que superan `+0,75` porque el léxico especializado premia las acciones operativas exitosas dentro de la misma cobertura de hurto.
+
 ## Series temporales multidimensionales, índice global y fechas críticas
 
-En el primer bloque de la subsección 4.5 llevamos a la práctica la Fase 3 de `scripts/03_analisis_sentometrics.R`, convirtiendo los puntajes individuales de las noticias en un panel mensual continuo de $2 \times 26 \times 7 = 364$ series de sentimiento. Este paso es indispensable dentro del flujo metodológico porque el modelo econométrico de la Sección 5 requiere predictores regulares en el tiempo (una observación por cada mes $t$) que integren las tres dimensiones formuladas en la Sección 4.2: cómo se califica cada texto (`proportionalPol`), cómo se ponderan los artículos publicados dentro de un mismo mes (`proportional`) y cómo se suaviza la memoria emocional durante una ventana móvil de 6 meses bajo 7 curvas distintas. Además, el bloque construye el índice global distrital y detecta automáticamente los meses de mayor tensión informativa.
+En la subsección 4.5 ejecutamos la Fase 3 de `scripts/03_analisis_sentometrics.R` y reunimos los puntajes individuales de las `993` noticias objetivo en un panel mensual continuo de **$2 \times 6 \times 3 = 36$ series de sentimiento**. Como paso previo auditable, la @tbl-parametros-ctr-agg documenta en detalle qué controla cada parámetro de `sentometrics::ctr_agg()`.
 
-Las funciones principales que articulan esta agregación tridimensional son:
+| Parámetro en `ctr_agg()` | Valor en nuestro proyecto | Significado y función en el cálculo |
+| :--- | :--- | :--- |
+| `howWithin` | `"proportionalPol"` | Califica cada artículo dividiendo la suma neta de polaridad ajustada por valencia entre el número de palabras que sí pertenecen a un diccionario, evitando que artículos extensos se diluyan por texto neutro. |
+| `howDocs` | `"proportional"` | Promedia los artículos dentro de cada mes ponderando cada nota por su extensión en palabras respecto al total publicado en ese mes. |
+| `howTime` | `c("linear", "exponential", "beta")` | Activa tres familias de ponderación temporal para suavizar los rezagos de meses anteriores dentro de una misma ventana móvil. |
+| `by` | `"month"` | Fija la frecuencia temporal de agregación a cortes mensuales (`2022-01` a `2026-09`), alineados con la frecuencia de `SIEDCO.csv`. |
+| `lag` | `6` | Fija la ventana móvil en 6 meses continuos (el mes actual $t$ más los 5 anteriores), descartando los primeros 5 meses y dejando 52 observaciones mensuales efectivas. |
+| `alphasExp` | `0.5` | Regula la pendiente de la curva exponencial ($\alpha_{\text{Exp}} = 0{,}5$, que equivale internamente a $\alpha = 5$), asignando `56,9%` al mes actual y `24,7%` al mes anterior. |
+| `aBeta` y `bBeta` | `aBeta = 2`, `bBeta = 2` | Define una única curva Beta simétrica (`beta22`) que asigna `0%` al mes actual y concentra el peso en los rezagos intermedios del semestre (`25,7%` hace 3 meses). |
+| `do.ignoreZeros` | `TRUE` | Excluye del promedio mensual las noticias puramente neutras (sin coincidencias léxicas) para que no arrastren artificialmente las series hacia cero. |
+| `fill` | `"zero"` | Completa con cero (junto con `measures_fill()`) los meses donde alguna categoría o modalidad no registró noticias, manteniendo una matriz rectangular sin valores faltantes. |
 
-* `sentometrics::ctr_agg()`: define la regla de agregación en los tres niveles: nivel intradocumental (`howWithin = "proportionalPol"`), nivel mensual entre documentos (`howDocs = "proportional"`, `by = "month"`, `do.ignoreZeros = TRUE`) y nivel intertemporal (`howTime = c("linear", "exponential", "beta")` con `lag = 6`, `alphasExp = c(0.2, 0.5)`, `aBeta = c(1, 2)` y `bBeta = c(2, 3)`).
-* `sentometrics::sento_measures()` y `sentometrics::measures_fill(..., fill = "zero")`: la primera cruza el corpus, los diccionarios y el control de agregación para generar las 364 series mensuales; la segunda garantiza que cualquier mes sin noticias en alguna localidad o tema específico se complete con cero para mantener la continuidad de la matriz.
-* `data.table::as.data.table()`, `tidyr::pivot_longer()` y `tidyr::separate(..., sep = "--")`: extraen la matriz ancha de medidas, la reestructuran en formato largo (`df_measures_long`) y separan el identificador compuesto `serie_id` en sus tres coordenadas analíticas (`lexicon`, `feature` y `time`), añadiendo etiquetas legibles para visualización.
-* `stats::aggregate(medidas_sento, do.global = TRUE)` y `sentometrics::peakdates(..., n = 8, type = "both" / "neg" / "pos")`: la primera colapsa las 364 series en un índice global mensual para toda Bogotá (junto con sus promedios por dimensión); la segunda identifica las 8 fechas mensuales donde la serie agregada alcanzó sus picos más negativos, más positivos o más extremos en valor absoluto.
+: Explicación de los parámetros configurados en `sentometrics::ctr_agg()` {#tbl-parametros-ctr-agg}
+
+El siguiente bloque instancia ese objeto `control_agg`, genera las `36` series mensuales continuas, las reorganiza en formato largo legible (`df_measures_long`), calcula el índice distrital global (`do.global = TRUE`) e identifica las 8 fechas de alarma más severas mediante `peakdates()`.
 
 ```{r}
 #| label: build-sento-measures
@@ -2161,9 +2215,9 @@ control_agg <- sentometrics::ctr_agg(
   howTime        = c("linear", "exponential", "beta"),
   by             = "month",
   lag            = 6,
-  alphasExp      = c(0.2, 0.5),
-  aBeta          = c(1, 2),
-  bBeta          = c(2, 3),
+  alphasExp      = 0.5,
+  aBeta          = 2,
+  bBeta          = 2,
   do.ignoreZeros = TRUE,
   fill           = "zero"
 )
@@ -2177,22 +2231,19 @@ medidas_sento <- sentometrics::sento_measures(
 # Aseguramos que ningún mes quede con NA cuando una feature no tiene menciones en ese mes
 medidas_sento <- sentometrics::measures_fill(medidas_sento, fill = "zero")
 stopifnot(inherits(medidas_sento, "sento_measures"))
+stopifnot(ncol(medidas_sento$measures) - 1L == 36L)
 
-# Convertimos la matriz ancha (57 meses x 364 series) a formato largo legible
+# Convertimos la matriz ancha (52 meses x 36 series) a formato largo legible
 dt_measures_wide <- data.table::as.data.table(medidas_sento)
 
 mapa_etiquetas_features <- c(
   c_centro               = "Clúster: Céntrico e Institucional",
   c_comercial            = "Clúster: Comercial y Automotor",
   c_residencial          = "Clúster: Residencial y Periférico",
-  tema_hurto_personas    = "Tema: Hurto a Personas y Transporte",
-  tema_hurto_patrimonial = "Tema: Hurto Patrimonial y Vehículos",
-  tema_violencia_vida    = "Tema: Violencia, Homicidio y Extorsión",
-  tema_institucional     = "Tema: Operatividad y Política de Seguridad"
+  tema_hurto_personas    = "Modalidad: Hurto a Personas",
+  tema_hurto_residencias = "Modalidad: Hurto a Residencias",
+  tema_hurto_motos       = "Modalidad: Hurto de Motocicletas"
 )
-for (i in seq_along(localidades_unicas)) {
-  mapa_etiquetas_features[nombres_feat_loc[i]] <- localidades_unicas[i]
-}
 
 df_measures_long <- as_tibble(dt_measures_wide) |>
   pivot_longer(
@@ -2209,8 +2260,7 @@ df_measures_long <- as_tibble(dt_measures_wide) |>
   mutate(
     grupo_feature = case_when(
       str_starts(feature, "c_")    ~ "Clúster Territorial",
-      str_starts(feature, "tema_") ~ "Tópico / Modalidad DAI",
-      str_starts(feature, "loc_")  ~ "Localidad",
+      str_starts(feature, "tema_") ~ "Modalidad de Hurto",
       TRUE                         ~ "Otro"
     ),
     feature_label = coalesce(unname(mapa_etiquetas_features[feature]), feature),
@@ -2250,13 +2300,7 @@ objeto_global_index <- list(
 medidas_sento
 ```
 
-Para cerrar la Sección 4 e inspeccionar visualmente el comportamiento de las series construidas antes de introducirlas en Elastic Net, el último bloque grafica la trayectoria mensual de los tres clústeres territoriales bajo el diccionario especializado `crimen_es` y el esquema de memoria exponencial ($\alpha = 0{,}5$), superponiendo los 8 meses críticos de negatividad detectados con `peakdates()`. Esta visualización es necesaria porque permite comprobar que las tres tipologías urbanas de $K$-Means exhiben dinámicas de prensa diferenciadas pero sincronizadas en torno a las coyunturas de mayor alarma ciudadana, y sirve como referencia directa de lo que el usuario explora de manera interactiva en la quinta pestaña de la aplicación Shiny.
-
-Las funciones principales utilizadas en este gráfico son:
-
-* `dplyr::filter()` y `stringr::str_remove(feature_label, "^Clúster: ")`: seleccionan del panel largo `df_measures_long` únicamente las tres series correspondientes a `grupo_feature == "Clúster Territorial"`, `lexicon == "crimen_es"` y `time == "exponential0.5"`, limpiando el prefijo de texto para simplificar la leyenda.
-* `ggplot2::geom_hline(yintercept = 0)` y `ggplot2::geom_vline(xintercept = ...)`: trazan la línea horizontal de referencia neutra ($0$) y las líneas verticales punteadas en las fechas exactas contenidas en `objeto_global_index$peakdates_neg`.
-* `ggplot2::geom_line()`, `ggplot2::scale_color_manual()` y `ggplot2::scale_x_date()`: dibujan las tres trayectorias mensuales manteniendo la misma paleta cromática de los clústeres definida en la Sección 3 y formatean el eje temporal con cortes semestrales (`date_breaks = "6 months"`).
+Para cerrar la Sección 4, la @fig-evolucion-sentimiento-cluster muestra la trayectoria mensual de los tres clústeres territoriales bajo el diccionario especializado `crimen_es` y la curva exponencial rápida ($\alpha_{\text{Exp}} = 0{,}5$), superponiendo con líneas punteadas las 8 fechas de mayor negatividad distrital detectadas por `peakdates()`.
 
 ```{r}
 #| label: fig-evolucion-sentimiento-cluster
@@ -2291,8 +2335,8 @@ ggplot(df_series_cluster, aes(x = date, y = valor, color = cluster_limpio)) +
   ) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
   labs(
-    title    = "Sentimiento Mediático sobre Seguridad por Clúster Territorial en Bogotá",
-    subtitle = "Léxico crimen_es con decaimiento exponencial (alpha = 0.5, lag = 6m) y fechas críticas (peakdates)",
+    title    = "Sentimiento Mediático por Clúster Territorial (3 Modalidades Objetivo)",
+    subtitle = "Léxico crimen_es con decaimiento exponencial (alpha = 0.5, lag = 6m) y fechas peakdates",
     x        = "Fecha de agregación mensual",
     y        = "Índice de sentimiento ponderado",
     color    = "Clúster territorial"
@@ -2307,70 +2351,56 @@ ggplot(df_series_cluster, aes(x = date, y = valor, color = cluster_limpio)) +
 
 # Modelado econométrico supervisado (Elastic Net) y atribuciones {#sec-elasticnet}
 
-En esta sección replicamos la Fase 4 de `scripts/03_analisis_sentometrics.R`. El reto econométrico consiste en conectar las 364 series mensuales de sentimiento mediático con la evolución real del hurto en la ciudad.
+En esta sección replicamos la Fase 4 de `scripts/03_analisis_sentometrics.R` y conectamos nuestras **36 series mensuales de sentimiento** con la dinámica observada del hurto en Bogotá.
 
 ## Especificación del modelo regularizado (`sento_model`) y guía intuitiva de Ridge, LASSO y Elastic Net
 
-Como las denuncias oficiales en `panel_delitos` tienen frecuencia anual mientras que nuestras series de sentimiento son mensuales, mensualizamos la tasa distrital de hurto cada año repartiéndola según la participación mensual observada de noticias sobre delitos de alto impacto estrictos (`prop_mensual_dai`), con suavizamiento de Laplace (`+ 1`) para evitar divisiones por cero y preservando la suma anual oficial.
+Al contar con los microdatos mensuales de `SIEDCO.csv` (`panel_delitos_mensual`, con `57` meses continuos entre enero de `2022` y septiembre de `2026`), ya no necesitamos desagregar tasas anuales con proxies periodísticos: calculamos directamente la **tasa mensual empírica distrital** agregando las denuncias mensuales de las tres modalidades objetivo sobre la población total de las 19 localidades y validamos que su calendario mensual coincida uno a uno con el de las noticias en `medidas_sento`.
 
-Con esa serie objetivo $y_t$ lista, buscamos predecir el nivel de intensidad delictiva un mes adelante ($y_{t+1}$, horizonte $h = 1$) usando las $M = 364$ series de sentimiento $S_{t,m}$:
+Con esa serie mensual observada $y_t$ lista, estimamos un modelo lineal penalizado para predecir la tasa de hurto del mes siguiente ($y_{t+1}$, horizonte $h = 1$) a partir de las $M = 36$ series de sentimiento $S_{t,m}$:
 
 $$
 \min_{\beta_0, \beta} \left\{ \underbrace{\frac{1}{2N} \sum_{t=1}^{N} \left( y_{t+1} - \beta_0 - \sum_{m=1}^{M} \beta_m S_{t,m} \right)^2}_{\text{Error de predicción (ajuste a los datos)}} + \lambda \left[ \underbrace{\frac{1-\alpha}{2} \sum_{m=1}^{M} \beta_m^2}_{\text{Penalización Ridge }(L_2)} + \underbrace{\alpha \sum_{m=1}^{M} |\beta_m|}_{\text{Penalización LASSO }(L_1)} \right] \right\}
 $$ {#eq-elasticnet}
 
-### ¿Por qué no podemos usar una regresión lineal común y corriente (MCO)?
+Cada símbolo y término de la @eq-elasticnet cumple un papel concreto:
 
-Para entender qué hacen **Ridge**, **LASSO** y **Elastic Net** sin necesidad de conocimientos previos en econometría avanzada, partamos del problema práctico que tenemos enfrente:
+* **$t$ y $N$ (reloj mensual y tamaño de muestra):** $t$ recorre los meses disponibles en `sento_measures`, mientras $N = 51$ cuenta los pares consecutivos $(S_t, y_{t+1})$ que quedan tras construir la ventana móvil de 6 meses y desplazar el pronóstico un mes adelante ($h = 1$).
+* **$y_{t+1}$ (tasa mensual real objetivo):** es la tasa observada en `SIEDCO.csv` para el mes $t + 1$, medida como hurtos acumulados de personas, residencias y motos por cada 100.000 habitantes en las 19 localidades urbanas.
+* **$m$ y $M$ (batería parsimoniosa de predictores):** $m$ indexa cada serie de sentimiento y $M = 36$ representa el total de columnas candidatas ($2$ diccionarios $\times$ $6$ características $\times$ $3$ memorias).
+* **$S_{t,m}$ (series suavizadas de sentimiento):** es el valor de la serie $m$ en el mes $t$ calculado con la @eq-sent-agg.
+* **$\beta_0$ (nivel base o intercepto):** marca la tasa mensual esperada de referencia cuando todas las señales de sentimiento valen cero.
+* **$\beta_m$ (peso estimado de cada serie):** mide cuántos puntos sube ($\beta_m > 0$) o baja ($\beta_m < 0$) el pronóstico de hurto del mes siguiente cuando aumenta una unidad el sentimiento de la serie $m$; si $\beta_m = 0$, esa serie queda excluida del modelo.
+* **$\frac{1}{2N} \sum_{t=1}^N (\dots)^2$ (error cuadrático medio):** mide la distancia al cuadrado entre la tasa mensual real de denuncias y el pronóstico del modelo.
+* **$\lambda \ge 0$ (intensidad global de la multa):** controla qué tan estricto es el presupuesto de pesos, seleccionado automáticamente mediante el criterio de información bayesiano (BIC). Si $\lambda = 0$ volvemos a MCO sin restricción; cuando $\lambda$ crece, el modelo comprime los coeficientes pequeños para evitar sobreajuste.
+* **$\alpha \in [0, 1]$ (mezcla entre Ridge y LASSO):** reparte el peso relativo entre dos penalizaciones complementarias:
+  * **Término Ridge ($\frac{1-\alpha}{2} \sum \beta_m^2$, norma $L_2$):** castiga coeficientes grandes elevándolos al cuadrado, repartiendo el peso entre series correlacionadas pero sin llevar ningún coeficiente a cero exacto.
+  * **Término LASSO ($\alpha \sum |\beta_m|$, norma $L_1$):** suma el valor absoluto de los pesos y apaga en cero exacto ($\beta_m = 0$) las series que no aportan capacidad predictiva adicional.
 
-1. **Tenemos más variables explicativas que meses de historia ($M > N$):** Contamos con **$N = 51$ meses** efectivos de datos (descontando los primeros meses que se usan para construir la memoria de 6 meses y el mes de pronóstico $h = 1$), pero tenemos **$M = 364$ series de sentimiento** tratando de explicar esa tasa mensual. En una regresión tradicional de Mínimos Cuadrados Ordinarios (MCO), intentar estimar 364 pesos ($\beta_m$) con solo 51 observaciones es como intentar resolver un acertijo con 364 incógnitas teniendo apenas 51 pistas: existen infinitas soluciones matemáticas que pasan exactamente por los 51 puntos históricos, pero **memorizan el ruido casual** (*sobreajuste* u *overfitting*) y fracasan al predecir un mes nuevo.
-2. **Nuestras series son «hermanas gemelas» (multicolinealidad extrema):** Dentro de las 364 series, muchas miden casi lo mismo. Por ejemplo, el sentimiento de *Chapinero* con memoria lineal (`linear`) y el sentimiento de *Chapinero* con memoria exponencial (`exponential0.2`) suben y bajan casi al unísono. Cuando dos variables son casi idénticas, la regresión tradicional se vuelve loca: puede asignarle un peso absurdo de $+5.000$ a la primera y $-5.000$ a la segunda para que se cancelen entre sí, haciendo imposible interpretar qué está pasando realmente.
+### ¿Por qué usar regularización aunque ahora tengamos $M = 36 < N = 51$?
 
-### La solución: poner un «presupuesto de pesos» ($\lambda$)
+Al reducir las series de `364` a `36`, ya evitamos tener más incógnitas que meses ($M < N$). Sin embargo, una regresión lineal tradicional (MCO) todavía sufriría dos problemas serios con estos datos:
 
-Para evitar que el modelo asigne pesos gigantescos o memorice el ruido, los métodos de **regularización** le cobran al modelo una «multa» o **penalización** cada vez que intenta hacer grande algún coeficiente $\beta_m$.
-
-El parámetro $\lambda \ge 0$ mide **qué tan severa es la multa global**:
-
-* Si $\lambda = 0$, no hay multa (volvemos a la regresión tradicional sin control).
-* Si $\lambda$ es muy grande, usar cualquier variable sale tan caro que el modelo prefiere encoger casi todos los pesos $\beta_m$ hacia cero.
-
-Dependiendo de **cómo se calcule esa multa**, obtenemos tres métodos distintos: **Ridge**, **LASSO** o **Elastic Net**.
+1. **Pocos grados de libertad efectivos:** ajustar `37` parámetros ($\beta_0$ más `36` pendientes) sobre apenas `51` meses deja muy poco margen estadístico y tiende a memorizar fluctuaciones puntuales de la muestra histórica.
+2. **Correlación interna entre series hermanas:** dentro de las `36` series persiste multicolinealidad natural; por ejemplo, las series de `linear` y `exponential0.5` sobre `c_centro` o `tema_hurto_personas` se mueven de forma parecida mes a mes, y lo mismo ocurre entre los diccionarios `nrc_es` y `crimen_es`. En MCO esa cercanía produce coeficientes gigantes de signos opuestos difíciles de interpretar.
 
 ::: {.callout-tip}
-## Guía intuitiva para cualquier lector: diferencias entre Ridge, LASSO y Elastic Net
+## Diferencias prácticas entre Ridge, LASSO y Elastic Net sobre nuestras 36 series
 
-Imagina que eres el director de un equipo de **364 analistas** (nuestras 364 series de sentimiento) y debes decidir cuánto peso ($\beta_m$) darle a la opinión de cada uno para pronosticar el hurto del próximo mes, pero tienes un presupuesto limitado:
+Con `36` series candidatas sobre `51` meses, conviene imaginar cada método como una regla distinta para asignar pesos ($\beta_m$):
 
-#### 1. Regresión Ridge ($\alpha = 0$, penalización cuadrática $L_2$: $\sum \beta_m^2$) — *«El director equitativo que no despide a nadie»*
-* **¿Cómo cobra la multa?** Eleva cada peso al cuadrado ($\beta_m^2$).
-* **Intuición sencilla:** Como eleva al cuadrado, a Ridge le sale carísimo darle mucho peso a un solo analista: darle un peso de $10$ a uno solo cuesta $10^2 = 100$ de multa, mientras que repartir ese mismo peso entre dos analistas dándole $5$ a cada uno cuesta $5^2 + 5^2 = 50$ (¡la mitad!).
-* **¿Qué efecto produce?** Cuando dos o más series se parecen mucho (están correlacionadas), Ridge **las encoge juntas y les reparte el peso de forma solidaria**.
-* **Su desventaja:** Como cuando un número es muy pequeño su cuadrado es casi cero (por ejemplo, $0{,}01^2 = 0{,}0001$), Ridge deja de castigar los pesos diminutos y **nunca vuelve ningún coeficiente exactamente igual a cero ($\beta_m \neq 0$)**. Al final, los 364 analistas siguen hablando al mismo tiempo y el modelo no filtra cuáles sobran.
-
-#### 2. Regresión LASSO ($\alpha = 1$, penalización absoluta $L_1$: $\sum |\beta_m|$) — *«El editor implacable que recorta personal»*
-* **¿Cómo cobra la multa?** Suma el valor absoluto de los pesos ($|\beta_m|$), sin elevarlos al cuadrado.
-* **Intuición sencilla:** Aquí cada unidad de peso cuesta exactamente lo mismo, sea grande o pequeña. Si un analista aporta poco, mantenerlo con un peso pequeño sigue costando presupuesto, así que para el modelo es más rentable **ponerle un peso de exactamente cero ($\beta_m = 0$)** y descartarlo por completo.
-* **¿Qué efecto produce?** Hace **selección automática de variables**: limpia el ruido y apaga en cero la gran mayoría de las 364 series, dejando solo unas pocas activas.
-* **Su desventaja:** Cuando hay un grupo de series muy parecidas entre sí (por ejemplo, las 7 curvas de memoria de una misma localidad), LASSO se comporta de forma caprichosa: **escoge una sola casi al azar y elimina a sus hermanas**, por lo que si los datos cambian ligeramente puede cambiar por completo qué variable sobrevive.
-
-#### 3. Regresión Elastic Net ($0 < \alpha < 1$, combina $L_1$ y $L_2$) — *«Lo mejor de ambos mundos: selección en equipo»*
-* **¿Cómo funciona?** Combina la multa de Ridge y la de LASSO mediante una perilla llamada **$\alpha$** (que va entre $0$ y $1$):
-  * Si $\alpha = 0$, es 100% Ridge.
-  * Si $\alpha = 1$, es 100% LASSO.
-  * Si $\alpha$ está entre $0$ y $1$ (por ejemplo, en nuestro modelo el criterio BIC elige $\alpha = 0{,}2$, es decir, **80% de fuerza Ridge + 20% de fuerza LASSO**), aplica ambas virtudes a la vez.
-* **¿Por qué es ideal para nuestro problema?**
-  1. Gracias a su **20% de fuerza LASSO**, limpia la casa: pone exactamente en cero ($\beta_m = 0$) las series que no aportan información nueva (descarta 318 series y se queda solo con **46 series relevantes**).
-  2. Gracias a su **80% de fuerza Ridge**, tiene **efecto de agrupamiento (*grouping effect*)**: cuando varias series correlacionadas de un mismo clúster o localidad son verdaderamente informativas, no las destruye al azar como LASSO, sino que las conserva juntas repartiéndoles pesos estables.
+1. **Ridge ($\alpha = 0$, penalización $L_2$):** reparte el peso de manera solidaria entre series que suben y bajan juntas, estabilizando la estimación, pero mantiene activas las `36` series con coeficientes distintos de cero y vuelve más pesada la lectura.
+2. **LASSO ($\alpha = 1$, penalización $L_1$):** limpia automáticamente el tablero poniendo en cero exacto las series redundantes; sin embargo, cuando dos curvas de una misma modalidad son parecidas, tiende a elegir una casi al azar y apagar la otra.
+3. **Elastic Net ($0 < \alpha < 1$, combinación $L_1 + L_2$):** aplica la poda de LASSO para quedarse solo con un subconjunto compacto de variables informativas, mientras conserva la estabilización de Ridge para mantener juntos grupos coherentes de clústeres, modalidades y memorias.
 :::
 
 | Característica | MCO (Tradicional) | Ridge ($\alpha = 0$) | LASSO ($\alpha = 1$) | Elastic Net ($0 < \alpha < 1$) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Fórmula del castigo** | Ninguno ($\lambda = 0$) | Suma de cuadrados ($\sum \beta_m^2$) | Suma de valores absolutos ($\sum |\beta_m|$) | Combinación de ambos ($(1-\alpha)L_2 + \alpha L_1$) |
-| **¿Funciona cuando hay más variables que meses ($364 > 51$)?** | **No** (se indetermina y sobreajusta) | **Sí** | **Sí** | **Sí** |
-| **¿Elimina variables irrelevantes poniéndoles $\beta_m = 0$?** | **No** (conserva las 364) | **No** (conserva las 364 con pesos pequeños) | **Sí** (deja muy pocas activas) | **Sí** (en nuestro caso conserva 46 de 364) |
-| **¿Cómo maneja series muy parecidas (correlacionadas)?** | Se vuelve inestable (pesos gigantes opuestos) | **Excelente** (reparte el peso entre ellas) | **Inestable** (elige una al azar y borra el resto) | **Excelente** (selecciona grupos completos y los estabiliza) |
-| **Analogía práctica** | Dejar hablar a los 364 analistas sin filtro | Bajarles el volumen a todos por igual | Despedir a casi todos y quedarse con uno por grupo al azar | Despedir a los que no aportan y conservar equipos estables |
+| **Fórmula del castigo** | Ninguno ($\lambda = 0$) | Suma de cuadrados ($\sum \beta_m^2$) | Suma de valores absolutos ($\sum |\beta_m|$) | Combinación $(1-\alpha)L_2 + \alpha L_1$ |
+| **Estabilidad con pocos grados de libertad ($36$ vs $51$ meses)** | Baja (sobreajuste y varianza alta) | Alta | Alta | Alta |
+| **¿Lleva a cero exacto ($\beta_m = 0$) las series que sobran?** | No (conserva las 36) | No (encoge pero no elimina) | Sí (selección dispersa) | Sí (filtra solo las activas) |
+| **Manejo de series correlacionadas (diccionarios y curvas)** | Pesos inestables de signo opuesto | Excelente (reparte peso) | Inestable (elige una por grupo) | Excelente (conserva equipos estables) |
+| **Resultado en este análisis** | Sobreajustado e inestable | Todas activas (`36/36`) | Selección sensible a pequeñas variaciones | Subconjunto compacto y estable seleccionado vía BIC |
 
 : Comparación pedagógica entre regresión tradicional, Ridge, LASSO y Elastic Net {#tbl-comparacion-regularizacion}
 
@@ -2378,56 +2408,45 @@ Imagina que eres el director de un equipo de **364 analistas** (nuestras 364 ser
 #| label: estimacion-elasticnet
 # 5. Réplica de la Fase 4 de scripts/03_analisis_sentometrics.R ----
 
-## 5.1 Construcción de la serie mensual empírica de intensidad delictiva (y_t) ----
-# Calculamos primero la tasa anual distrital agregando las 19 localidades
-tasas_anuales_distrito <- panel_delitos |>
-  group_by(año) |>
+## 5.1 Validación de frecuencia mensual real en SIEDCO y alineación con noticias ----
+tasas_mensuales_distrito <- panel_delitos_mensual |>
+  group_by(date_mes = as.Date(fecha_mes)) |>
   summarise(
     hurto_personas_total  = sum(hurto_personas, na.rm = TRUE),
-    hurto_total_denuncias = sum(hurto_personas + hurto_residencias + hurto_motos, na.rm = TRUE),
+    hurto_resid_total     = sum(hurto_residencias, na.rm = TRUE),
+    hurto_motos_total     = sum(hurto_motos, na.rm = TRUE),
+    hurto_total_denuncias = hurto_personas_total + hurto_resid_total + hurto_motos_total,
     poblacion_distrito    = sum(poblacion, na.rm = TRUE),
-    tasa_anual_personas   = (hurto_personas_total / poblacion_distrito) * 100000,
-    tasa_anual_total      = (hurto_total_denuncias / poblacion_distrito) * 100000,
-    .groups = "drop"
-  )
+    y_tasa_hurto_mensual  = round((hurto_total_denuncias / poblacion_distrito) * 100000, 2),
+    y_tasa_pers_mensual   = round((hurto_personas_total / poblacion_distrito) * 100000, 2),
+    .groups               = "drop"
+  ) |>
+  arrange(date_mes)
 
-# Obtenemos el perfil mensual intra-anual según noticias estrictas de los 11 DAI
-pesos_mensuales_dai <- df_noticias_enriquecida |>
-  mutate(
-    date_mes = as.Date(format(as.Date(fecha), "%Y-%m-01")),
-    año      = as.integer(format(date_mes, "%Y"))
-  ) |>
-  group_by(año, date_mes) |>
-  summarise(
-    n_noticias_mes = n(),
-    n_dai_mes      = sum(es_dai_estricto, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  group_by(año) |>
-  mutate(
-    # Suavizamiento + 1 evita pesos nulos en meses con muy baja cobertura DAI
-    prop_mensual_dai = (n_dai_mes + 1) / sum(n_dai_mes + 1)
-  ) |>
-  ungroup()
+# Verificación estricta de calendario mensual continuo (57 meses: ene. 2022 a sep. 2026)
+fechas_esperadas_mes <- seq.Date(as.Date("2022-01-01"), as.Date("2026-09-01"), by = "month")
+stopifnot(identical(tasas_mensuales_distrito$date_mes, fechas_esperadas_mes))
 
-fechas_medidas <- as.Date(sentometrics::get_dates(medidas_sento))
+fechas_medidas     <- as.Date(sentometrics::get_dates(medidas_sento))
+fechas_medidas_mes <- as.Date(format(fechas_medidas, "%Y-%m-01"))
+stopifnot(all(fechas_medidas_mes %in% tasas_mensuales_distrito$date_mes))
 
 serie_objetivo_mensual <- tibble(
   date     = fechas_medidas,
-  date_mes = as.Date(format(fechas_medidas, "%Y-%m-01")),
-  año      = as.integer(format(fechas_medidas, "%Y"))
+  date_mes = fechas_medidas_mes
 ) |>
-  left_join(tasas_anuales_distrito, by = "año") |>
-  left_join(pesos_mensuales_dai, by = c("año", "date_mes")) |>
-  mutate(
-    prop_mensual_dai     = coalesce(prop_mensual_dai, 1 / 12),
-    y_tasa_hurto_mensual = round(tasa_anual_total * prop_mensual_dai, 2),
-    y_tasa_pers_mensual  = round(tasa_anual_personas * prop_mensual_dai, 2)
-  )
+  left_join(tasas_mensuales_distrito, by = "date_mes")
 
 y_vector <- serie_objetivo_mensual$y_tasa_hurto_mensual
 stopifnot(length(y_vector) == nrow(medidas_sento$measures))
 stopifnot(all(!is.na(y_vector)))
+
+cat(
+  "Frecuencia validada: ", nrow(tasas_mensuales_distrito), " meses reales en SIEDCO (",
+  as.character(min(tasas_mensuales_distrito$date_mes)), " a ",
+  as.character(max(tasas_mensuales_distrito$date_mes)), ") <-> ",
+  length(fechas_medidas), " meses efectivos tras lag = 6.\n", sep = ""
+)
 
 ## 5.2 Estimación de sento_model() con selección BIC y horizonte h = 1 ----
 control_modelo <- sentometrics::ctr_model(
@@ -2460,7 +2479,7 @@ atribuciones_norm <- sentometrics::attributions(
   do.normalize   = TRUE
 )
 
-# Alineamos los predictores en t (idx_x) con el objetivo en t + h (idx_y)
+# Alineamos los predictores en t (idx_x) con el objetivo real en t + h (idx_y)
 n_total_m <- nrow(medidas_sento$measures)
 idx_x     <- 1:(n_total_m - control_modelo$h)
 idx_y     <- (1 + control_modelo$h):n_total_m
@@ -2481,8 +2500,10 @@ df_ajuste_modelo <- tibble(
   residual  = round(y_alineado - pred_matriz, 2)
 )
 
-# Extraemos las series cuyo coeficiente sobrevivió a la penalización L1
+# Extraemos el intercepto y las series cuyo coeficiente sobrevivió a la penalización L1
 coefs_sparse <- coef(modelo_elasticnet$reg)
+beta0_hat    <- round(as.numeric(coefs_sparse[1, 1]), 2)
+
 df_coeficientes <- tibble(
   variable    = rownames(coefs_sparse),
   coeficiente = as.numeric(coefs_sparse[, 1])
@@ -2523,13 +2544,38 @@ metricas_mod <- list(
   lambda_optimo   = modelo_elasticnet$lambda,
   horizonte_h     = control_modelo$h,
   criterio        = control_modelo$type,
-  # R² descriptivo dentro de muestra medido como el cuadrado de la correlación lineal
   r2_in_sample    = round(cor(df_ajuste_modelo$observado, df_ajuste_modelo$predicho)^2, 4),
   rmse            = round(sqrt(mean(df_ajuste_modelo$residual^2)), 3),
   n_observaciones = nrow(df_ajuste_modelo),
   n_predictores   = sum(modelo_elasticnet$nVar),
   n_activos       = nrow(df_coeficientes)
 )
+
+# Valores reales de apoyo para la guía de Figura 14 (respetando el desfase h = 1 de attributions)
+attr_lex_wide <- df_attr_long_raw |>
+  filter(dimension == "lexicons") |>
+  select(date, componente, atribucion) |>
+  pivot_wider(names_from = componente, values_from = atribucion) |>
+  arrange(date)
+
+idx_ej_max <- which.max(df_ajuste_modelo$predicho)
+idx_ej_min <- which.min(df_ajuste_modelo$predicho)
+ej_max_pred <- df_ajuste_modelo$predicho[idx_ej_max]
+ej_max_mes_pred <- format(df_ajuste_modelo$date[idx_ej_max], "%B de %Y")
+ej_max_mes_attr <- format(attr_lex_wide$date[idx_ej_max], "%B de %Y")
+ej_max_nrc <- round(attr_lex_wide$nrc_es[idx_ej_max], 2)
+ej_max_cri <- round(attr_lex_wide$crimen_es[idx_ej_max], 2)
+
+ej_min_pred <- df_ajuste_modelo$predicho[idx_ej_min]
+ej_min_mes_pred <- format(df_ajuste_modelo$date[idx_ej_min], "%B de %Y")
+ej_min_mes_attr <- format(attr_lex_wide$date[idx_ej_min], "%B de %Y")
+ej_min_nrc <- round(attr_lex_wide$nrc_es[idx_ej_min], 2)
+ej_min_cri <- round(attr_lex_wide$crimen_es[idx_ej_min], 2)
+
+rango_nrc <- round(range(attr_lex_wide$nrc_es), 1)
+media_nrc <- round(mean(attr_lex_wide$nrc_es), 1)
+rango_cri <- round(range(attr_lex_wide$crimen_es), 1)
+media_cri <- round(mean(attr_lex_wide$crimen_es), 1)
 
 objeto_attributions <- list(
   modelo            = modelo_elasticnet,
@@ -2551,7 +2597,7 @@ cat(
 )
 ```
 
-El criterio BIC selecciona $\alpha = `r metricas_mod$alpha_optimo`$ (predominio de estabilización Ridge con selección dispersa) y $\lambda = `r round(metricas_mod$lambda_optimo, 2)`$, reteniendo **`r metricas_mod$n_activos` de las `r metricas_mod$n_predictores` series** y explicando el **`r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)`** de la varianza dentro de muestra ($RMSE = `r metricas_mod$rmse`$). La @tbl-top-coefs muestra las diez series con mayor magnitud estimada.
+El criterio BIC selecciona $\alpha = `r metricas_mod$alpha_optimo`$ (equilibrio 50% Ridge y 50% LASSO) y $\lambda = `r round(metricas_mod$lambda_optimo, 2)`$, reteniendo **`r metricas_mod$n_activos` de las `r metricas_mod$n_predictores` series** y explicando el **`r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)`** de la varianza mensual real dentro de muestra ($RMSE = `r metricas_mod$rmse`$). La @tbl-top-coefs muestra las diez series con mayor peso absoluto en la regresión.
 
 ```{r}
 #| label: tbl-top-coefs
@@ -2565,28 +2611,28 @@ knitr::kable(
 
 ```{r}
 #| label: fig-ajuste-elasticnet
-#| fig-cap: "Comparación entre la tasa mensualizada de hurto observada y la predicción un paso adelante con Elastic Net"
-#| fig-alt: "Gráfico de dos líneas mensuales que compara la tasa observada de hurto frente al pronóstico Elastic Net entre 2022 y 2026."
+#| fig-cap: "Comparación entre la tasa mensual real de hurto (SIEDCO) y la predicción un mes adelante con Elastic Net"
+#| fig-alt: "Gráfico de dos líneas mensuales que compara la tasa mensual real de hurto frente al pronóstico Elastic Net entre 2022 y 2026."
 ## 5.4 Visualización del ajuste predictivo ----
 df_aj <- df_ajuste_modelo |>
-  select(date, `Observada` = observado, `Predicha (Elastic Net)` = predicho) |>
+  select(date, `Observada (SIEDCO real)` = observado, `Predicha (Elastic Net)` = predicho) |>
   pivot_longer(cols = -date, names_to = "serie", values_to = "valor")
 
 ggplot(df_aj, aes(x = date, y = valor, color = serie, linetype = serie)) +
   geom_line(linewidth = 0.95) +
   scale_color_manual(
-    values = c("Observada" = "#1b365d", "Predicha (Elastic Net)" = "#c0392b")
+    values = c("Observada (SIEDCO real)" = "#1b365d", "Predicha (Elastic Net)" = "#c0392b")
   ) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
   labs(
-    title    = "Ajuste Predictivo del Modelo de Sentimiento Mediático (sento_model)",
+    title    = "Ajuste Predictivo del Modelo de Sentimiento sobre Tasa Mensual Real (sento_model)",
     subtitle = paste0(
-      "Regresión Elastic Net (alpha = ", metricas_mod$alpha_optimo,
+      "Regresión Elastic Net sobre 36 series (alpha = ", metricas_mod$alpha_optimo,
       ", lambda = ", round(metricas_mod$lambda_optimo, 2),
       ", R^2 = ", scales::percent(metricas_mod$r2_in_sample, accuracy = 0.1), ")"
     ),
     x        = "Mes de pronóstico (h = 1)",
-    y        = "Tasa mensualizada por 100.000 hab.",
+    y        = "Tasa mensual real por 100.000 hab.",
     color    = NULL,
     linetype = NULL
   ) +
@@ -2600,9 +2646,9 @@ ggplot(df_aj, aes(x = date, y = valor, color = serie, linetype = serie)) +
 
 ## Descomposición de atribuciones marginales (`attributions`) y lectura detallada de la Figura 14
 
-Mientras que la @fig-ajuste-elasticnet (Figura 13) nos muestra **cuánto** predice el modelo cada mes (la línea roja punteada frente a la línea azul observada), por sí sola no nos dice **por qué** subió o bajó ese pronóstico en un mes determinado. La función `sentometrics::attributions()` abre esa «caja negra» y descompone cada predicción mensual en la suma exacta de lo que aporta cada grupo de series.
+La @fig-ajuste-elasticnet muestra el grado de ajuste entre la línea roja predicha y la línea azul observada mes a mes, mientras que `sentometrics::attributions()` abre el modelo para cuantificar cuánto aporta cada diccionario léxico a esa predicción mensual.
 
-En particular, la @fig-atribuciones-lexicos (**Figura 14**) responde una pregunta central del proyecto: **en cada mes del periodo 2022–2026, ¿qué parte del pronóstico de hurto proviene del lenguaje emocional general de las noticias (`nrc_es`, barras azules) y qué parte proviene del vocabulario especializado de criminalidad bogotana (`crimen_es`, barras color terracota)?**
+En concreto, la @fig-atribuciones-lexicos responde qué parte de la predicción proviene del tono emocional general (`nrc_es`, barras azules) y qué parte proviene del vocabulario especializado de seguridad urbana en Bogotá (`crimen_es`, barras color terracota).
 
 ```{r}
 #| label: fig-atribuciones-lexicos
@@ -2621,8 +2667,8 @@ suppressMessages(
       labels = c("nrc_es" = "NRC en español (nrc_es)", "crimen_es" = "Criminalidad Bogotá (crimen_es)"),
       name   = NULL
     ) +
-    scale_x_date(name = "Fecha", date_breaks = "6 months", date_labels = "%b %Y") +
-    scale_y_continuous(name = "Aporte marginal al pronóstico") +
+    scale_x_date(name = "Fecha de señal mediática (mes t)", date_breaks = "6 months", date_labels = "%b %Y") +
+    scale_y_continuous(name = "Aporte marginal al pronóstico (t + 1)") +
     labs(
       title    = "Descomposición de Atribuciones por Diccionario Léxico (attributions)",
       subtitle = "Contribución marginal del léxico general (nrc_es) vs. criminalidad en Bogotá (crimen_es)"
@@ -2637,38 +2683,28 @@ suppressMessages(
 ```
 
 ::: {.callout-note}
-## Guía paso a paso para entender la Figura 14 (@fig-atribuciones-lexicos)
+## Cómo leer la Figura 14 (@fig-atribuciones-lexicos) paso a paso
 
-#### 1. ¿De dónde salen exactamente las barras de la Figura 14? (La regla de la suma exacta)
-En nuestro modelo Elastic Net, el pronóstico de la tasa de hurto para el próximo mes ($\hat{y}_{t+1}$, la línea roja de la Figura 13) se obtiene partiendo de una **constante o nivel base ($\hat{\beta}_0 = 219{,}42$ hurtos por 100.000 hab.)** y sumándole el aporte de las 46 series seleccionadas ($\sum \hat{\beta}_m S_{t,m}$). Como cada serie usa o bien el diccionario `nrc_es` o bien el diccionario `crimen_es`, podemos separar esa suma en dos bloques exactos:
+#### 1. De dónde salen las barras (suma exacta con el horizonte $h = 1$)
+En nuestro modelo Elastic Net, el pronóstico de la tasa de hurto del mes siguiente ($\hat{y}_{t+1}$ en la Figura 13) parte del intercepto estimando **$\hat{\beta}_0 = `r beta0_hat`$ hurtos por 100.000 habitantes** y suma el aporte de las `r metricas_mod$n_activos` series activas ($\sum \hat{\beta}_m S_{t,m}$). Como cada serie pertenece a uno de los dos diccionarios, la predicción se descompone en dos bloques exactos evaluados sobre la señal de prensa del mes $t$:
 
 $$
-\underbrace{\hat{y}_{t+1}}_{\text{Pronóstico en Figura 13}} = \underbrace{219{,}42}_{\text{Base fija }(\hat{\beta}_0)} + \underbrace{\sum_{m \in \texttt{nrc\_es}} \hat{\beta}_m S_{t,m}}_{\text{Barra Azul en Figura 14}} + \underbrace{\sum_{m \in \texttt{crimen\_es}} \hat{\beta}_m S_{t,m}}_{\text{Barra Terracota en Figura 14}}
+\underbrace{\hat{y}_{t+1}}_{\text{Pronóstico en Figura 13}} = \underbrace{`r beta0_hat`}_{\text{Base fija }(\hat{\beta}_0)} + \underbrace{\sum_{m \in \texttt{nrc\_es}} \hat{\beta}_m S_{t,m}}_{\text{Barra azul en Figura 14 }(t)} + \underbrace{\sum_{m \in \texttt{crimen\_es}} \hat{\beta}_m S_{t,m}}_{\text{Barra terracota en Figura 14 }(t)}
 $$
 
-Es decir, **las barras de la Figura 14 muestran cuántos puntos por encima o por debajo del nivel base ($219{,}42$) aporta cada diccionario en cada mes**:
+Nótese que `attributions()` grafica cada barra sobre el mes $t$ en que se lee la prensa para explicar el pronóstico del mes $t + 1$:
 
-* **Ejemplo real de un mes alto (julio de 2022):** La barra azul (`nrc_es`) suma **$+38{,}57$** puntos y la barra terracota (`crimen_es`) suma **$+8{,}16$** puntos. Si los sumamos al nivel base ($219{,}42 + 38{,}57 + 8{,}16$), obtenemos **$266{,}15$**, que es exactamente el pico que marca la línea roja de pronóstico en la Figura 13.
-* **Ejemplo real de un mes bajo (agosto de 2026):** La barra azul (`nrc_es`) aporta **$+55{,}95$** puntos, pero la barra terracota (`crimen_es`) resta **$-140{,}57$** puntos. Al sumarlos al nivel base ($219{,}42 + 55{,}95 - 140{,}57$), el pronóstico cae a **$134{,}80$**, reproduciendo el descenso de 2026 en la Figura 13.
+* **Mes de pronóstico más alto (`r ej_max_mes_pred`):** las señales medidas un mes antes (`r ej_max_mes_attr`) registran una barra azul (`nrc_es`) de **`r sprintf("%+.2f", ej_max_nrc)`** puntos y una barra terracota (`crimen_es`) de **`r sprintf("%+.2f", ej_max_cri)`** puntos. Al sumarlas a la constante ($`r beta0_hat` + (`r ej_max_nrc`) + (`r ej_max_cri`)$), el modelo predice **`r round(beta0_hat + ej_max_nrc + ej_max_cri, 2)`** (coincidiendo con el pico de `r ej_max_pred` observado en la Figura 13).
+* **Mes de pronóstico más bajo (`r ej_min_mes_pred`):** con las señales de `r ej_min_mes_attr`, la barra azul aporta **`r sprintf("%+.2f", ej_min_nrc)`** puntos y la barra terracota resta **`r ej_min_cri`** puntos, llevando la tasa predicha a **`r round(beta0_hat + ej_min_nrc + ej_min_cri, 2)`** (punto mínimo `r ej_min_pred` en la Figura 13).
 
-#### 2. ¿Cómo leer los ejes y los colores del gráfico?
-* **Eje horizontal (Fecha):** Muestra cada uno de los 51 meses de pronóstico, desde junio de 2022 hasta agosto de 2026. Cada columna vertical del gráfico representa un mes.
-* **Eje vertical (Aporte marginal al pronóstico) y la línea del $0$:**
-  * **Cuando una barra está por encima de $0$ (positiva):** Significa que ese mes ese diccionario **empuja el pronóstico hacia arriba** (aumenta la tasa predicha respecto a la base de $219{,}42$).
-  * **Cuando una barra está por debajo de $0$ (negativa):** Significa que ese mes ese diccionario **empuja el pronóstico hacia abajo** (reduce la tasa predicha respecto a la base de $219{,}42$).
-* **Los dos colores:**
-  * **Azul (`nrc_es` — NRC en español):** Mide el empuje del vocabulario emocional general (palabras de miedo, tristeza, ira o calma general). Oscila tanto por encima como por debajo de cero (entre $-47{,}6$ y $+56{,}1$ puntos, con promedio de $+4{,}1$).
-  * **Terracota / Naranja (`crimen_es` — Criminalidad Bogotá):** Mide el empuje del vocabulario delictivo y policial local (*fleteo, atraco, sicariato, cosquilleo, capturas, incautación*). Es la fuerza dominante del modelo: sus barras son mucho más largas (llegan hasta $-140{,}6$ puntos, con un promedio de $-86{,}6$).
+#### 2. Ejes y significado de los colores
+* **Eje horizontal:** recorre los `r metricas_mod$n_observaciones` meses de señal informativa ($t$, desde junio de `2022` hasta agosto de `2026`).
+* **Eje vertical respecto al cero:** una barra sobre cero empuja la predicción por encima del nivel base ($\hat{\beta}_0$), mientras que una barra por debajo de cero la reduce.
+* **Diccionario `nrc_es` (azul):** mide el lenguaje emocional general y oscila a ambos lados de cero (entre `r rango_nrc[1]` y `r rango_nrc[2]`, promedio `r media_nrc`).
+* **Diccionario `crimen_es` (terracota):** recoge el léxico específico de delitos urbanos y acciones policiales; ejerce el mayor desplazamiento neto de nivel (rango entre `r rango_cri[1]` y `r rango_cri[2]`, promedio `r media_cri`).
 
-#### 3. ¿Por qué las barras terracota (`crimen_es`) apuntan casi siempre hacia abajo (valores negativos)?
-A primera vista podría sorprender que `crimen_es` tenga barras negativas casi todo el periodo. La razón es matemática y muy sencilla:
-
-1. El modelo fijó un **punto de partida alto ($\hat{\beta}_0 = 219{,}42$)** que corresponde a los meses de mayor criminalidad (2022–2023).
-2. En el corpus de noticias, el puntaje de sentimiento del diccionario `crimen_es` es **negativo ($S_{t,m} < 0$)** porque predominan palabras de delito. Cuando se multiplica un coeficiente positivo ($\hat{\beta}_m > 0$, como `crimen_es--chapinero--beta11` con $+56{,}65$) por un puntaje negativo ($S_{t,m} < 0$), el resultado tiene **signo negativo ($\hat{\beta}_m \times S_{t,m} < 0$)**.
-3. Por lo tanto, `crimen_es` funciona como el **regulador de nivel** que descuenta puntos desde el techo de $219{,}42$ para ubicar la tasa predicha en el escalón real de cada año: en 2022 y principios de 2023 descuenta muy poco (o incluso suma en julio-agosto de 2022, dejando el pronóstico arriba en $\sim 250$), entre finales de 2023 y 2025 descuenta alrededor de $-80$ a $-110$ puntos (ubicando la serie en su meseta intermedia de $\sim 140$–$170$), y en 2026 descuenta hasta $-140$ puntos para reflejar la caída del último año.
-
-#### 4. ¿Qué pasa cuando en un mismo mes la barra azul va hacia arriba y la terracota hacia abajo?
-En varios meses (por ejemplo, en el segundo semestre de 2022 o en mediados de 2026) se observa una barra azul hacia arriba ($> 0$) y una barra terracota hacia abajo ($< 0$). Esto significa que **ambos diccionarios están haciendo contrapeso**: mientras el vocabulario especializado de delitos (`crimen_es`) ajusta el nivel estructural de la tasa de hurto, el tono emocional general (`nrc_es`) corrige las fluctuaciones de corto plazo de ese mes. Esto demuestra por qué fue indispensable combinar ambos diccionarios en lugar de usar solo uno.
+#### 3. Por qué las barras terracota suelen apuntar hacia abajo
+El modelo fija un intercepto alto ($\hat{\beta}_0 = `r beta0_hat`$) y, en las noticias de hurto, el diccionario `crimen_es` suele ser negativo ($S_{t,m} < 0$) por el predominio de términos de atraco y robo. Al multiplicar coeficientes positivos dominantes (como `` `r df_coeficientes$variable[1]` `` con $\hat{\beta} = `r round(df_coeficientes$coeficiente[1], 2)`$) por un puntaje negativo $S_{t,m}$, el producto resulta negativo ($\hat{\beta}_m S_{t,m} < 0$). Así, `crimen_es` gradúa el nivel estructural mes a mes mientras `nrc_es` aporta los ajustes emocionales de corto plazo.
 :::
 
 # Cartografía espacial e integración para R Shiny {#sec-mapa}
@@ -2719,6 +2755,23 @@ panel_consolidado <- panel_delitos |>
   )
 
 stopifnot(nrow(panel_consolidado) == 95)
+
+resumen_ref_6 <- df_noticias_ref_corpus |>
+  mutate(año = as.integer(año), mes = as.integer(mes)) |>
+  filter(año >= 2022 & año <= 2026, !(año == 2026 & mes > 9)) |>
+  count(delito_sdscj)
+
+get_n_del_6 <- function(etiqueta) {
+  val <- resumen_ref_6$n[resumen_ref_6$delito_sdscj == etiqueta]
+  if (length(val) == 0L) 0L else sum(val)
+}
+
+n_corpus_total_6 <- sum(resumen_ref_6$n)
+n_pers_6         <- get_n_del_6("Hurto a personas")
+n_resid_6        <- get_n_del_6("Hurto a residencias")
+n_motos_6        <- get_n_del_6("Hurto de motocicletas")
+n_3mod_6         <- n_pers_6 + n_resid_6 + n_motos_6
+n_rest_6         <- n_corpus_total_6 - n_3mod_6
 
 ## 6.2 Preparación de polígonos oficiales (sf) y mapa de clústeres K-Means ----
 orden_clusters <- c(
@@ -2821,7 +2874,7 @@ if (knitr::is_html_output()) {
 }
 ```
 
-La cartografía muestra que los tres grupos forman bloques geográficos continuos. El clúster **Céntrico e Institucional** ocupa el centro-oriente (La Candelaria, Santa Fe, Chapinero, Teusaquillo y Barrios Unidos); justo al occidente queda el corredor **Comercial y Automotor** (Los Mártires y Antonio Nariño); y alrededor de ambos aparece el cinturón **Residencial y Periférico** con las doce localidades restantes del norte, occidente y sur.
+La cartografía muestra que los tres grupos forman bloques geográficos continuos. El clúster **Céntrico e Institucional** ocupa el centro-oriente (La Candelaria, Santa Fe, Chapinero, Teusaquillo y Barrios Unidos); en su borde occidental aparece **Comercial y Automotor** (Los Mártires como localidad única, con el perfil más elevado en hurto a personas, comercio y motocicletas); y alrededor de ambos se extiende el cinturón **Residencial y Periférico** con las trece localidades restantes (incluida Antonio Nariño, Puente Aranda y los sectores residenciales del norte, occidente y sur).
 
 ## Comparación espacial por modalidad: tasas, conteos totales y sentimiento promedio
 
@@ -2830,8 +2883,8 @@ Para revisar si la cobertura de prensa sigue la misma geografía que las denunci
 En todas las escalas los colores oscuros marcan los valores numéricos más bajos y los colores claros los más altos. La escala `magma` (denuncias) arranca en morado oscuro (`0,22`) y la escala `mako` (prensa y sentimiento) en azul oscuro (`0,26`), sin llegar al negro puro.
 
 ::: {.callout-note}
-## Alcance del corpus comparable por modalidad (992 frente a 3.916 noticias)
-El panel oficial de delitos de la SDSCJ mide tres modalidades de hurto (`hurto_personas`, `hurto_residencias` y `hurto_motos`). En la clasificación textual `delito_sdscj` del corpus de prensa, esas tres categorías suman **992 noticias (25,3 % de las 3.916 notas)**: 736 de hurto a personas, 140 de hurto a residencias y 116 de hurto de motocicletas. Las **2.924 noticias restantes (74,7 %)** cubren otros delitos o temas de seguridad (794 *No DAI*, 575 de hurto de automotores, 540 de hurto sin modalidad identificada, 452 de homicidio y 349 de hurto a comercio, entre otros). Para comparar numeradores equivalentes, la fila Total (3 modalidades) cruza las denuncias combinadas de esos tres hurtos contra esas 992 noticias, mientras que la @tbl-correlacion-modalidades incluye aparte la fila de referencia con las 3.916 notas del corpus.
+## Alcance del corpus comparable por modalidad (`r scales::number(n_3mod_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` frente a `r scales::number(n_corpus_total_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` noticias)
+El panel oficial de delitos de la SDSCJ (SIEDCO) mide tres modalidades de hurto (`hurto_personas`, `hurto_residencias` y `hurto_motos`). En la clasificación textual `delito_sdscj` del corpus de prensa, esas tres categorías suman **`r scales::number(n_3mod_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` noticias (`r scales::number(100 * n_3mod_6 / n_corpus_total_6, accuracy = 0.1, decimal.mark = ",")` % de las `r scales::number(n_corpus_total_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` notas)**: `r scales::number(n_pers_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` de hurto a personas, `r scales::number(n_resid_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` de hurto a residencias y `r scales::number(n_motos_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` de hurto de motocicletas. Esas **`r scales::number(n_3mod_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` notas** constituyen el corpus objetivo sobre el cual se estima `sentometrics`. Las **`r scales::number(n_rest_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` noticias restantes (`r scales::number(100 * n_rest_6 / n_corpus_total_6, accuracy = 0.1, decimal.mark = ",")` %)** cubren otros delitos o temas de seguridad (`r scales::number(get_n_del_6("No DAI"), accuracy = 1, big.mark = ".", decimal.mark = ",")` *No DAI*, `r scales::number(get_n_del_6("Hurto de automotores"), accuracy = 1, big.mark = ".", decimal.mark = ",")` de hurto de automotores, `r scales::number(get_n_del_6("Hurto (modalidad no identificada)"), accuracy = 1, big.mark = ".", decimal.mark = ",")` de hurto sin modalidad identificada, `r scales::number(get_n_del_6("Homicidio"), accuracy = 1, big.mark = ".", decimal.mark = ",")` de homicidio y `r scales::number(get_n_del_6("Hurto a comercio"), accuracy = 1, big.mark = ".", decimal.mark = ",")` de hurto a comercio, entre otros). Para comparar numeradores equivalentes, la fila Total (3 modalidades) cruza las denuncias combinadas de esos tres hurtos contra esas `r scales::number(n_3mod_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` noticias, mientras que la @tbl-correlacion-modalidades incluye aparte la fila de referencia con las `r scales::number(n_corpus_total_6, accuracy = 1, big.mark = ".", decimal.mark = ",")` notas del corpus completo.
 :::
 
 ```{r}
@@ -2842,7 +2895,7 @@ El panel oficial de delitos de la SDSCJ mide tres modalidades de hurto (`hurto_p
 #| fig-height: 11.4
 #| out-height: !expr 'if (knitr::is_latex_output()) "0.84\\textheight" else NULL'
 ## 6.3 Tasas, conteos, sentimiento por modalidad y contraste espacial ----
-noticias_filtradas_6 <- df_noticias_enriquecida |>
+noticias_filtradas_6 <- df_noticias_ref_corpus |>
   mutate(año = as.integer(año), mes = as.integer(mes)) |>
   filter(año >= 2022 & año <= 2026, !(año == 2026 & mes > 9))
 
@@ -3149,7 +3202,13 @@ renderizar_matriz_4x2(
   unidad_der     = "noticias/100k",
   titulo_html    = "Tasas Anuales por Modalidad: Denuncias vs. Noticias (por 100k hab.)",
   titulo_pdf     = "Tasas Anuales por Modalidad: Denuncias vs. Cobertura Noticiosa (por 100.000 hab.)",
-  subtitulo_pdf  = "Promedio anual 2022-sep. 2026 por localidad; la fila Total agrupa las 3 modalidades comparables (992 de 3.916 noticias)",
+  subtitulo_pdf  = paste0(
+    "Promedio anual 2022-sep. 2026 por localidad; la fila Total agrupa las 3 modalidades comparables (",
+    scales::number(n_3mod_6, accuracy = 1, big.mark = ".", decimal.mark = ","),
+    " de ",
+    scales::number(n_corpus_total_6, accuracy = 1, big.mark = ".", decimal.mark = ","),
+    " noticias)"
+  ),
   encabezado_izq = "Denuncias oficiales (SDSCJ / 100k hab.)",
   encabezado_der = "Cobertura en prensa (Noticias / 100k hab.)",
   cb_izq         = "Del./100k",
@@ -3185,7 +3244,11 @@ renderizar_matriz_4x2(
   unidad_der     = "artículos",
   titulo_html    = "Por Modalidad: Denuncias (100k hab.) vs. Noticias Totales",
   titulo_pdf     = "Comparación por Modalidad: Denuncias (por 100.000 hab.) vs. Noticias Totales",
-  subtitulo_pdf  = "Tasa anual promedio 2022-sep. 2026 (izquierda) frente a conteo acumulado de artículos (derecha; 992 notas en 3 mod.)",
+  subtitulo_pdf  = paste0(
+    "Tasa anual promedio 2022-sep. 2026 (izquierda) frente a conteo acumulado de artículos (derecha; ",
+    scales::number(n_3mod_6, accuracy = 1, big.mark = ".", decimal.mark = ","),
+    " notas en 3 mod.)"
+  ),
   encabezado_izq = "Denuncias oficiales (SDSCJ / 100k hab.)",
   encabezado_der = "Noticias totales acumuladas (conteo)",
   cb_izq         = "Del./100k",
@@ -3195,7 +3258,7 @@ renderizar_matriz_4x2(
 )
 ```
 
-La @fig-mapa-delitos-sentimiento cruza las denuncias por cada 100.000 habitantes frente al sentimiento neto promedio (`sentimiento_score`) de las noticias publicadas sobre cada localidad y modalidad. En hurto a residencias y hurto de motocicletas, Usme aparece en gris claro porque no tuvo artículos en esas categorías (`0` notas).
+La @fig-mapa-delitos-sentimiento cruza las denuncias por cada 100.000 habitantes frente al sentimiento neto promedio (`sentimiento_score`) de las noticias publicadas sobre cada localidad y modalidad. Solo en hurto de motocicletas Usme aparece en gris claro porque no registró artículos en esa categoría (`0` notas); en hurto a residencias todas las 19 localidades cuentan con al menos un artículo.
 
 ```{r}
 #| label: fig-mapa-delitos-sentimiento
@@ -3205,6 +3268,30 @@ La @fig-mapa-delitos-sentimiento cruza las denuncias por cada 100.000 habitantes
 #| fig-height: 11.4
 #| out-height: !expr 'if (knitr::is_latex_output()) "0.84\\textheight" else NULL'
 ## 6.5 Matriz 4x2: tasa delictiva por 100k hab. vs. sentimiento neto promedio ----
+fmt_es_6 <- function(x, dec = 1) {
+  scales::number(x, accuracy = 10^(-dec), big.mark = ".", decimal.mark = ",")
+}
+
+sent_pers_6 <- noticias_filtradas_6 |>
+  filter(delito_sdscj == "Hurto a personas") |>
+  group_by(localidad) |>
+  summarise(
+    n       = n(),
+    s_mean  = mean(sentimiento_score, na.rm = TRUE),
+    pct_neg = mean(sentimiento_score < -0.02, na.rm = TRUE) * 100,
+    pct_pos = mean(sentimiento_score >  0.02, na.rm = TRUE) * 100,
+    .groups = "drop"
+  )
+
+get_sp_6 <- function(loc, col) {
+  sent_pers_6[[col]][sent_pers_6$localidad == loc]
+}
+
+datos_map_6       <- sf::st_drop_geometry(geo_bogota_modalidades)
+corr_pers_sent_6  <- round(cor(datos_map_6$tasa_personas_prom, datos_map_6$sent_noti_personas, use = "complete.obs"), 3)
+corr_3mod_sent_6  <- round(cor(datos_map_6$tasa_total_prom, datos_map_6$sent_noti_3mod, use = "complete.obs"), 3)
+rango_sent_3mod_6 <- range(datos_map_6$sent_noti_3mod, na.rm = TRUE)
+
 spec_sentimiento <- tibble::tribble(
   ~mod_titulo,              ~mod_corto,     ~col_izq,              ~dec_izq, ~col_der,             ~col_conteo,           ~dec_der,
   "Hurto a Personas",       "Personas",     "tasa_personas_prom",  0L,       "sent_noti_personas", "n_noti_personas_tot", 3L,
@@ -3240,15 +3327,29 @@ Para leer bien esas dos columnas, conviene distinguir qué representa cada tono 
 * En @fig-mapa-desajuste-espacial y @fig-mapa-desajuste-conteos, el azul oscuro indica pocas noticias (en tasa por 100.000 habitantes o en conteo acumulado) y el aguamarina claro indica mayor cantidad de artículos.
 * En @fig-mapa-delitos-sentimiento, en cambio, la barra derecha mide el sentimiento neto promedio (`sentimiento_score`, en $[-1, +1]$) calculado con `nrc_es`, `crimen_es` y `valenceIn`. Las palabras sobre hurtos y violencia restan y producen valores negativos; las notas sobre capturas, recuperaciones u operativos policiales suman y acercan el puntaje a cero o lo vuelven positivo. Como la barra ordena los números de menor a mayor, el azul oscuro señala el promedio más negativo (localidades donde predominan los reportes de robos), el azul claro o aguamarina indica un tono menos negativo o positivo, y el gris claro marca las celdas con cero artículos en esa modalidad (Usme en residencias y motocicletas).
 
-Esta lectura explica por qué varias localidades residenciales e intermedias se ven más oscuras que el centro en @fig-mapa-delitos-sentimiento. En hurto a personas (`736` notas) y en el total de tres modalidades (`992` notas), las 19 localidades tienen promedios negativos (de `-0,403` a `-0,121` en el agregado). Localidades como Teusaquillo (`-0,400`, con `87,1 %` de notas negativas y `6,5 %` positivas), Tunjuelito (`-0,396`, con `89,5 %` negativas), Fontibón (`-0,348`), Puente Aranda (`-0,329`) y Kennedy (`-0,322`) aparecen en azul oscuro porque casi toda su prensa en esa categoría trata sobre atracos. En corredores céntricos y en localidades como La Candelaria (`-0,240`, con `35,3 %` de notas positivas), Antonio Nariño (`-0,216`, `31,6 %` positivas), Suba (`-0,192`, `30,2 %` positivas), Chapinero (`-0,201`) y Santa Fe (`-0,213`), las notas de capturas y balances policiales compensan parte de los titulares de robo y suben el promedio hacia cero. Al coincidir tasas altas de denuncia en el centro con puntajes menos negativos, la correlación lineal $r$ entre tasa delictiva y sentimiento resulta positiva ($r = 0{,}364$ en personas y $r = 0{,}303$ en las tres modalidades).
+Esta lectura explica por qué varias localidades residenciales e intermedias se ven más oscuras que el centro en @fig-mapa-delitos-sentimiento. En hurto a personas (`r fmt_es_6(n_pers_6, 0)` notas) y en el total de tres modalidades (`r fmt_es_6(n_3mod_6, 0)` notas), las 19 localidades tienen promedios negativos (de `r fmt_es_6(rango_sent_3mod_6[1], 3)` a `r fmt_es_6(rango_sent_3mod_6[2], 3)` en el agregado). Localidades como Tunjuelito (`r fmt_es_6(get_sp_6("Tunjuelito", "s_mean"), 3)`, con `r fmt_es_6(get_sp_6("Tunjuelito", "pct_neg"), 1)` % de notas negativas y `r fmt_es_6(get_sp_6("Tunjuelito", "pct_pos"), 1)` % positivas), Teusaquillo (`r fmt_es_6(get_sp_6("Teusaquillo", "s_mean"), 3)`, con `r fmt_es_6(get_sp_6("Teusaquillo", "pct_neg"), 1)` % negativas), Fontibón (`r fmt_es_6(get_sp_6("Fontibón", "s_mean"), 3)`), Puente Aranda (`r fmt_es_6(get_sp_6("Puente Aranda", "s_mean"), 3)`) y Kennedy (`r fmt_es_6(get_sp_6("Kennedy", "s_mean"), 3)`) aparecen en azul oscuro porque casi toda su prensa en esa categoría trata sobre atracos. En corredores céntricos y en localidades como La Candelaria (`r fmt_es_6(get_sp_6("La Candelaria", "s_mean"), 3)`, con `r fmt_es_6(get_sp_6("La Candelaria", "pct_pos"), 1)` % de notas positivas), Antonio Nariño (`r fmt_es_6(get_sp_6("Antonio Nariño", "s_mean"), 3)`, `r fmt_es_6(get_sp_6("Antonio Nariño", "pct_pos"), 1)` % positivas), Suba (`r fmt_es_6(get_sp_6("Suba", "s_mean"), 3)`, `r fmt_es_6(get_sp_6("Suba", "pct_pos"), 1)` % positivas), Chapinero (`r fmt_es_6(get_sp_6("Chapinero", "s_mean"), 3)`) y Santa Fe (`r fmt_es_6(get_sp_6("Santa Fe", "s_mean"), 3)`), las notas de capturas y balances policiales compensan parte de los titulares de robo y suben el promedio hacia cero. Al coincidir tasas altas de denuncia en el centro con puntajes menos negativos, la correlación lineal $r$ entre tasa delictiva y sentimiento resulta positiva ($r = `r fmt_es_6(corr_pers_sent_6, 3)`$ en personas y $r = `r fmt_es_6(corr_3mod_sent_6, 3)`$ en las tres modalidades).
 
-En hurto a residencias (`140` notas) y hurto de motocicletas (`116` notas), varias localidades tienen entre una y cuatro notas en todo el periodo. Con tan pocos casos, un par de artículos mueven el promedio por encima o muy por debajo de la media distrital: en motocicletas, Santa Fe promedia `+0,625` sobre `2` artículos sobre recuperación de motos y el hallazgo de un taller clandestino, Puente Aranda marca `+0,295` sobre `4` notas (tres de ellas sobre capturas, recuperación o robo frustrado) y Fontibón cae a `-0,900` por una sola nota de hurto. En residencias, Santa Fe obtiene `+0,500` a partir de un único artículo cuya composición léxica dio puntaje positivo. Conviene leer la @fig-mapa-delitos-sentimiento junto con los conteos de la @fig-mapa-desajuste-conteos y la @tbl-correlacion-modalidades antes de interpretar casos aislados.
+En hurto a residencias (`r fmt_es_6(n_resid_6, 0)` notas) y hurto de motocicletas (`r fmt_es_6(n_motos_6, 0)` notas), varias localidades tienen entre una y cuatro notas en todo el periodo. Con tan pocos casos, un par de artículos mueven el promedio por encima o muy por debajo de la media distrital: en motocicletas, Santa Fe promedia `+0,625` sobre `2` artículos sobre recuperación de motos y el hallazgo de un taller clandestino, Puente Aranda marca `+0,295` sobre `4` notas (tres de ellas sobre capturas, recuperación o robo frustrado) y Fontibón cae a `-0,900` por una sola nota de hurto. En residencias, Santa Fe obtiene `+0,500` a partir de un único artículo cuya composición léxica dio puntaje positivo. Conviene leer la @fig-mapa-delitos-sentimiento junto con los conteos de la @fig-mapa-desajuste-conteos y la @tbl-correlacion-modalidades antes de interpretar casos aislados.
 
 ```{r}
 #| label: tbl-correlacion-modalidades
-#| tbl-cap: "Resumen estadístico y correlación espacial entre tasas de hurtos (por 100.000 hab.) y las tres métricas periodísticas por localidad según modalidad (n = 19 localidades; n = 18 con tono en residencias y motos)"
+#| tbl-cap: "Resumen estadístico y correlación espacial entre tasas de hurtos (por 100.000 hab.) y las tres métricas periodísticas por localidad según modalidad (n = 19 localidades; n = 18 con tono en motos)"
 ## 6.6 Métricas y correlación espacial por modalidad en tasas, conteos y sentimiento ----
 datos_corr_mod <- sf::st_drop_geometry(geo_bogota_modalidades)
+
+get_loc_mod <- function(loc, col) {
+  datos_corr_mod[[col]][datos_corr_mod$localidad == loc]
+}
+
+motos_loc_6 <- panel_delitos |>
+  group_by(localidad) |>
+  summarise(motos = sum(hurto_motos, na.rm = TRUE), .groups = "drop") |>
+  arrange(desc(motos))
+
+motos_tot_dist_6  <- sum(motos_loc_6$motos)
+motos_top5_sum_6  <- sum(motos_loc_6$motos[1:5])
+motos_top5_pct_6  <- 100 * motos_top5_sum_6 / motos_tot_dist_6
+get_motos_vol_6   <- function(loc) motos_loc_6$motos[motos_loc_6$localidad == loc]
 
 resumir_modalidad_espacial <- function(etiqueta, col_del, col_not, col_n, col_sent) {
   x      <- datos_corr_mod[[col_del]]
@@ -3285,17 +3386,17 @@ knitr::kable(
 
 Al cruzar las tres comparaciones de la @tbl-correlacion-modalidades con las figuras anteriores, salen cuatro patrones concretos:
 
-1. Cuando denuncias y noticias se dividen por los habitantes residentes (@fig-mapa-desajuste-espacial), la correlación espacial es alta en el agregado ($r = 0{,}838$, $\rho = 0{,}812$) y en hurto a personas ($r = 0{,}847$, $\rho = 0{,}779$). El centro-oriente (La Candelaria, Los Mártires y Chapinero) encabeza ambas tasas per cápita por la mezcla de población residente reducida y millones de visitantes diarios, aunque Santa Fe tiene una tasa oficial alta (`6.364,1` denuncias/100k hab.) frente a una tasa moderada de prensa (`4,60` noticias/100k hab. en las tres modalidades).
-2. Al pasar al conteo acumulado de artículos sin ajustar por población (@fig-mapa-desajuste-conteos), la correlación con la tasa de denuncias se vuelve cercana a cero o negativa ($r = 0{,}010$ en personas, $r = -0{,}185$ en residencias, $r = 0{,}176$ en motos, $r = -0{,}121$ en las tres modalidades y $r = -0{,}402$ en todo el corpus). El mayor número bruto de noticias cae en Chapinero (`101` notas en las tres modalidades; `90` en personas), Bosa (`90` en tres modalidades; líder en motos con `17`), Suba (`79` en tres modalidades; líder en residencias con `17`), Engativá (`78`), Usaquén (`65`), Kennedy (`60` comparables y `260` totales) y Ciudad Bolívar (`55` comparables y `323` totales), mientras La Candelaria suma solo `21` notas comparables (`90` en todo el corpus).
-3. En hurto a personas y en el total de tres modalidades (@fig-mapa-delitos-sentimiento), el sentimiento promedio es siempre negativo, pero más severo en Teusaquillo, Tunjuelito, Fontibón, Puente Aranda y Kennedy que en Chapinero, Santa Fe, La Candelaria, Suba o Barrios Unidos, donde las notas sobre capturas y resultados policiales compensan parcialmente la carga negativa de los robos.
-4. El hurto de motocicletas (`r sum(geo_bogota_modalidades$n_noti_motos_tot)` noticias) tiene la correlación ordinal más débil en tasas ($\rho = 0{,}402$, $r = 0{,}605$) porque mezcla dos dinámicas distintas. Por población residente y presencia de talleres y autopartes, lideran Los Mártires (`178,2` denuncias/100k; `1,86` noticias/100k, `7` notas), Antonio Nariño (`127,8` denuncias/100k; líder en prensa con `2,82` noticias/100k, `11` notas) y Puente Aranda (`92,5`). Pero a diferencia del hurto a personas o residencias, varias localidades periféricas del sur y suroccidente también tienen tasas altas (Ciudad Bolívar `82,2`, Kennedy `78,1` y Rafael Uribe Uribe `72,2`, por encima de La Candelaria `64,7`, Santa Fe `62,8`, Teusaquillo `60,8`, Chapinero `42,5` y Usaquén `16,6`). En volumen absoluto, cinco localidades periféricas suman el `59,2 %` de las `22.733` denuncias distritales (`13.462` casos): Kennedy (`4.278`, `18,8 %`), Ciudad Bolívar (`2.767`, `12,2 %`), Engativá (`2.434`, `10,7 %`), Bosa (`2.088`, `9,2 %`) y Suba (`1.895`, `8,3 %`). Pese a ese peso, su cobertura per cápita es mínima (Kennedy `0,13` noticias/100k, Ciudad Bolívar `0,26` y Usme `0,00`). Tres datos de movilidad y seguridad explican esa concentración periférica:
+1. Cuando denuncias y noticias se dividen por los habitantes residentes (@fig-mapa-desajuste-espacial), la correlación espacial es alta en el agregado ($r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][4], 3)`$, $\rho = `r fmt_es_6(tabla_corr_modalidades[["rho (tasa)"]][4], 3)`$) y en hurto a personas ($r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][1], 3)`$, $\rho = `r fmt_es_6(tabla_corr_modalidades[["rho (tasa)"]][1], 3)`$). El centro-oriente (La Candelaria, Los Mártires y Chapinero) encabeza ambas tasas per cápita por la mezcla de población residente reducida y millones de visitantes diarios, aunque Santa Fe tiene una tasa oficial alta (`r fmt_es_6(get_loc_mod("Santa Fe", "tasa_total_prom"), 1)` denuncias/100k hab.) frente a una tasa moderada de prensa (`r fmt_es_6(get_loc_mod("Santa Fe", "tasa_noti_3mod_prom"), 2)` noticias/100k hab. en las tres modalidades).
+2. Al pasar al conteo acumulado de artículos sin ajustar por población (@fig-mapa-desajuste-conteos), la correlación con la tasa de denuncias se vuelve cercana a cero o negativa ($r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][1], 3)`$ en personas, $r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][2], 3)`$ en residencias, $r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][3], 3)`$ en motos, $r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][4], 3)`$ en las tres modalidades y $r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][5], 3)`$ en todo el corpus). El mayor número bruto de noticias cae en Chapinero (`r get_loc_mod("Chapinero", "n_noti_3mod_tot")` notas en las tres modalidades; `r get_loc_mod("Chapinero", "n_noti_personas_tot")` en personas), Bosa (`r get_loc_mod("Bosa", "n_noti_3mod_tot")` en tres modalidades; líder en motos con `r get_loc_mod("Bosa", "n_noti_motos_tot")`), Suba (`r get_loc_mod("Suba", "n_noti_3mod_tot")` en tres modalidades; líder en residencias con `r get_loc_mod("Suba", "n_noti_resid_tot")`), Engativá (`r get_loc_mod("Engativá", "n_noti_3mod_tot")`), Usaquén (`r get_loc_mod("Usaquén", "n_noti_3mod_tot")`), Kennedy (`r get_loc_mod("Kennedy", "n_noti_3mod_tot")` comparables y `r get_loc_mod("Kennedy", "n_noti_corpus_tot")` totales) y Ciudad Bolívar (`r get_loc_mod("Ciudad Bolívar", "n_noti_3mod_tot")` comparables y `r get_loc_mod("Ciudad Bolívar", "n_noti_corpus_tot")` totales), mientras La Candelaria suma solo `r get_loc_mod("La Candelaria", "n_noti_3mod_tot")` notas comparables (`r get_loc_mod("La Candelaria", "n_noti_corpus_tot")` en todo el corpus).
+3. En hurto a personas y en el total de tres modalidades (@fig-mapa-delitos-sentimiento), el sentimiento promedio es siempre negativo, pero más severo en Tunjuelito, Teusaquillo, Fontibón, Puente Aranda y Kennedy que en Chapinero, Santa Fe, La Candelaria, Suba o Barrios Unidos, donde las notas sobre capturas y resultados policiales compensan parcialmente la carga negativa de los robos.
+4. El hurto de motocicletas (`r sum(datos_corr_mod$n_noti_motos_tot)` noticias) tiene la correlación ordinal más débil en tasas ($\rho = `r fmt_es_6(tabla_corr_modalidades[["rho (tasa)"]][3], 3)`$, $r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][3], 3)`$) porque mezcla dos dinámicas distintas. Por población residente y presencia de talleres y autopartes, lideran Los Mártires (`r fmt_es_6(get_loc_mod("Los Mártires", "tasa_motos_prom"), 1)` denuncias/100k; `r fmt_es_6(get_loc_mod("Los Mártires", "tasa_noti_motos_prom"), 2)` noticias/100k, `r get_loc_mod("Los Mártires", "n_noti_motos_tot")` notas), Antonio Nariño (`r fmt_es_6(get_loc_mod("Antonio Nariño", "tasa_motos_prom"), 1)` denuncias/100k; líder en prensa con `r fmt_es_6(get_loc_mod("Antonio Nariño", "tasa_noti_motos_prom"), 2)` noticias/100k, `r get_loc_mod("Antonio Nariño", "n_noti_motos_tot")` notas) y Puente Aranda (`r fmt_es_6(get_loc_mod("Puente Aranda", "tasa_motos_prom"), 1)`). Pero a diferencia del hurto a personas o residencias, varias localidades periféricas del sur y suroccidente también tienen tasas altas (Ciudad Bolívar `r fmt_es_6(get_loc_mod("Ciudad Bolívar", "tasa_motos_prom"), 1)`, Kennedy `r fmt_es_6(get_loc_mod("Kennedy", "tasa_motos_prom"), 1)` y Rafael Uribe Uribe `r fmt_es_6(get_loc_mod("Rafael Uribe Uribe", "tasa_motos_prom"), 1)`, por encima de Santa Fe `r fmt_es_6(get_loc_mod("Santa Fe", "tasa_motos_prom"), 1)`, La Candelaria `r fmt_es_6(get_loc_mod("La Candelaria", "tasa_motos_prom"), 1)`, Teusaquillo `r fmt_es_6(get_loc_mod("Teusaquillo", "tasa_motos_prom"), 1)`, Chapinero `r fmt_es_6(get_loc_mod("Chapinero", "tasa_motos_prom"), 1)` y Usaquén `r fmt_es_6(get_loc_mod("Usaquén", "tasa_motos_prom"), 1)`). En volumen absoluto, cinco localidades periféricas suman el `r fmt_es_6(motos_top5_pct_6, 1)` % de las `r fmt_es_6(motos_tot_dist_6, 0)` denuncias distritales (`r fmt_es_6(motos_top5_sum_6, 0)` casos): Kennedy (`r fmt_es_6(get_motos_vol_6("Kennedy"), 0)`, `r fmt_es_6(100 * get_motos_vol_6("Kennedy") / motos_tot_dist_6, 1)` %), Ciudad Bolívar (`r fmt_es_6(get_motos_vol_6("Ciudad Bolívar"), 0)`, `r fmt_es_6(100 * get_motos_vol_6("Ciudad Bolívar") / motos_tot_dist_6, 1)` %), Engativá (`r fmt_es_6(get_motos_vol_6("Engativá"), 0)`, `r fmt_es_6(100 * get_motos_vol_6("Engativá") / motos_tot_dist_6, 1)` %), Bosa (`r fmt_es_6(get_motos_vol_6("Bosa"), 0)`, `r fmt_es_6(100 * get_motos_vol_6("Bosa") / motos_tot_dist_6, 1)` %) y Suba (`r fmt_es_6(get_motos_vol_6("Suba"), 0)`, `r fmt_es_6(100 * get_motos_vol_6("Suba") / motos_tot_dist_6, 1)` %). Pese a ese peso, su cobertura per cápita es mínima (Kennedy `r fmt_es_6(get_loc_mod("Kennedy", "tasa_noti_motos_prom"), 2)` noticias/100k, Ciudad Bolívar `r fmt_es_6(get_loc_mod("Ciudad Bolívar", "tasa_noti_motos_prom"), 2)` y Usme `0,00`). Tres datos de movilidad y seguridad explican esa concentración periférica:
    * Según la Encuesta de Movilidad 2023 de la Secretaría Distrital de Movilidad (SDM), en Bogotá circulan `551.518` motocicletas de hogares (`81,77 %` de las `674.444` de Bogotá-Región, es decir, `1` moto por cada `5,40` hogares) y se hacen `887.352` viajes diarios (`7 %` de la partición modal). La propiedad y los orígenes de viaje se concentran en la periferia (Kennedy lidera con más de `92.000` motocicletas, cerca del `13,7 %` del parque distrital, seguida por Suba, Bosa, Engativá y Ciudad Bolívar), mientras los destinos laborales y de servicios van hacia el centro ampliado y corredores como Los Mártires, Puente Aranda, Teusaquillo y Chapinero.
    * Un estudio de ProBogotá Región (2023) documenta que cerca del `90 %` de los viajes en motocicleta se origina en estratos 1, 2 y 3 de la periferia, con recorridos promedio de `10,4` km (`50` minutos) hacia zonas de empleo, donde la moto suple rutas troncales y funciona como vehículo de trabajo o reparto.
    * Reportes de la SDSCJ y la Policía Metropolitana de Bogotá (MEBOG) indican que cerca de 7 de cada 10 hurtos de motocicletas se cometen por «halado» sobre vehículos estacionados en vía pública, bahías o frentes de casas sin parqueadero vigilado. Eso deja más expuesto el parque residencial en barrios populares de la periferia y alimenta ventas clandestinas de repuestos en zonas comerciales céntricas.
 
 ## Integración hacia el tablero R Shiny ("Dos lecturas de Bogotá")
 
-Para que `app/app.R` responda sin retrasos y sin leer archivos GeoJSON ni estimar modelos en cada visita de usuario, `scripts/05_export_insumos_shiny.R` empaqueta el panel consolidado, los clústeres, los polígonos en WGS84, las estadísticas del corpus, las series mensuales y los resultados de Elastic Net en un único archivo binario (`datos_consolidados_shiny.rds`). Al abrirse la aplicación, las pestañas *Panorama* y *Clusters* dibujan los polígonos directamente sobre un mapa oscuro de OpenStreetMap (denuncias en ámbar frente a noticias en azul), y cada clic en un polígono (`input$mapa_panorama_shape_click`) o punto (`plotly_click`) filtra las series de sentimiento, la distribución de tono y los titulares extremos (`peakdocs`).
+Para que `app/app.R` responda sin retrasos y sin leer archivos GeoJSON ni estimar modelos en cada visita de usuario, `scripts/03_analisis_sentometrics.R` consolida toda la corrida de `sentometrics` en `data/processed/sentometrics_pipeline.rds` y `scripts/05_export_insumos_shiny.R` empaqueta esos resultados junto con el panel consolidado, los clústeres `K-Means` y los polígonos en WGS84 en un único archivo binario para el tablero (`data/processed/datos_consolidados_shiny.rds`). Al abrirse la aplicación, *Panorama* dibuja los polígonos y permite alternar indicadores, *Clusters* incluye el mapa territorial y el gráfico tridimensional interactivo de las 19 localidades en `plotly`, *Sentometrics* explora las `r fmt_es_6(ncol(medidas_sento$measures) - 1, 0)` series mensuales sobre las `r fmt_es_6(quanteda::ndoc(corpus_sento), 0)` noticias objetivo y cada clic actualiza las gráficas y titulares extremos (`peakdocs`).
 
 # Verificación de consistencia y conclusiones {#sec-conclusiones}
 
@@ -3323,15 +3424,15 @@ objetos_sesion <- list(
 
 descripciones_obj <- c(
   "Asignaciones K-Means (K* = 3) y ancho de silueta por localidad",
-  "Corpus textual con 26 covariables binarias (19 loc. + 3 clústeres + 4 temas)",
+  "Corpus objetivo (3 modalidades de hurto) con 6 covariables binarias (3 clústeres + 3 modalidades)",
   "Diccionarios combinados (nrc_es + crimen_es) y modificadores de valencia",
   "Puntajes de polaridad documental (proportionalPol)",
   "Catálogo de noticias extremas globales y locales (peakdocs)",
-  "Objeto S3 con 364 series mensuales ponderadas",
+  "Objeto S3 con 36 series mensuales (2 léxicos x 6 covariables x 3 esquemas)",
   "Panel largo de series mensuales con etiquetas legibles",
   "Índice global distrital y fechas críticas (peakdates)",
   "Modelo Elastic Net (BIC, h = 1) y descomposición de atribuciones",
-  "Panel consolidado anual Localidad x Año (delitos, población y prensa)",
+  "Panel consolidado anual Localidad x Año (delitos, población y prensa objetivo)",
   "Capa vectorial sf de las 19 localidades urbanas"
 )
 
@@ -3372,9 +3473,9 @@ knitr::kable(tabla_auditoria, row.names = FALSE, align = c("l", "l", "l", "r", "
 
 El cruce de denuncias oficiales, análisis de texto y regresión regularizada deja tres resultados principales:
 
-1. La partición en $K^* = 3$ clústeres (silueta promedio `r max(diagnostico_k$silueta_media)`) distingue zonas urbanas con perfiles distintos de hurto. El grupo céntrico e institucional concentra las tasas más altas de hurto a personas (hasta `r scales::comma(round(df_clusters$tasa_personas_prom[df_clusters$localidad == "La Candelaria"]))` por 100.000 habitantes en La Candelaria) por su población flotante diaria. El corredor de Los Mártires y Antonio Nariño encabeza la tasa relativa en personas (`r scales::comma(round(df_clusters$tasa_personas_prom[df_clusters$localidad == "Los Mártires"]))` en Los Mártires) y en motocicletas (`178,2` y `127,8` por 100.000 habitantes). Las doce localidades periféricas tienen tasas totales más bajas por habitante, pero concentran la mayor población afectada en términos absolutos y el `59,2 %` de los hurtos de motocicletas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba, en línea con los orígenes de viaje y tenencia medidos por la Encuesta de Movilidad 2023 de la SDM).
-2. Sumar `crimen_es` a `nrc_es` junto con modificadores de valencia evitó invertir el signo de frases con negación y permitió identificar con `peakdocs()` los episodios informativos de mayor severidad en transporte masivo y homicidios.
-3. Elastic Net seleccionó `r metricas_mod$n_activos` de las `r metricas_mod$n_predictores` series mensuales y explicó el `r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)` de la varianza mensual de la tasa de hurto a un mes ($h = 1$). Al desagregar los mapas por modalidad en tasas por 100.000 habitantes, denuncias y noticias muestran una correlación positiva ($r = `r format(tabla_corr_modalidades[["r (tasa)"]][4], decimal.mark = ",")`$ en las tres modalidades y $r = `r format(tabla_corr_modalidades[["r (tasa)"]][1], decimal.mark = ",")`$ en personas). En conteos brutos esa relación desaparece ($r = `r format(tabla_corr_modalidades[["r (conteo)"]][4], decimal.mark = ",")`$) porque las notas absolutas se acumulan en localidades populosas como Bosa, Suba, Engativá, Kennedy y Ciudad Bolívar. Por último, el sentimiento neto promedio tiende a ser más negativo en sectores residenciales e intermedios que en el centro ($r = `r format(tabla_corr_modalidades[["r (sent.)"]][1], decimal.mark = ",")`$ en personas), donde las noticias de capturas moderan el balance diario.
+1. La partición en $K^* = 3$ clústeres (silueta promedio `r fmt_es_6(max(diagnostico_k$silueta_media), 4)`, con cero siluetas negativas) distingue zonas urbanas con perfiles distintos de hurto. El grupo *Céntrico e Institucional* (`5` localidades) concentra tasas altas en hurto a personas por su población flotante diaria (hasta `r scales::comma(round(get_loc_mod("La Candelaria", "tasa_personas_prom")))` por 100.000 habitantes en La Candelaria). El grupo *Comercial y Automotor* queda representado únicamente por **Los Mártires**, que encabeza las tasas relativas en personas (`r scales::comma(round(get_loc_mod("Los Mártires", "tasa_personas_prom")))`) y en motocicletas (`r fmt_es_6(get_loc_mod("Los Mártires", "tasa_motos_prom"), 1)` por 100.000 habitantes). Las `13` localidades de *Residencial y Periférico* (entre ellas Antonio Nariño, con `r fmt_es_6(get_loc_mod("Antonio Nariño", "tasa_motos_prom"), 1)` denuncias de motos por 100.000 habitantes) muestran tasas totales moderadas por habitante, pero concentran la mayor población afectada en términos absolutos y el `r fmt_es_6(motos_top5_pct_6, 1)` % de los hurtos de motocicletas en sus cinco localidades más pobladas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba, en línea con los orígenes de viaje y tenencia medidos por la Encuesta de Movilidad 2023 de la SDM).
+2. Sumar `crimen_es` a `nrc_es` junto con modificadores de valencia evitó invertir el signo de frases con negación y permitió aislar con `peakdocs()` los episodios extremos dentro de las `r fmt_es_6(n_3mod_6, 0)` noticias directamente comparables con las tres modalidades del panel.
+3. Sobre ese corpus objetivo y el diseño parsimonioso de `36` series ($M < N = 51$), Elastic Net seleccionó `r metricas_mod$n_activos` series mensuales activas y explicó el `r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)` de la varianza mensual de la tasa distrital de hurto registrada en `SIEDCO.csv` a un mes ($h = 1$). Al desagregar los mapas por modalidad en tasas por 100.000 habitantes, denuncias y noticias muestran una correlación positiva ($r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][4], 3)`$ en las tres modalidades y $r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][1], 3)`$ en personas). En conteos brutos esa relación desaparece ($r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][4], 3)`$) porque las notas absolutas se acumulan en localidades populosas como Bosa, Suba, Engativá, Kennedy y Ciudad Bolívar. Por último, el sentimiento neto promedio tiende a ser más negativo en sectores residenciales e intermedios que en el centro ($r = `r fmt_es_6(tabla_corr_modalidades[["r (sent.)"]][1], 3)`$ en personas), donde las noticias de capturas moderan el balance diario.
 
 ## Limitaciones de la investigación
 
@@ -3388,5 +3489,5 @@ El alcance de estos resultados tiene tres límites que conviene tener presentes:
 
 Estos hallazgos sugieren dos criterios concretos para la gestión de la seguridad:
 
-1. Las intervenciones deben ajustarse al tipo de hurto predominante en cada zona: patrullaje peatonal, vigilancia en estaciones de transporte e iluminación en el centro; control a talleres y venta de autopartes en Los Mártires y Antonio Nariño; y prevención comunitaria y control de espacio público en localidades residenciales extensas.
+1. Las intervenciones deben ajustarse al tipo de hurto predominante en cada zona: patrullaje peatonal, vigilancia en estaciones de transporte e iluminación en el centro; control a talleres y venta de autopartes en Los Mártires, Antonio Nariño y Puente Aranda; y prevención comunitaria y control de espacio público en localidades residenciales extensas.
 2. Guiar los operativos únicamente por el volumen o el tono de las noticias puede concentrar recursos en sectores con alta cobertura mediática mientras deja desatendidas localidades con mayor número absoluto de víctimas, como ocurre en el hurto de motocicletas en el sur y occidente de la ciudad.

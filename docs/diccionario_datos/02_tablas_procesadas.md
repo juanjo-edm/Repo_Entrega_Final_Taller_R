@@ -10,80 +10,84 @@ Esta capa almacena los cinco conjuntos de datos tabulares limpios, cruzados y en
 
 ## Tabla de Contenido
 
-1. [`delitos_localidad_anual.parquet`](#1-delitos_localidad_anualparquet) — Conteos oficiales de hurtos por localidad y año (`95 × 6`)
-2. [`panel_delitos_poblacion_localidad.parquet`](#2-panel_delitos_poblacion_localidadparquet) — Panel de delitos, población y tasas por 100.000 hab. (`95 × 11`)
+1. [`delitos_localidad_mensual.parquet`](#1-delitos_localidad_mensualparquet) — Conteos mensuales oficiales SIEDCO por localidad y mes (`1.083 × 8`)
+2. [`panel_delitos_poblacion_mensual.parquet`](#2-panel_delitos_poblacion_mensualparquet) — Panel mensual de delitos, población y tasas por 100.000 hab. (`1.083 × 13`)
 3. [`noticias_procesadas.parquet`](#3-noticias_procesadasparquet) — Microdatos del corpus de prensa limpios, clasificados y calificados (`3.916 × 42`)
 4. [`clusters_localidades_kmeans.parquet`](#4-clusters_localidades_kmeansparquet) — Tipología territorial $K$-means por perfiles de hurto (`19 × 11`)
-5. [`panel_consolidado_localidad_anual.parquet`](#5-panel_consolidado_localidad_anualparquet) — Panel maestro criminalidad–demografía–sentimiento (`95 × 20`)
+5. [`panel_consolidado_localidad_anual.parquet`](#5-panel_consolidado_localidad_anualparquet) — Panel maestro criminalidad–demografía–sentimiento objetivo (`95 × 20`)
 
 ---
 
-## 1. `delitos_localidad_anual.parquet`
+## 1. `delitos_localidad_mensual.parquet`
 
-* **Ruta relativa:** `data/processed/01_delitos/delitos_localidad_anual.parquet`
+* **Ruta relativa:** `data/processed/01_delitos/delitos_localidad_mensual.parquet`
 * **Formato / Clase en R:** Apache Parquet (`tbl_df`, `data.frame`)
-* **Dimensiones verificadas:** `95` filas × `6` columnas (`19 localidades × 5 años`)
-* **Unidad de observación (grano):** Combinación `Localidad × Año` (`2022`–`2026`).
-* **Llave primaria compuesta (`PK`):** `(codigo_localidad, año)`
-* **Llaves foráneas / de cruce (`FK`):** `codigo_localidad` vincula con [`localidades_bogota_raw.geojson`](./01_datos_crudos.md#1-localidades_bogota_rawgeojson) (`CMIULOCAL`) y [`poblacion_localidades_raw.parquet`](./01_datos_crudos.md#2-poblacion_localidades_rawparquet) (`CODIGO_LOCALIDAD`).
-* **Propósito y uso:** Estandariza los conteos oficiales de las tres modalidades de hurto seleccionadas (`CMHP`, `CMHR`, `CMHM`) desde formato ancho (`22CONT`–`26CONT`) a formato largo en panel equilibrado, normalizando acentos y homologando `"Candelaria"` a `"La Candelaria"`.
+* **Dimensiones verificadas:** `1.083` filas × `8` columnas (`19 localidades × 57 meses`, enero de `2022` a septiembre de `2026`)
+* **Unidad de observación (grano):** Combinación `Localidad × Mes` (`fecha_mes`).
+* **Llave primaria compuesta (`PK`):** `(codigo_localidad, fecha_mes)`
+* **Llaves foráneas / de cruce (`FK`):** `codigo_localidad` vincula con [`SIEDCO.csv`](./01_datos_crudos.md#1-siedcocsv) (`COD_LOCALIDAD`), [`localidades_bogota_raw.geojson`](./01_datos_crudos.md#2-localidades_bogota_rawgeojson) (`CMIULOCAL`) y [`poblacion_localidades_raw.parquet`](./01_datos_crudos.md#3-poblacion_localidades_rawparquet) (`CODIGO_LOCALIDAD`).
+* **Propósito y uso:** Consolida los microdatos mensuales de las tres modalidades de hurto objetivo (`HURTO A PERSONAS`, `HURTO A RESIDENCIAS`, `HURTO MOTOCICLETAS`) desde `SIEDCO.csv` en una malla temporal balanceada de 57 meses, normalizando tildes y completando ceros explícitos cuando una celda no registra casos.
 * **Linaje:**
-  * **Generado por:** [`scripts/02_procesamiento/01_delitos/procesamiento_delitos.R`](../../scripts/02_procesamiento/01_delitos/procesamiento_delitos.R) (a partir de `localidades_bogota_raw.geojson`).
+  * **Generado por:** [`scripts/02_procesamiento/01_delitos/procesamiento_delitos.R`](../../scripts/02_procesamiento/01_delitos/procesamiento_delitos.R) (a partir de `SIEDCO.csv`).
   * **Consumido por:** [`scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R`](../../scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R).
-* **Controles de auditoría:** Exclusión explícita de códigos `"20"` (Sumapaz) y `"99"` (Sin Localización); `stopifnot()` verifica exactamente `95` filas, `19` localidades únicas y ausencia de valores `NA`.
+* **Controles de auditoría:** Exclusión explícita de Sumapaz (`20`) y Sin Localización (`99`); `stopifnot()` verifica exactamente `1.083` filas, `19` localidades únicas, rango `2022-01-01`..`2026-09-01` y ausencia de valores `NA`.
 
 ```r
-delitos_anual <- arrow::read_parquet(
-  here::here("data", "processed", "01_delitos", "delitos_localidad_anual.parquet")
+delitos_mensual <- arrow::read_parquet(
+  here::here("data", "processed", "01_delitos", "delitos_localidad_mensual.parquet")
 )
 ```
 
 | Campo | Tipo (`R`) | Nulabilidad | Dominio / Valores observados | Origen / Fórmula | Descripción |
 | :--- | :---: | :---: | :--- | :--- | :--- |
-| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | `CMIULOCAL` (GeoJSON crudo) | Código oficial DANE/Distrito a dos dígitos para las 19 localidades urbanas. |
-| `localidad` | `character` | No nula (`0 NA`) | `"Usaquén"`, `"La Candelaria"`, ..., `"Ciudad Bolívar"` (`19` únicos) | `CMNOMLOCAL` homologado (`"Candelaria"` → `"La Candelaria"`) | Nombre oficial estandarizado con tildes de la localidad. |
-| `año` | `numeric` | No nula (`0 NA`) | `[2022, 2026]` (`5` únicos enteros) | Extraído del sufijo `22CONT`..`26CONT` + `2000` | Año del corte acumulado enero–septiembre reportado por la SDSCJ. |
-| `hurto_personas` | `numeric` | No nula (`0 NA`) | `[870, 22.781]` (`95` únicos) | `CMHP{yy}CONT` | Conteo acumulado de denuncias/casos de hurto a personas en la localidad y año. |
-| `hurto_residencias` | `numeric` | No nula (`0 NA`) | `[21, 1.674]` (`87` únicos) | `CMHR{yy}CONT` | Conteo acumulado de hurtos a residencias en la localidad y año. |
-| `hurto_motos` | `numeric` | No nula (`0 NA`) | `[7, 1.472]` (`85` únicos) | `CMHM{yy}CONT` | Conteo acumulado de hurtos a motocicletas en la localidad y año. |
+| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | `sprintf("%02d", COD_LOCALIDAD)` (`SIEDCO.csv`) | Código oficial DANE/Distrito a dos dígitos para las 19 localidades urbanas. |
+| `localidad` | `character` | No nula (`0 NA`) | `"Usaquén"`, `"La Candelaria"`, ..., `"Ciudad Bolívar"` (`19` únicos) | `LOCALIDAD` homologado (`"Candelaria"` → `"La Candelaria"`) | Nombre oficial estandarizado con tildes de la localidad. |
+| `año` | `integer` | No nula (`0 NA`) | `[2022, 2026]` (`5` únicos) | `ANIO` (`SIEDCO.csv`) | Año del registro mensual. |
+| `mes` | `integer` | No nula (`0 NA`) | `[1, 12]` (`12` únicos; hasta `9` en `2026`) | `MES` (`SIEDCO.csv`) | Mes calendario del registro mensual. |
+| `fecha_mes` | `Date` | No nula (`0 NA`) | `[2022-01-01, 2026-09-01]` (`57` únicos) | Primer día de `(año, mes)` | Llave temporal mensual exacta. |
+| `hurto_personas` | `integer` | No nula (`0 NA`) | `[53, 2.179]` (`697` únicos) | Suma mensual de `CANTIDAD` (`HURTO A PERSONAS`) | Conteo mensual oficial de hurtos a personas. |
+| `hurto_residencias` | `integer` | No nula (`0 NA`) | `[0, 178]` (`108` únicos) | Suma mensual de `CANTIDAD` (`HURTO A RESIDENCIAS`) | Conteo mensual oficial de hurtos a residencias. |
+| `hurto_motos` | `integer` | No nula (`0 NA`) | `[0, 118]` (`94` únicos) | Suma mensual de `CANTIDAD` (`HURTO MOTOCICLETAS`) | Conteo mensual oficial de hurtos a motocicletas. |
 
 ---
 
-## 2. `panel_delitos_poblacion_localidad.parquet`
+## 2. `panel_delitos_poblacion_mensual.parquet`
 
-* **Ruta relativa:** `data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet`
+* **Ruta relativa:** `data/processed/02_poblacion/panel_delitos_poblacion_mensual.parquet`
 * **Formato / Clase en R:** Apache Parquet (`tbl_df`, `data.frame`)
-* **Dimensiones verificadas:** `95` filas × `11` columnas (`19 localidades × 5 años`)
-* **Unidad de observación (grano):** Combinación `Localidad × Año` (`2022`–`2026`).
-* **Llave primaria compuesta (`PK`):** `(codigo_localidad, año)`
-* **Propósito y uso:** Integra los conteos delictivos con la población total proyectada por la Secretaría de Salud para relativizar la incidencia mediante tasas por cada `100.000` habitantes, corrigiendo el sesgo por tamaño poblacional antes del clustering y del análisis panel.
+* **Dimensiones verificadas:** `1.083` filas × `13` columnas (`19 localidades × 57 meses`)
+* **Unidad de observación (grano):** Combinación `Localidad × Mes` (`fecha_mes`).
+* **Llave primaria compuesta (`PK`):** `(codigo_localidad, fecha_mes)`
+* **Propósito y uso:** Integra los conteos mensuales oficiales de `SIEDCO.csv` con la población anual proyectada por la Secretaría de Salud para calcular tasas mensuales por cada `100.000` habitantes. Provee simultáneamente las tasas mensualizadas para la variable dependiente real de Elastic Net (`h = 1`) y las tasas anualizadas base para $K$-means y análisis territorial.
 * **Linaje:**
-  * **Generado por:** [`scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R`](../../scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R) (cruce de `delitos_localidad_anual.parquet` con `poblacion_localidades_raw.parquet` filtrando `CODIGO_LOCALIDAD != 0`).
+  * **Generado por:** [`scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R`](../../scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R) (cruce de `delitos_localidad_mensual.parquet` con `poblacion_localidades_raw.parquet` filtrando `CODIGO_LOCALIDAD != 0`).
   * **Consumido por:**
-    * [`scripts/04_clustering_kmeans.R`](../../scripts/04_clustering_kmeans.R) (insumo de los promedios 2022–2026 para clustering).
-    * [`scripts/03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R) (base para el panel maestro y para construir la variable objetivo mensual del Elastic Net).
+    * [`scripts/04_clustering_kmeans.R`](../../scripts/04_clustering_kmeans.R) (agregado anual promedio 2022–2026 para clustering).
+    * [`scripts/03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R) (variable objetivo mensual real de Elastic Net y agregación al panel consolidado anual).
     * [`notebook/metodologia/02_modelado_clustering_sentometrics.qmd`](../../notebook/metodologia/02_modelado_clustering_sentometrics.qmd).
-* **Controles de auditoría:** Se verifica unión completa sin pérdida de filas (`95` registros) y población estrictamente positiva en todos los pares `(codigo_localidad, año)`.
+* **Controles de auditoría:** Verifica unión completa sin pérdida de filas (`1.083` registros) y población estrictamente positiva en todos los pares `(codigo_localidad, fecha_mes)`.
 
 ```r
-panel_delitos_pob <- arrow::read_parquet(
-  here::here("data", "processed", "02_poblacion", "panel_delitos_poblacion_localidad.parquet")
+panel_delitos_mensual <- arrow::read_parquet(
+  here::here("data", "processed", "02_poblacion", "panel_delitos_poblacion_mensual.parquet")
 )
 ```
 
 | Campo | Tipo (`R`) | Nulabilidad | Dominio / Valores observados | Origen / Fórmula | Descripción |
 | :--- | :---: | :---: | :--- | :--- | :--- |
-| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | Heredado de `delitos_localidad_anual` | Código identificador oficial de la localidad urbana. |
-| `localidad` | `character` | No nula (`0 NA`) | `"Usaquén"`, ..., `"Ciudad Bolívar"` (`19` únicos) | Heredado de `delitos_localidad_anual` | Nombre homologado de la localidad. |
-| `año` | `numeric` | No nula (`0 NA`) | `[2022, 2026]` (`5` únicos) | Heredado de `delitos_localidad_anual` | Año de análisis (`2022`–`2026`). |
-| `hurto_personas` | `numeric` | No nula (`0 NA`) | `[870, 22.781]` (`95` únicos) | Heredado de `delitos_localidad_anual` | Casos acumulados de hurto a personas (corte ene–sep). |
-| `hurto_residencias` | `numeric` | No nula (`0 NA`) | `[21, 1.674]` (`87` únicos) | Heredado de `delitos_localidad_anual` | Casos acumulados de hurto a residencias (corte ene–sep). |
-| `hurto_motos` | `numeric` | No nula (`0 NA`) | `[7, 1.472]` (`85` únicos) | Heredado de `delitos_localidad_anual` | Casos acumulados de hurto a motocicletas (corte ene–sep). |
-| `poblacion` | `numeric` | No nula (`0 NA`) | `[16.449, 1.252.218]` (`94` únicos) | $\sum_{\text{sexo, edad}} \text{POBLACION}$ por `(CODIGO_LOCALIDAD, ANO)` | Proyección oficial total de habitantes de la localidad en el año correspondiente. |
-| `tasa_hurto_personas` | `numeric` | No nula (`0 NA`) | `[410,33, 13.348,28]` (`95` únicos) | `round((hurto_personas / poblacion) * 100000, 2)` | Tasa de hurto a personas por cada 100.000 habitantes. |
-| `tasa_hurto_residencias` | `numeric` | No nula (`0 NA`) | `[27,73, 398,13]` (`95` únicos) | `round((hurto_residencias / poblacion) * 100000, 2)` | Tasa de hurto a residencias por cada 100.000 habitantes. |
-| `tasa_hurto_motos` | `numeric` | No nula (`0 NA`) | `[11,45, 291,23]` (`94` únicos) | `round((hurto_motos / poblacion) * 100000, 2)` | Tasa de hurto a motocicletas por cada 100.000 habitantes. |
-| `tasa_hurto_total` | `numeric` | No nula (`0 NA`) | `[490,75, 13.730,22]` (`95` únicos) | `round(((hurto_personas + hurto_residencias + hurto_motos) / poblacion) * 100000, 2)` | Tasa agregada de las tres modalidades de hurto por cada 100.000 habitantes. |
+| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | Heredado de `delitos_localidad_mensual` | Código identificador oficial de la localidad urbana. |
+| `localidad` | `character` | No nula (`0 NA`) | `"Usaquén"`, ..., `"Ciudad Bolívar"` (`19` únicos) | Heredado de `delitos_localidad_mensual` | Nombre homologado de la localidad. |
+| `año` | `integer` | No nula (`0 NA`) | `[2022, 2026]` (`5` únicos) | Heredado de `delitos_localidad_mensual` | Año de análisis (`2022`–`2026`). |
+| `mes` | `integer` | No nula (`0 NA`) | `[1, 12]` (`12` únicos) | Heredado de `delitos_localidad_mensual` | Mes calendario (`1`–`12`; hasta `9` en `2026`). |
+| `fecha_mes` | `Date` | No nula (`0 NA`) | `[2022-01-01, 2026-09-01]` (`57` únicos) | Heredado de `delitos_localidad_mensual` | Fecha primer día del mes. |
+| `hurto_personas` | `integer` | No nula (`0 NA`) | `[53, 2.179]` | Heredado de `delitos_localidad_mensual` | Conteo mensual de hurtos a personas. |
+| `hurto_residencias` | `integer` | No nula (`0 NA`) | `[0, 178]` | Heredado de `delitos_localidad_mensual` | Conteo mensual de hurtos a residencias. |
+| `hurto_motos` | `integer` | No nula (`0 NA`) | `[0, 118]` | Heredado de `delitos_localidad_mensual` | Conteo mensual de hurtos a motocicletas. |
+| `poblacion` | `numeric` | No nula (`0 NA`) | `[16.449, 1.252.218]` | $\sum_{\text{sexo, edad}} \text{POBLACION}$ por `(CODIGO_LOCALIDAD, ANO)` | Proyección oficial total de habitantes de la localidad en el año correspondiente. |
+| `tasa_hurto_personas` | `numeric` | No nula (`0 NA`) | `[24,05, 2.889,81]` | `round((hurto_personas / poblacion) * 100000, 2)` | Tasa mensual de hurto a personas por cada 100.000 habitantes. |
+| `tasa_hurto_residencias` | `numeric` | No nula (`0 NA`) | `[0, 63,76]` | `round((hurto_residencias / poblacion) * 100000, 2)` | Tasa mensual de hurto a residencias por cada 100.000 habitantes. |
+| `tasa_hurto_motos` | `numeric` | No nula (`0 NA`) | `[0, 37,13]` | `round((hurto_motos / poblacion) * 100000, 2)` | Tasa mensual de hurto a motocicletas por cada 100.000 habitantes. |
+| `tasa_hurto_total` | `numeric` | No nula (`0 NA`) | `[33,32, 2.942,85]` | `round(((hurto_personas + hurto_residencias + hurto_motos) / poblacion) * 100000, 2)` | Tasa mensual agregada de las tres modalidades por cada 100.000 habitantes. |
 
 ---
 
@@ -91,18 +95,18 @@ panel_delitos_pob <- arrow::read_parquet(
 
 * **Ruta relativa:** `data/processed/03_noticias/noticias_procesadas.parquet`
 * **Formato / Clase en R:** Apache Parquet (`tbl_df`, `data.frame`)
-* **Dimensiones verificadas:** `3.916` filas × `42` columnas
+* **Dimensiones verificadas:** `3.916` filas × `42` columnas (`993` filas marcadas con `es_objetivo_3mod == TRUE`)
 * **Unidad de observación (grano):** Artículo periodístico individual único (`doc_1` a `doc_3916`, ordenado cronológicamente por `localidad` y `fecha`).
 * **Llave primaria (`PK`):** `id` (y unicidad funcional en `enlace` y `titulo`).
 * **Llaves foráneas / de cruce (`FK`):**
-  * `id` enlaza fila a fila con `03_sentiment_scores.rds`, `04_peak_docs.rds`, `05_sento_measures.rds$attribWeights$W` y `08_attributions.rds`.
+  * Los `993` artículos donde `es_objetivo_3mod == TRUE` enlazan vía `id` con `sentometrics_pipeline.rds` (`corpus_sento`, `sentiment_scores`, `peak_docs`, `sento_measures$attribWeights$W`).
   * `localidad` y `año` enlazan con `panel_consolidado_localidad_anual.parquet`.
   * `cluster_id` enlaza con `clusters_localidades_kmeans.parquet`.
-* **Propósito y uso:** Constituye la tabla maestra a nivel de documento del proyecto. Se construye en dos etapas secuenciales: primero [`procesamiento_noticias.R`](../../scripts/02_procesamiento/03_noticias/procesamiento_noticias.R) limpia HTML/cookies/anuncios, añade métricas de longitud, clasifica jerárquicamente la taxonomía DAI (`32` columnas iniciales); luego [`03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R) adjunta los puntajes de sentimiento léxico/TF-IDF y la pertenencia al clúster territorial (`+10` columnas, sobrescribiendo el archivo hasta alcanzar `42` columnas).
+* **Propósito y uso:** Constituye la tabla maestra a nivel de documento del proyecto. Primero [`procesamiento_noticias.R`](../../scripts/02_procesamiento/03_noticias/procesamiento_noticias.R) limpia HTML/cookies/anuncios, añade métricas de longitud y clasifica jerárquicamente la taxonomía DAI (`32` columnas iniciales). Después [`03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R) agrega la bandera `es_objetivo_3mod` (`TRUE` para las `993` notas de las 3 modalidades SIEDCO comparables), los puntajes auxiliares de sentimiento para las `3.916` noticias recopiladas y la pertenencia al clúster territorial (`42` columnas finales).
 * **Linaje:**
   * **Generado por:** [`scripts/02_procesamiento/03_noticias/procesamiento_noticias.R`](../../scripts/02_procesamiento/03_noticias/procesamiento_noticias.R) (escritura inicial) y [`scripts/03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R) (enriquecimiento y escritura final).
   * **Consumido por:** [`scripts/03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R), [`scripts/06_descriptivos_corpus.R`](../../scripts/06_descriptivos_corpus.R), [`notebook/entregas/01_entrega_1_propuesta_eda.qmd`](../../notebook/entregas/01_entrega_1_propuesta_eda.qmd) y [`notebook/metodologia/02_modelado_clustering_sentometrics.qmd`](../../notebook/metodologia/02_modelado_clustering_sentometrics.qmd).
-* **Controles de auditoría:** Se verifica alineación exacta `all(id == corpus_meta$id)` entre las filas del Parquet y los documentos del `sento_corpus`, conservación exacta de los `3.916` registros y ausencia de `NA` salvo en `confianza_dai` (`794` casos `"No DAI"`) y `motivo_exclusion` (`3.122` casos `es_dai_amplio == TRUE`).
+* **Controles de auditoría:** Conserva los `3.916` registros originales (`sum(es_objetivo_3mod) == 993`), verifica alineación exacta con `sentometrics_pipeline.rds$corpus_sento` para el subconjunto objetivo y ausencia de `NA` salvo en `confianza_dai` (`790` casos `"No DAI"`) y `motivo_exclusion` (`3.126` casos `es_dai_amplio == TRUE`).
 
 ```r
 noticias_proc <- arrow::read_parquet(
@@ -152,24 +156,24 @@ La clasificación del delito sigue una evaluación jerárquica estricta en orden
 | :--- | :---: | :---: | :--- | :--- | :--- |
 | `delito_alto_impacto` | `character` | No nula (`0 NA`) | `15` etiquetas originales de scraping | Heredado de tabla cruda | Categoría temática con la que fue consultada/capturada la noticia en Google News. |
 | `tipo_delito_dominante` | `character` | No nula (`0 NA`) | `15` etiquetas originales | Heredado de tabla cruda | Subtipo delictivo principal detectado durante la etapa de scraping. |
-| `modalidad_dai` | `character` | No nula (`0 NA`) | `20` modalidades: `hurto_automotores` (`575`), `hurto_no_identificado` (`540`), `hurto_personas` (`519`), `homicidio` (`452`), `hurto_comercio` (`349`), `nodai_sin_hecho_delictivo` (`307`), `nodai_operatividad` (`184`), `hurto_celulares` (`143`), `hurto_residencias` (`140`), `hurto_motocicletas` (`116`), `nodai_politica_seguridad` (`105`), `lesiones_personales` (`80`), `nodai_microtrafico` (`78`), `hurto_bicicletas` (`74`), `extorsion` (`69`), `nodai_otros_hurtos` (`66`), `nodai_otros_delitos` (`54`), `delitos_sexuales` (`32`), `violencia_intrafamiliar` (`17`), `hurto_entidades_financieras` (`16`) | Reglas regex jerárquicas en `procesamiento_noticias.R` | Clasificación granular en 20 categorías (modalidades de hurto, otros DAI y exclusiones No DAI). |
+| `modalidad_dai` | `character` | No nula (`0 NA`) | `20` modalidades: `hurto_automotores` (`576`), `hurto_no_identificado` (`538`), `hurto_personas` (`519`), `homicidio` (`453`), `hurto_comercio` (`350`), `nodai_sin_hecho_delictivo` (`307`), `nodai_operatividad` (`183`), `hurto_celulares` (`143`), `hurto_residencias` (`141`), `hurto_motocicletas` (`116`), `nodai_politica_seguridad` (`103`), `lesiones_personales` (`81`), `nodai_microtrafico` (`78`), `hurto_bicicletas` (`74`), `extorsion` (`69`), `nodai_otros_hurtos` (`65`), `nodai_otros_delitos` (`54`), `delitos_sexuales` (`33`), `violencia_intrafamiliar` (`17`), `hurto_entidades_financieras` (`16`) | Reglas regex jerárquicas en `procesamiento_noticias.R` | Clasificación granular en 20 categorías (modalidades de hurto, otros DAI y exclusiones No DAI). |
 | `campo_clasificacion` | `character` | No nula (`0 NA`) | `"titulo"`, `"resumen"`, `"cuerpo"` (`3` únicos) | Primer campo donde hizo coincidencia la regla regex | Indica el nivel textual que determinó la clasificación de `modalidad_dai`. |
-| `delito_sdscj` | `character` | No nula (`0 NA`) | `13` clases: `No DAI` (`794`), `Hurto a personas` (`736`), `Hurto de automotores` (`575`), `Hurto (modalidad no identificada)` (`540`), `Homicidio` (`452`), `Hurto a comercio` (`349`), `Hurto a residencias` (`140`), `Hurto de motocicletas` (`116`), `Lesiones personales` (`80`), `Extorsión` (`69`), `Delitos sexuales` (`32`), `Violencia intrafamiliar` (`17`), `Hurto a entidades financieras` (`16`) | Homologación de `modalidad_dai` (agrupa `hurto_celulares` y `hurto_bicicletas` dentro de `Hurto a personas`) | Categoría oficial homologada con la nomenclatura de la SDSCJ; las 6 modalidades `nodai_*` se consolidan en `"No DAI"`. |
-| `confianza_dai` | `character` | Admite `NA` (`794 NA`) | `"Alta"` (`2.472`), `"Baja"` (`404`), `"Media"` (`246`), `<NA>` (`794`) | Derivado de `campo_clasificacion` y `es_dai_amplio` (`NA` si `"No DAI"`) | Certeza de la asignación DAI según el campo de coincidencia (`titulo` → Alta, `resumen` → Media, `cuerpo` → Baja). |
+| `delito_sdscj` | `character` | No nula (`0 NA`) | `13` clases: `No DAI` (`790`), `Hurto a personas` (`736`), `Hurto de automotores` (`576`), `Hurto (modalidad no identificada)` (`538`), `Homicidio` (`453`), `Hurto a comercio` (`350`), `Hurto a residencias` (`141`), `Hurto de motocicletas` (`116`), `Lesiones personales` (`81`), `Extorsión` (`69`), `Delitos sexuales` (`33`), `Violencia intrafamiliar` (`17`), `Hurto a entidades financieras` (`16`) | Homologación de `modalidad_dai` (agrupa `hurto_celulares` y `hurto_bicicletas` dentro de `Hurto a personas`) | Categoría oficial homologada con la nomenclatura de la SDSCJ; las 6 modalidades `nodai_*` se consolidan en `"No DAI"`. |
+| `confianza_dai` | `character` | Admite `NA` (`790 NA`) | `"Alta"` (`2.470`), `"Baja"` (`410`), `"Media"` (`246`), `<NA>` (`790`) | Derivado de `campo_clasificacion` y `es_dai_amplio` (`NA` si `"No DAI"`) | Certeza de la asignación DAI según el campo de coincidencia (`titulo` → Alta, `resumen` → Media, `cuerpo` → Baja). |
 | `es_dai_estricto` | `logical` | No nula (`0 NA`) | `TRUE` / `FALSE` | `delito_sdscj != "No DAI" & delito_sdscj != "Hurto (modalidad no identificada)"` | Indica si el artículo corresponde inequívocamente a una categoría DAI oficial específica. |
-| `es_dai_amplio` | `logical` | No nula (`0 NA`) | `TRUE` (`3.122`) / `FALSE` (`794`) | `delito_sdscj != "No DAI"` | Incluye las noticias DAI estrictas más las notas de `"Hurto (modalidad no identificada)"`. |
-| `motivo_exclusion` | `character` | Admite `NA` (`3.122 NA`) | `"sin_hecho_delictivo"` (`307`), `"operatividad"` (`184`), `"politica_seguridad"` (`105`), `"microtrafico"` (`78`), `"otros_hurtos"` (`66`), `"otros_delitos"` (`54`), `<NA>` (`3.122`) | Extraído de `modalidad_dai` cuando `es_dai_amplio == FALSE` | Causa de exclusión del marco DAI oficial para las 794 noticias etiquetadas `"No DAI"`. |
+| `es_dai_amplio` | `logical` | No nula (`0 NA`) | `TRUE` (`3.126`) / `FALSE` (`790`) | `delito_sdscj != "No DAI"` | Incluye las noticias DAI estrictas más las notas de `"Hurto (modalidad no identificada)"`. |
+| `motivo_exclusion` | `character` | Admite `NA` (`3.126 NA`) | `"sin_hecho_delictivo"` (`307`), `"operatividad"` (`183`), `"politica_seguridad"` (`103`), `"microtrafico"` (`78`), `"otros_hurtos"` (`65`), `"otros_delitos"` (`54`), `<NA>` (`3.126`) | Extraído de `modalidad_dai` cuando `es_dai_amplio == FALSE` | Causa de exclusión del marco DAI oficial para las `790` noticias etiquetadas `"No DAI"`. |
 
-### 3.4 Enriquecimiento Léxico (`sentometrics`) y Tipología Territorial (9 campos)
+### 3.4 Enriquecimiento Léxico (`sentometrics`) y Tipología Territorial (10 campos)
 
 | Campo | Tipo (`R`) | Nulabilidad | Dominio / Valores observados | Origen / Fórmula | Descripción |
 | :--- | :---: | :---: | :--- | :--- | :--- |
-| `word_count` | `numeric` | No nula (`0 NA`) | `[21, 197]` (`116` únicos) | Calculado por `sentometrics::compute_sentiment()` | Conteo de tokens en el texto del `sento_corpus` (`titulo` + `resumen` + primeros `800` caracteres de `cuerpo`). |
-| `score_nrc_es` | `numeric` | No nula (`0 NA`) | `[-1,25, 1,4]` (`222` únicos) | Media de columnas `nrc_es--*` en `03_sentiment_scores.rds` (`proportionalPol`) | Polaridad del documento según el léxico general español NRC ajustado por modificadores de valencia. |
-| `score_crimen_es` | `numeric` | No nula (`0 NA`) | `[-1,8, 0,8]` (`397` únicos) | Media de columnas `crimen_es--*` en `03_sentiment_scores.rds` (`proportionalPol`) | Polaridad del documento según el léxico especializado de criminalidad en Bogotá (`crimen_es`). |
-| `sentimiento_score` | `numeric` | No nula (`0 NA`) | `[-1,0875, 0,9]` (`1.253` únicos) | `round(0.5 * score_nrc_es + 0.5 * score_crimen_es, 4)` | Índice compuesto de sentimiento documental en escala continua; valores negativos expresan tono de alarma/inseguridad. |
-| `score_tfidf_compuesto` | `numeric` | No nula (`0 NA`) | `[-15,7244, 22,7264]` (`3.393` únicos) | `0.5 * tfidf_nrc + 0.5 * tfidf_crimen` (esquema `how = "TFIDF"`) | Métrica alternativa ponderada por frecuencia inversa de documento para control metodológico ($r = 0{,}7383$ frente a `proportionalPol`). |
-| `sentimiento_categoria` | `character` | No nula (`0 NA`) | `"Negativo"` (`2.580`), `"Positivo"` (`1.129`), `"Neutro"` (`207`) | Negativo `< -0.02`; Neutro `[-0.02, 0.02]`; Positivo `> 0.02` | Clasificación discreta de la polaridad basada en `sentimiento_score`. |
+| `es_objetivo_3mod` | `logical` | No nula (`0 NA`) | `TRUE` (`993`) / `FALSE` (`2.923`) | `delito_sdscj %in% c("Hurto a personas", "Hurto a residencias", "Hurto de motocicletas")` | Indica si el artículo pertenece a las 3 modalidades SIEDCO comparables modeladas en `sentometrics`. |
+| `word_count` | `numeric` | No nula (`0 NA`) | `[21, 197]` | Calculado por `sentometrics::compute_sentiment()` | Conteo de tokens en el texto resumido (`titulo` + `resumen` + primeros `800` caracteres de `cuerpo`). |
+| `score_nrc_es` | `numeric` | No nula (`0 NA`) | `[-1,25, 1,4]` | `proportionalPol` con léxico `nrc_es` + valencia | Polaridad del documento según el léxico general español NRC ajustado por modificadores de valencia. |
+| `score_crimen_es` | `numeric` | No nula (`0 NA`) | `[-1,8, 0,8]` | `proportionalPol` con léxico `crimen_es` + valencia | Polaridad del documento según el léxico especializado de criminalidad en Bogotá (`crimen_es`). |
+| `sentimiento_score` | `numeric` | No nula (`0 NA`) | `[-1,0875, 0,9]` | `round(0.5 * score_nrc_es + 0.5 * score_crimen_es, 4)` | Índice compuesto de sentimiento documental en escala continua; valores negativos expresan tono de alarma/inseguridad. |
+| `sentimiento_categoria` | `character` | No nula (`0 NA`) | `"Negativo"` (`2.578`), `"Positivo"` (`1.130`), `"Neutro"` (`208`) | Negativo `< -0.02`; Neutro `[-0.02, 0.02]`; Positivo `> 0.02` | Clasificación discreta de la polaridad basada en `sentimiento_score`. |
 | `cluster_id` | `integer` | No nula (`0 NA`) | `1`, `2`, `3` (`3` únicos) | Unión por `localidad` desde `clusters_localidades_kmeans.parquet` | Identificador numérico del clúster territorial asignado a la localidad de la noticia. |
 | `cluster_nombre` | `character` | No nula (`0 NA`) | `"Céntrico e Institucional"`, `"Comercial y Automotor"`, `"Residencial y Periférico"` (`3` únicos) | Unión desde `clusters_localidades_kmeans.parquet` | Nombre descriptivo del clúster territorial. |
 | `perfil_seguridad` | `character` | No nula (`0 NA`) | 3 perfiles descriptivos por clúster | Unión desde `clusters_localidades_kmeans.parquet` | Síntesis criminológica del perfil de seguridad del clúster territorial correspondiente. |
@@ -183,10 +187,10 @@ La clasificación del delito sigue una evaluación jerárquica estricta en orden
 * **Dimensiones verificadas:** `19` filas × `11` columnas
 * **Unidad de observación (grano):** Localidad urbana individual de Bogotá D.C. (`19` localidades).
 * **Llave primaria (`PK`):** `codigo_localidad` (y unicidad biunívoca en `localidad`).
-* **Propósito y uso:** Almacena la tipología espacial no supervisada obtenida mediante $K$-means sobre las tasas promedio estandarizadas ($Z$-score) de hurto a personas, residencias y motocicletas en el periodo 2022–2026. Evaluando $K \in \{2, 3, 4, 5\}$, el algoritmo selecciona **$K^* = 3$** con silueta promedio global de **`0,5416`**:
+* **Propósito y uso:** Almacena la tipología espacial no supervisada obtenida mediante $K$-means sobre las tasas promedio anualizadas de `SIEDCO.csv` (estandarizadas $Z$-score) de hurto a personas, residencias y motocicletas en el periodo 2022–septiembre de 2026. Evaluando $K \in \{2, \dots, 6\}$, el algoritmo selecciona **$K^* = 3$** con silueta promedio global de **`0,5211`** y cero siluetas negativas (partición `13 / 5 / 1`):
   * **Clúster 1 — `Céntrico e Institucional`** (`5` localidades): *La Candelaria, Chapinero, Santa Fe, Teusaquillo, Barrios Unidos*.
-  * **Clúster 2 — `Comercial y Automotor`** (`2` localidades): *Los Mártires, Antonio Nariño*.
-  * **Clúster 3 — `Residencial y Periférico`** (`12` localidades): *Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa, Usme*.
+  * **Clúster 2 — `Comercial y Automotor`** (`1` localidad): *Los Mártires*.
+  * **Clúster 3 — `Residencial y Periférico`** (`13` localidades): *Antonio Nariño, Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, Rafael Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa, Usme*.
 * **Linaje:**
   * **Generado por:** [`scripts/04_clustering_kmeans.R`](../../scripts/04_clustering_kmeans.R) (usando semilla fija `set.seed(2026)`, `nstart = 50`).
   * **Consumido por:** [`scripts/03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R), [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R) y [`notebook/metodologia/02_modelado_clustering_sentometrics.qmd`](../../notebook/metodologia/02_modelado_clustering_sentometrics.qmd). También se exporta de forma idéntica a [`output/tables/tabla_clustering_kmeans_perfiles.csv`](./04_tablas_salida.md#1-tabla_clustering_kmeans_perfilescsv).
@@ -199,17 +203,17 @@ clusters_km <- arrow::read_parquet(
 
 | Campo | Tipo (`R`) | Nulabilidad | Dominio / Valores observados | Origen / Fórmula | Descripción |
 | :--- | :---: | :---: | :--- | :--- | :--- |
-| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Código identificador oficial de la localidad. |
-| `localidad` | `character` | No nula (`0 NA`) | `19` nombres oficiales | Heredado de `panel_delitos_poblacion_localidad` | Nombre oficial normalizado de la localidad. |
-| `tasa_personas_prom` | `numeric` | No nula (`0 NA`) | `[619,698, 8.389,902]` (`19` únicos) | `mean(tasa_hurto_personas)` 2022–2026 (variable usada en $K$-means) | Tasa promedio quinquenal de hurto a personas por 100.000 hab. |
-| `tasa_resid_prom` | `numeric` | No nula (`0 NA`) | `[45,292, 217,482]` (`19` únicos) | `mean(tasa_hurto_residencias)` 2022–2026 (variable usada en $K$-means) | Tasa promedio quinquenal de hurto a residencias por 100.000 hab. |
-| `tasa_motos_prom` | `numeric` | No nula (`0 NA`) | `[16,616, 178,178]` (`19` únicos) | `mean(tasa_hurto_motos)` 2022–2026 (variable usada en $K$-means) | Tasa promedio quinquenal de hurto a motocicletas por 100.000 hab. |
-| `tasa_total_prom` | `numeric` | No nula (`0 NA`) | `[729,754, 8.757,422]` (`19` únicos) | `mean(tasa_hurto_total)` 2022–2026 | Tasa promedio quinquenal de hurto agregado (informativa; excluida de ajuste para evitar colinealidad). |
+| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | Heredado de `panel_delitos_poblacion_mensual` | Código identificador oficial de la localidad. |
+| `localidad` | `character` | No nula (`0 NA`) | `19` nombres oficiales | Heredado de `panel_delitos_poblacion_mensual` | Nombre oficial normalizado de la localidad. |
+| `tasa_personas_prom` | `numeric` | No nula (`0 NA`) | `[645,304, 9.337,386]` (`19` únicos) | `mean(tasa_hurto_personas anual)` 2022–2026 (variable usada en $K$-means) | Tasa promedio quinquenal de hurto a personas por 100.000 hab. |
+| `tasa_resid_prom` | `numeric` | No nula (`0 NA`) | `[44,506, 219,660]` (`19` únicos) | `mean(tasa_hurto_residencias anual)` 2022–2026 (variable usada en $K$-means) | Tasa promedio quinquenal de hurto a residencias por 100.000 hab. |
+| `tasa_motos_prom` | `numeric` | No nula (`0 NA`) | `[19,034, 187,432]` (`19` únicos) | `mean(tasa_hurto_motos anual)` 2022–2026 (variable usada en $K$-means) | Tasa promedio quinquenal de hurto a motocicletas por 100.000 hab. |
+| `tasa_total_prom` | `numeric` | No nula (`0 NA`) | `[761,216, 9.743,590]` (`19` únicos) | `mean(tasa_hurto_total anual)` 2022–2026 | Tasa promedio quinquenal de hurto agregado (informativa; excluida de ajuste para evitar colinealidad). |
 | `poblacion_prom` | `numeric` | No nula (`0 NA`) | `[16.682, 1.245.490,4]` (`19` únicos) | `mean(poblacion)` 2022–2026 | Población media proyectada en la ventana 2022–2026. |
-| `silueta_localidad` | `numeric` | No nula (`0 NA`) | `[-0,2116, 0,7615]` (`19` únicos; media = `0,5416`) | `cluster::silhouette()` sobre distancia euclidiana Z-score | Coeficiente individual de silueta (`Antonio Nariño = -0,2116` marca transición limítrofe). |
+| `silueta_localidad` | `numeric` | No nula (`0 NA`) | `[0,0000, 0,7176]` (`19` únicos; media = `0,5211`) | `cluster::silhouette()` sobre distancia euclidiana Z-score | Coeficiente individual de silueta (`0` localidades con silueta negativa; *Los Mártires* = `0` como grupo unitario). |
 | `cluster_id` | `integer` | No nula (`0 NA`) | `1`, `2`, `3` (`3` únicos) | Reasignación determinista según centroides | Código entero del clúster territorial (`1` = Céntrico, `2` = Comercial, `3` = Residencial). |
 | `cluster_nombre` | `character` | No nula (`0 NA`) | `"Céntrico e Institucional"`, `"Comercial y Automotor"`, `"Residencial y Periférico"` (`3` únicos) | Mapeo desde `cluster_id` | Etiqueta categórica del perfil urbano de criminalidad. |
-| `perfil_seguridad` | `character` | No nula (`0 NA`) | `"Alta criticidad en hurto a personas y residencias (núcleo céntrico)"`; `"Alta concentración de hurto automotor y motocicletas (corredor comercial)"`; `"Tasa per cápita moderada en zonas de alta densidad residencial"` (`3` únicos) | Mapeo descriptivo de dominio por `cluster_id` | Descripción criminológica interpretativa mostrada en tooltips de mapas y perfiles de Shiny. |
+| `perfil_seguridad` | `character` | No nula (`0 NA`) | 3 perfiles descriptivos por `cluster_id` | Mapeo descriptivo de dominio por `cluster_id` | Descripción criminológica interpretativa mostrada en tooltips de mapas y perfiles de Shiny. |
 
 ---
 
@@ -220,11 +224,11 @@ clusters_km <- arrow::read_parquet(
 * **Dimensiones verificadas:** `95` filas × `20` columnas (`19 localidades × 5 años`)
 * **Unidad de observación (grano):** Combinación `Localidad × Año` (`2022`–`2026`).
 * **Llave primaria compuesta (`PK`):** `(codigo_localidad, año)`
-* **Propósito y uso:** Tabla panel maestra que consolida los indicadores objetivos de criminalidad y población con las métricas agregadas anuales de volumen mediático y sentimiento calculadas sobre `noticias_procesadas.parquet`.
+* **Propósito y uso:** Tabla panel maestra que consolida los indicadores anuales de criminalidad (agregados desde `SIEDCO.csv` mensual) con las métricas agregadas anuales de volumen y sentimiento mediático calculadas exclusivamente sobre las **`993` noticias objetivo** de las 3 modalidades SIEDCO (`es_objetivo_3mod == TRUE`).
 * **Linaje:**
-  * **Generado por:** [`scripts/03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R) (unión izquierda de `panel_delitos_poblacion_localidad.parquet` con la agregación anual de `noticias_procesadas.parquet` y relleno `replace_na(..., 0)`).
-  * **Consumido por:** [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R) (donde se enriquece con `clusters_localidades_kmeans.parquet` para formar `datos_consolidados_shiny.rds$panel_localidades`) y [`notebook/entregas/01_entrega_1_propuesta_eda.qmd`](../../notebook/entregas/01_entrega_1_propuesta_eda.qmd).
-* **Controles de auditoría:** Conserva exactamente `95` filas sin valores `NA`, garantizando que todas las combinaciones `(localidad, año)` tengan al menos `5` noticias capturadas y que `prop_negativas + prop_positivas + prop_neutras ≈ 100%`.
+  * **Generado por:** [`scripts/03_analisis_sentometrics.R`](../../scripts/03_analisis_sentometrics.R) (anualización de `panel_delitos_poblacion_mensual.parquet` unida a la agregación anual de las `993` noticias objetivo y relleno `replace_na(..., 0)`).
+  * **Consumido por:** [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R) (enriquecida con `clusters_localidades_kmeans.parquet` para formar `datos_consolidados_shiny.rds$panel_localidades`) y [`notebook/entregas/01_entrega_1_propuesta_eda.qmd`](../../notebook/entregas/01_entrega_1_propuesta_eda.qmd).
+* **Controles de auditoría:** Conserva exactamente `95` filas sin valores `NA`, garantizando consistencia de totales (`sum(noticias_conteo) == 993`).
 
 ```r
 panel_maestro <- arrow::read_parquet(
@@ -234,26 +238,26 @@ panel_maestro <- arrow::read_parquet(
 
 | Campo | Tipo (`R`) | Nulabilidad | Dominio / Valores observados | Origen / Fórmula | Descripción |
 | :--- | :---: | :---: | :--- | :--- | :--- |
-| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Código identificador oficial de la localidad. |
-| `localidad` | `character` | No nula (`0 NA`) | `19` nombres oficiales | Heredado de `panel_delitos_poblacion_localidad` | Nombre oficial normalizado de la localidad. |
-| `año` | `numeric` | No nula (`0 NA`) | `[2022, 2026]` (`5` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Año de análisis (`2022`–`2026`). |
-| `hurto_personas` | `numeric` | No nula (`0 NA`) | `[870, 22.781]` (`95` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Conteo acumulado de hurto a personas (ene–sep). |
-| `hurto_residencias` | `numeric` | No nula (`0 NA`) | `[21, 1.674]` (`87` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Conteo acumulado de hurto a residencias (ene–sep). |
-| `hurto_motos` | `numeric` | No nula (`0 NA`) | `[7, 1.472]` (`85` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Conteo acumulado de hurto a motocicletas (ene–sep). |
-| `poblacion` | `numeric` | No nula (`0 NA`) | `[16.449, 1.252.218]` (`94` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Población total proyectada por la SDS para la localidad y año. |
-| `tasa_hurto_personas` | `numeric` | No nula (`0 NA`) | `[410,33, 13.348,28]` (`95` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Tasa de hurto a personas por 100.000 habitantes. |
-| `tasa_hurto_residencias` | `numeric` | No nula (`0 NA`) | `[27,73, 398,13]` (`95` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Tasa de hurto a residencias por 100.000 habitantes. |
-| `tasa_hurto_motos` | `numeric` | No nula (`0 NA`) | `[11,45, 291,23]` (`94` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Tasa de hurto a motocicletas por 100.000 habitantes. |
-| `tasa_hurto_total` | `numeric` | No nula (`0 NA`) | `[490,75, 13.730,22]` (`95` únicos) | Heredado de `panel_delitos_poblacion_localidad` | Tasa agregada de hurtos por 100.000 habitantes. |
-| `noticias_conteo` | `integer` | No nula (`0 NA`) | `[5, 88]` (`61` únicos) | `dplyr::n()` en `noticias_procesadas` por `(localidad, año)` | Total de noticias capturadas para la localidad en ese año. |
-| `noticias_dai_conteo` | `integer` | No nula (`0 NA`) | `[3, 62]` (`42` únicos) | `sum(es_dai_estricto)` en `noticias_procesadas` | Cantidad de noticias clasificadas estrictamente en una categoría DAI específica. |
-| `sentimiento_promedio` | `numeric` | No nula (`0 NA`) | `[-0,5844, 0,3339]` (`95` únicos) | `round(mean(sentimiento_score), 4)` | Promedio anual del sentimiento compuesto en la cobertura mediática de la localidad. |
-| `sentimiento_nrc` | `numeric` | No nula (`0 NA`) | `[-0,5401, 0,5642]` (`95` únicos) | `round(mean(score_nrc_es), 4)` | Promedio anual de polaridad calculada con el léxico general `nrc_es`. |
-| `sentimiento_crimen` | `numeric` | No nula (`0 NA`) | `[-0,6717, 0,1037]` (`94` únicos) | `round(mean(score_crimen_es), 4)` | Promedio anual de polaridad calculada con el léxico especializado `crimen_es`. |
-| `sentimiento_mediana` | `numeric` | No nula (`0 NA`) | `[-0,725, 0,4583]` (`78` únicos) | `round(median(sentimiento_score), 4)` | Mediana anual del puntaje compuesto de sentimiento. |
-| `prop_negativas` | `numeric` | No nula (`0 NA`) | `[21,43, 88,89]` (`81` únicos) | `round(mean(sentimiento_categoria == "Negativo") * 100, 2)` | Porcentaje (`%`) de noticias con sentimiento clasificado como Negativo. |
-| `prop_positivas` | `numeric` | No nula (`0 NA`) | `[0, 78,57]` (`76` únicos) | `round(mean(sentimiento_categoria == "Positivo") * 100, 2)` | Porcentaje (`%`) de noticias con sentimiento clasificado como Positivo. |
-| `prop_neutras` | `numeric` | No nula (`0 NA`) | `[0, 16,67]` (`62` únicos) | `round(mean(sentimiento_categoria == "Neutro") * 100, 2)` | Porcentaje (`%`) de noticias con sentimiento clasificado como Neutro. |
+| `codigo_localidad` | `character` | No nula (`0 NA`) | `"01"`..`"19"` (`19` únicos) | Heredado de `panel_delitos_poblacion_mensual` | Código identificador oficial de la localidad. |
+| `localidad` | `character` | No nula (`0 NA`) | `19` nombres oficiales | Heredado de `panel_delitos_poblacion_mensual` | Nombre oficial normalizado de la localidad. |
+| `año` | `integer` | No nula (`0 NA`) | `[2022, 2026]` (`5` únicos) | Heredado de `panel_delitos_poblacion_mensual` | Año de análisis (`2022`–`2026`). |
+| `hurto_personas` | `integer` | No nula (`0 NA`) | `[1.097, 17.656]` | Suma anual desde `panel_delitos_poblacion_mensual` | Conteo anual de hurtos a personas (`SIEDCO.csv`; corte sep. 2026). |
+| `hurto_residencias` | `integer` | No nula (`0 NA`) | `[22, 1.229]` | Suma anual desde `panel_delitos_poblacion_mensual` | Conteo anual de hurtos a residencias. |
+| `hurto_motos` | `integer` | No nula (`0 NA`) | `[10, 1.058]` | Suma anual desde `panel_delitos_poblacion_mensual` | Conteo anual de hurtos a motocicletas. |
+| `poblacion` | `numeric` | No nula (`0 NA`) | `[16.449, 1.252.218]` | Heredado de `panel_delitos_poblacion_mensual` | Población total proyectada por la SDS para la localidad y año. |
+| `tasa_hurto_personas` | `numeric` | No nula (`0 NA`) | `[410,33, 15.250,06]` | `round((hurto_personas / poblacion) * 100000, 2)` | Tasa anual de hurto a personas por 100.000 habitantes. |
+| `tasa_hurto_residencias` | `numeric` | No nula (`0 NA`) | `[34,01, 337,42]` | `round((hurto_residencias / poblacion) * 100000, 2)` | Tasa anual de hurto a residencias por 100.000 habitantes. |
+| `tasa_hurto_motos` | `numeric` | No nula (`0 NA`) | `[14,23, 230,76]` | `round((hurto_motos / poblacion) * 100000, 2)` | Tasa anual de hurto a motocicletas por 100.000 habitantes. |
+| `tasa_hurto_total` | `numeric` | No nula (`0 NA`) | `[490,75, 15.719,53]` | `round(((hurto_personas + hurto_residencias + hurto_motos) / poblacion) * 100000, 2)` | Tasa anual agregada de las 3 modalidades por 100.000 habitantes. |
+| `noticias_conteo` | `integer` | No nula (`0 NA`) | `[1, 35]` (`sum = 993`) | `dplyr::n()` en noticias objetivo por `(localidad, año)` | Total de noticias de las 3 modalidades objetivo en esa localidad y año. |
+| `noticias_dai_conteo` | `integer` | No nula (`0 NA`) | `[1, 35]` | `sum(es_dai_estricto)` en el subconjunto objetivo | Cantidad de noticias objetivo con clasificación DAI estricta (`== noticias_conteo`). |
+| `sentimiento_promedio` | `numeric` | No nula (`0 NA`) | `[-0,5844, 0,3339]` | `round(mean(sentimiento_score), 4)` | Promedio anual del sentimiento compuesto sobre las noticias objetivo de la localidad. |
+| `sentimiento_nrc` | `numeric` | No nula (`0 NA`) | `[-0,5401, 0,5642]` | `round(mean(score_nrc_es), 4)` | Promedio anual de polaridad con el léxico general `nrc_es` (subconjunto objetivo). |
+| `sentimiento_crimen` | `numeric` | No nula (`0 NA`) | `[-0,6717, 0,1037]` | `round(mean(score_crimen_es), 4)` | Promedio anual de polaridad con el léxico especializado `crimen_es` (subconjunto objetivo). |
+| `sentimiento_mediana` | `numeric` | No nula (`0 NA`) | `[-0,7250, 0,1708]` | `round(median(sentimiento_score), 4)` | Mediana anual del puntaje compuesto en el subconjunto objetivo. |
+| `prop_negativas` | `numeric` | No nula (`0 NA`) | `[0, 100]` % | `round(mean(sentimiento_categoria == "Negativo") * 100, 2)` | Porcentaje (`%`) de noticias objetivo con tono Negativo. |
+| `prop_positivas` | `numeric` | No nula (`0 NA`) | `[0, 75]` % | `round(mean(sentimiento_categoria == "Positivo") * 100, 2)` | Porcentaje (`%`) de noticias objetivo con tono Positivo. |
+| `prop_neutras` | `numeric` | No nula (`0 NA`) | `[0, 100]` % | `round(mean(sentimiento_categoria == "Neutro") * 100, 2)` | Porcentaje (`%`) de noticias objetivo con tono Neutro. |
 
 ---
 

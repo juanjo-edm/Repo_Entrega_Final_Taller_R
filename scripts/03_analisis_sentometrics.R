@@ -1,18 +1,11 @@
 # ==============================================================================
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/03_analisis_sentometrics.R
-# ROL: Pipeline Integral de Sentometrics (Fases 1 a 4: T-01 a T-17) y Panel
+# ROL: Pipeline Integral de Sentometrics (3 Modalidades Objetivo, 36 Series)
 # AUTORES: Juan José Echeverry, Sergio López, Olga Lucía Ramírez (Grupo 10)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # PRODUCE:
-#   - data/processed/01_sento_corpus.rds
-#   - data/processed/02_lexicons_es.rds
-#   - data/processed/03_sentiment_scores.rds
-#   - data/processed/04_peak_docs.rds
-#   - data/processed/05_sento_measures.rds
-#   - data/processed/06_measures_long.rds
-#   - data/processed/07_global_index.rds
-#   - data/processed/08_attributions.rds
+#   - data/processed/sentometrics_pipeline.rds (único artefacto S3 intermedio)
 #   - data/processed/panel_consolidado_localidad_anual.parquet
 # ==============================================================================
 
@@ -52,9 +45,11 @@ stopifnot(file.exists(archivo_delitos))
 
 # 2. Fase 1: Corpus y Construcción de Features (T-05, T-06, T-07) ----
 
-## 2.1 Carga de noticias depuradas y clústeres K-Means ----
+## 2.1 Carga de noticias depuradas, panel mensual SIEDCO y clústeres K-Means ----
 df_noticias <- arrow::read_parquet(archivo_noticias)
-panel_delitos <- arrow::read_parquet(archivo_delitos) |>
+panel_delitos_mensual <- arrow::read_parquet(archivo_delitos)
+
+panel_delitos <- panel_delitos_mensual |>
   group_by(codigo_localidad, localidad, año) |>
   summarise(
     hurto_personas         = sum(hurto_personas, na.rm = TRUE),
@@ -68,22 +63,28 @@ panel_delitos <- arrow::read_parquet(archivo_delitos) |>
     .groups                = "drop"
   )
 
+# Filtrar estrictamente el corpus comparable de las 3 modalidades objetivo SIEDCO
+modalidades_objetivo_noticias <- c(
+  "Hurto a personas",
+  "Hurto a residencias",
+  "Hurto de motocicletas"
+)
+df_noticias_modelo <- df_noticias |>
+  filter(delito_sdscj %in% modalidades_objetivo_noticias)
+
+stopifnot(
+  nrow(df_noticias_modelo) > 0,
+  length(unique(df_noticias_modelo$localidad)) == 19L,
+  all(df_noticias_modelo$delito_sdscj %in% modalidades_objetivo_noticias)
+)
+
 if (!file.exists(archivo_clusters)) {
   source(here::here("scripts", "04_clustering_kmeans.R"), local = new.env())
 }
 df_clusters <- arrow::read_parquet(archivo_clusters)
 
-## 2.2 Función de normalización a snake_case sin guiones medios ('-') ----
-normalizar_nombre_feature <- function(x) {
-  x |>
-    stringi::stri_trans_general("Latin-ASCII") |>
-    str_to_lower() |>
-    str_replace_all("[\\s\\-]+", "_") |>
-    str_replace_all("[^a-z0-9_]", "")
-}
-
-## 2.3 Construcción de textos e indicadores binarios [0, 1] (Localidades, Clústeres, Temas) ----
-df_base_corpus <- df_noticias |>
+## 2.2 Construcción de textos y 6 indicadores binarios [0, 1] (Clústeres y Modalidades) ----
+df_base_corpus <- df_noticias_modelo |>
   select(-any_of(c("cluster_id", "cluster_nombre", "perfil_seguridad"))) |>
   left_join(
     df_clusters |> select(localidad, cluster_id, cluster_nombre),
@@ -98,59 +99,29 @@ df_base_corpus <- df_noticias |>
       str_sub(coalesce(cuerpo, ""), 1, 800),
       sep = ". "
     )),
-    txt_norm = stringi::stri_trans_general(str_to_lower(texts), "Latin-ASCII"),
-    # 3 features de clústeres K-Means
+    # 3 features de clústeres K-Means (partición exhaustiva y excluyente)
     c_centro      = as.numeric(cluster_nombre == "Céntrico e Institucional"),
     c_comercial   = as.numeric(cluster_nombre == "Comercial y Automotor"),
     c_residencial = as.numeric(cluster_nombre == "Residencial y Periférico"),
-    # 4 features temáticas y de modalidades DAI (SDSCJ)
-    tema_hurto_personas = as.numeric(
-      delito_sdscj == "Hurto a personas" |
-        str_detect(txt_norm, "\\b(transmilenio|sitp|peaton|transeunte|celular|raponazo|cosquilleo|fleteo|escopolamina)\\b")
-    ),
-    tema_hurto_patrimonial = as.numeric(
-      delito_sdscj %in% c(
-        "Hurto a residencias", "Hurto a comercio", "Hurto de automotores",
-        "Hurto de motocicletas", "Hurto a entidades financieras",
-        "Hurto (modalidad no identificada)"
-      )
-    ),
-    tema_violencia_vida = as.numeric(
-      delito_sdscj %in% c(
-        "Homicidio", "Lesiones personales", "Extorsión",
-        "Delitos sexuales", "Violencia intrafamiliar"
-      )
-    ),
-    tema_institucional = as.numeric(
-      modalidad_dai %in% c("nodai_operatividad", "nodai_politica_seguridad") |
-        str_detect(txt_norm, "\\b(captur|desarticul|operativ|patrullaj|incaut|megatoma|secretaria de seguridad|policia)\\b")
-    )
+    # 3 features temáticas exclusivas de las modalidades de hurto analizadas
+    tema_hurto_personas    = as.numeric(delito_sdscj == "Hurto a personas"),
+    tema_hurto_residencias = as.numeric(delito_sdscj == "Hurto a residencias"),
+    tema_hurto_motos       = as.numeric(delito_sdscj == "Hurto de motocicletas")
   )
-
-# Añadir las 19 features binarias por localidad (prefijo loc_ sin guiones '-')
-localidades_unicas <- sort(unique(df_base_corpus$localidad))
-nombres_feat_loc   <- character(length(localidades_unicas))
-
-for (i in seq_along(localidades_unicas)) {
-  loc_actual <- localidades_unicas[i]
-  col_feat   <- paste0("loc_", normalizar_nombre_feature(loc_actual))
-  nombres_feat_loc[i] <- col_feat
-  df_base_corpus[[col_feat]] <- as.numeric(df_base_corpus$localidad == loc_actual)
-}
 
 cols_features <- c(
   "c_centro", "c_comercial", "c_residencial",
-  "tema_hurto_personas", "tema_hurto_patrimonial",
-  "tema_violencia_vida", "tema_institucional",
-  nombres_feat_loc
+  "tema_hurto_personas", "tema_hurto_residencias", "tema_hurto_motos"
 )
 
-# Auditoría estricta de contrato T-01 / T-07: cero guiones '-' y cero NAs
+# Auditoría estricta de contrato T-01 / T-07: cero guiones '-', cero NAs y partición exacta
 stopifnot(!any(str_detect(cols_features, "-")))
 stopifnot(all(!is.na(df_base_corpus$date)))
 stopifnot(all(!is.na(df_base_corpus$texts)))
+stopifnot(all(rowSums(df_base_corpus[, c("c_centro", "c_comercial", "c_residencial")]) == 1))
+stopifnot(all(rowSums(df_base_corpus[, c("tema_hurto_personas", "tema_hurto_residencias", "tema_hurto_motos")]) == 1))
 
-## 2.4 Creación y guardado del objeto S3 sento_corpus (T-07) ----
+## 2.3 Creación del objeto S3 sento_corpus (T-07) ----
 df_sento_input <- df_base_corpus |>
   select(id, date, texts, all_of(cols_features)) |>
   as.data.frame()
@@ -160,9 +131,7 @@ corpus_sento <- sentometrics::sento_corpus(
   do.clean = FALSE
 )
 
-archivo_01_corpus <- file.path(ruta_proc, "01_sento_corpus.rds")
-saveRDS(corpus_sento, archivo_01_corpus)
-message("✔ [T-07] 01_sento_corpus.rds guardado con ", length(cols_features), " features.")
+message("✔ [T-07] Objeto sento_corpus creado con ", nrow(df_sento_input), " noticias objetivo y ", length(cols_features), " features.")
 
 # 3. Fase 2: Léxicos, Modificadores de Valencia y Sentimiento (T-09, T-10, T-11) ----
 
@@ -277,9 +246,7 @@ lexicons_es <- sentometrics::sento_lexicons(
 )
 attr(lexicons_es, "valence_table_full") <- tabla_valence_es
 
-archivo_02_lexicons <- file.path(ruta_proc, "02_lexicons_es.rds")
-saveRDS(lexicons_es, archivo_02_lexicons)
-message("✔ [T-09] 02_lexicons_es.rds guardado (nrc_es + crimen_es + valenceIn).")
+message("✔ [T-09] Diccionarios construidos en memoria (nrc_es + crimen_es + valenceIn).")
 
 ## 3.3 Cómputo de sentimiento a nivel documento: proportionalPol vs TFIDF (T-10) ----
 sentiment_scores <- sentometrics::compute_sentiment(
@@ -335,12 +302,10 @@ attr(sentiment_scores, "comparacion_metodologica") <- list(
   media_combinada   = mean(df_sent_doc$sentimiento_score, na.rm = TRUE)
 )
 
-archivo_03_scores <- file.path(ruta_proc, "03_sentiment_scores.rds")
-saveRDS(sentiment_scores, archivo_03_scores)
-message("✔ [T-10] 03_sentiment_scores.rds guardado (how = 'proportionalPol').")
+message("✔ [T-10] Puntajes de sentimiento calculados en memoria (how = 'proportionalPol').")
 
-## 3.4 Enriquecimiento del dataset de noticias y extracción de peakdocs (T-11) ----
-df_noticias_enriquecida <- df_noticias |>
+## 3.4 Enriquecimiento del dataset objetivo (993 docs) y actualización de noticias_procesadas.parquet ----
+df_noticias_enriquecida <- df_noticias_modelo |>
   select(-any_of(c(
     "id", "word_count", "score_nrc_es", "score_crimen_es",
     "score_tfidf_compuesto", "sentimiento_score", "sentimiento_categoria",
@@ -360,10 +325,65 @@ df_noticias_enriquecida <- df_noticias |>
     )
   )
 
-arrow::write_parquet(df_noticias_enriquecida, archivo_noticias)
-message("✔ Corpus de noticias enriquecido guardado en: ", archivo_noticias)
+# Enriquecimiento auxiliar sobre las 3.916 noticias en disco (sin alterar corpus_sento)
+# para preservar la referencia de recolección y la comparación espacial en Cuaderno 02.
+df_corpus_aux_3916 <- df_noticias |>
+  mutate(
+    id    = paste0("ref_", row_number()),
+    date  = as.Date(fecha),
+    texts = str_squish(paste(
+      coalesce(titulo, ""),
+      coalesce(resumen, ""),
+      str_sub(coalesce(cuerpo, ""), 1, 800),
+      sep = ". "
+    )),
+    todas = 1.0
+  )
+corpus_aux_3916 <- sentometrics::sento_corpus(
+  corpusdf = as.data.frame(df_corpus_aux_3916 |> select(id, date, texts, todas)),
+  do.clean = FALSE
+)
+sent_aux_3916 <- sentometrics::compute_sentiment(
+  x           = corpus_aux_3916,
+  lexicons    = lexicons_es,
+  how         = "proportionalPol",
+  do.sentence = FALSE
+)
+df_sent_aux <- as_tibble(sent_aux_3916) |>
+  transmute(
+    id                = id,
+    word_count        = word_count,
+    score_nrc_es      = round(`nrc_es--todas`, 4),
+    score_crimen_es   = round(`crimen_es--todas`, 4),
+    sentimiento_score = round(0.5 * score_nrc_es + 0.5 * score_crimen_es, 4)
+  )
+df_noticias_completo <- df_noticias |>
+  select(-any_of(c(
+    "id", "word_count", "score_nrc_es", "score_crimen_es",
+    "score_tfidf_compuesto", "sentimiento_score", "sentimiento_categoria",
+    "cluster_id", "cluster_nombre", "perfil_seguridad", "es_objetivo_3mod"
+  ))) |>
+  mutate(
+    id               = paste0("ref_", row_number()),
+    es_objetivo_3mod = delito_sdscj %in% modalidades_objetivo_noticias
+  ) |>
+  left_join(df_sent_aux, by = "id") |>
+  left_join(
+    df_clusters |> select(localidad, cluster_id, cluster_nombre, perfil_seguridad),
+    by = "localidad"
+  ) |>
+  mutate(
+    sentimiento_categoria = case_when(
+      sentimiento_score < -0.02 ~ "Negativo",
+      sentimiento_score >  0.02 ~ "Positivo",
+      TRUE                      ~ "Neutro"
+    )
+  )
 
-# Extracción oficial con peakdocs() (T-11)
+arrow::write_parquet(df_noticias_completo, archivo_noticias)
+message("✔ noticias_procesadas.parquet actualizado en disco (", nrow(df_noticias_completo), " recopiladas; ", sum(df_noticias_completo$es_objetivo_3mod), " de las 3 modalidades objetivo).")
+
+# Extracción oficial con peakdocs() sobre las 993 noticias objetivo (T-11)
 ids_peak_both <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "both")
 ids_peak_neg  <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "neg")
 ids_peak_pos  <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "pos")
@@ -371,7 +391,7 @@ ids_peak_pos  <- sentometrics::peakdocs(sentiment_scores, n = 25, type = "pos")
 # Tabla de consulta de documentos pico globales y por localidad
 peak_por_localidad <- df_noticias_enriquecida |>
   group_by(localidad) |>
-   arrange(sentimiento_score) |>
+  arrange(sentimiento_score) |>
   slice(unique(c(1:5, (n() - 4):n()))) |>
   ungroup()
 
@@ -403,22 +423,20 @@ objeto_04_peak_docs <- list(
   top_criticas    = as.data.table(tabla_peak_docs |> filter(tipo_pico != "Regular"))
 )
 
-archivo_04_peaks <- file.path(ruta_proc, "04_peak_docs.rds")
-saveRDS(objeto_04_peak_docs, archivo_04_peaks)
-message("✔ [T-11] 04_peak_docs.rds guardado con noticias pico y catálogo filtrable.")
+message("✔ [T-11] Catálogo peakdocs() armado en memoria (", nrow(tabla_peak_docs), " noticias objetivo).")
 
 # 4. Fase 3: Series de Tiempo Multidimensionales (T-13, T-14, T-15) ----
 
-## 4.1 Configuración de ctr_agg y cálculo de sento_measures (T-13) ----
+## 4.1 Configuración parsimoniosa de ctr_agg y cálculo de sento_measures (36 series) ----
 control_agg <- sentometrics::ctr_agg(
   howWithin      = "proportionalPol",
   howDocs        = "proportional",
   howTime        = c("linear", "exponential", "beta"),
   by             = "month",
   lag            = 6,
-  alphasExp      = c(0.2, 0.5),
-  aBeta          = c(1, 2),
-  bBeta          = c(2, 3),
+  alphasExp      = 0.5,
+  aBeta          = 2,
+  bBeta          = 2,
   do.ignoreZeros = TRUE,
   fill           = "zero"
 )
@@ -430,27 +448,21 @@ medidas_sento <- sentometrics::sento_measures(
 )
 
 medidas_sento <- sentometrics::measures_fill(medidas_sento, fill = "zero")
-
-archivo_05_measures <- file.path(ruta_proc, "05_sento_measures.rds")
-saveRDS(medidas_sento, archivo_05_measures)
-message("✔ [T-13] 05_sento_measures.rds guardado (", ncol(medidas_sento$measures) - 1, " series mensuales).")
+stopifnot(ncol(medidas_sento$measures) - 1L == 36L)
+message("✔ [T-13] Medidas calculadas: ", ncol(medidas_sento$measures) - 1L, " series mensuales (2 léxicos × 6 features × 3 curvas).")
 
 ## 4.2 Remodelado en formato Long y Wide para Shiny (T-14) ----
 dt_measures_wide <- data.table::as.data.table(medidas_sento)
 
-# Diccionario de etiquetas legibles para features
+# Diccionario de etiquetas legibles para features (3 clústeres + 3 modalidades)
 mapa_etiquetas_features <- c(
   c_centro               = "Clúster: Céntrico e Institucional",
   c_comercial            = "Clúster: Comercial y Automotor",
   c_residencial          = "Clúster: Residencial y Periférico",
-  tema_hurto_personas    = "Tema: Hurto a Personas y Transporte",
-  tema_hurto_patrimonial = "Tema: Hurto Patrimonial y Vehículos",
-  tema_violencia_vida    = "Tema: Violencia, Homicidio y Extorsión",
-  tema_institucional     = "Tema: Operatividad y Política de Seguridad"
+  tema_hurto_personas    = "Modalidad: Hurto a Personas",
+  tema_hurto_residencias = "Modalidad: Hurto a Residencias",
+  tema_hurto_motos       = "Modalidad: Hurto de Motocicletas"
 )
-for (i in seq_along(localidades_unicas)) {
-  mapa_etiquetas_features[nombres_feat_loc[i]] <- localidades_unicas[i]
-}
 
 df_measures_long <- as_tibble(dt_measures_wide) |>
   pivot_longer(
@@ -467,8 +479,7 @@ df_measures_long <- as_tibble(dt_measures_wide) |>
   mutate(
     grupo_feature = case_when(
       str_starts(feature, "c_")    ~ "Clúster Territorial",
-      str_starts(feature, "tema_") ~ "Tópico / Modalidad DAI",
-      str_starts(feature, "loc_")  ~ "Localidad",
+      str_starts(feature, "tema_") ~ "Modalidad de Hurto",
       TRUE                         ~ "Otro"
     ),
     feature_label = coalesce(unname(mapa_etiquetas_features[feature]), feature),
@@ -486,12 +497,7 @@ objeto_06_measures_long <- list(
   long = as.data.table(df_measures_long),
   wide = dt_measures_wide
 )
-
-archivo_06_long <- file.path(ruta_proc, "06_measures_long.rds")
-saveRDS(objeto_06_measures_long, archivo_06_long)
-archivo_06_wide <- file.path(ruta_proc, "06_measures_wide.rds")
-saveRDS(dt_measures_wide, archivo_06_wide)
-message("✔ [T-14] 06_measures_long.rds guardado (", nrow(df_measures_long), " filas en formato long).")
+message("✔ [T-14] Series reestructuradas en memoria (", nrow(df_measures_long), " filas en formato long).")
 
 ## 4.3 Índice global ponderado y fechas pico con peakdates() (T-15) ----
 medidas_global_dt <- stats::aggregate(medidas_sento, do.global = TRUE)
@@ -516,59 +522,37 @@ objeto_07_global_index <- list(
   peakdates_neg     = as.Date(fechas_pico_neg),
   peakdates_pos     = as.Date(fechas_pico_pos)
 )
-
-archivo_07_global <- file.path(ruta_proc, "07_global_index.rds")
-saveRDS(objeto_07_global_index, archivo_07_global)
-message("✔ [T-15] 07_global_index.rds guardado con índice global y peakdates.")
+message("✔ [T-15] Índice global y fechas pico detectadas con peakdates().")
 
 # 5. Fase 4: Modelado Econométrico Elastic Net y Atribuciones (T-17) ----
 
-## 5.1 Construcción de la serie mensual empírica real de intensidad delictiva (y_t) ----
-# Desagregamos las tasas anuales oficiales de SIEDCO/SDS utilizando la participación
-# mensual observada de hechos delictivos de alto impacto (es_dai_estricto) en cada año.
-tasas_anuales_distrito <- panel_delitos |>
-  group_by(año) |>
+## 5.1 Serie mensual empírica real SIEDCO (alineada mes a mes con las noticias) ----
+tasas_mensuales_distrito <- panel_delitos_mensual |>
+  group_by(date_mes = as.Date(fecha_mes)) |>
   summarise(
-    hurto_personas_total = sum(hurto_personas, na.rm = TRUE),
-    hurto_total_denuncias = sum(hurto_personas + hurto_residencias + hurto_motos, na.rm = TRUE),
-    poblacion_distrito   = sum(poblacion, na.rm = TRUE),
-    tasa_anual_personas  = (hurto_personas_total / poblacion_distrito) * 100000,
-    tasa_anual_total     = (hurto_total_denuncias / poblacion_distrito) * 100000,
-    .groups = "drop"
-  )
+    hurto_personas_total  = sum(hurto_personas, na.rm = TRUE),
+    hurto_resid_total     = sum(hurto_residencias, na.rm = TRUE),
+    hurto_motos_total     = sum(hurto_motos, na.rm = TRUE),
+    hurto_total_denuncias = hurto_personas_total + hurto_resid_total + hurto_motos_total,
+    poblacion_distrito    = sum(poblacion, na.rm = TRUE),
+    y_tasa_hurto_mensual  = round((hurto_total_denuncias / poblacion_distrito) * 100000, 2),
+    y_tasa_pers_mensual   = round((hurto_personas_total / poblacion_distrito) * 100000, 2),
+    .groups               = "drop"
+  ) |>
+  arrange(date_mes)
 
-pesos_mensuales_dai <- df_noticias_enriquecida |>
-  mutate(
-    date_mes = as.Date(format(as.Date(fecha), "%Y-%m-01")),
-    año      = as.integer(format(date_mes, "%Y"))
-  ) |>
-  group_by(año, date_mes) |>
-  summarise(
-    n_noticias_mes = n(),
-    n_dai_mes      = sum(es_dai_estricto, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  group_by(año) |>
-  mutate(
-    prop_mensual_dai = (n_dai_mes + 1) / sum(n_dai_mes + 1)
-  ) |>
-  ungroup()
+fechas_esperadas_mes <- seq.Date(as.Date("2022-01-01"), as.Date("2026-09-01"), by = "month")
+stopifnot(identical(tasas_mensuales_distrito$date_mes, fechas_esperadas_mes))
 
-fechas_medidas <- as.Date(sentometrics::get_dates(medidas_sento))
+fechas_medidas     <- as.Date(sentometrics::get_dates(medidas_sento))
+fechas_medidas_mes <- as.Date(format(fechas_medidas, "%Y-%m-01"))
+stopifnot(all(fechas_medidas_mes %in% tasas_mensuales_distrito$date_mes))
 
 serie_objetivo_mensual <- tibble(
   date     = fechas_medidas,
-  date_mes = as.Date(format(fechas_medidas, "%Y-%m-01")),
-  año      = as.integer(format(fechas_medidas, "%Y"))
+  date_mes = fechas_medidas_mes
 ) |>
-  left_join(tasas_anuales_distrito, by = "año") |>
-  left_join(pesos_mensuales_dai, by = c("año", "date_mes")) |>
-  mutate(
-    prop_mensual_dai     = coalesce(prop_mensual_dai, 1 / 12),
-    # Tasa mensualizada equivalente por cada 100.000 habitantes
-    y_tasa_hurto_mensual = round(tasa_anual_total * prop_mensual_dai, 2),
-    y_tasa_pers_mensual  = round(tasa_anual_personas * prop_mensual_dai, 2)
-  )
+  left_join(tasas_mensuales_distrito, by = "date_mes")
 
 y_vector <- serie_objetivo_mensual$y_tasa_hurto_mensual
 stopifnot(length(y_vector) == nrow(medidas_sento$measures))
@@ -685,9 +669,32 @@ objeto_08_attributions <- list(
   )
 )
 
-archivo_08_attr <- file.path(ruta_proc, "08_attributions.rds")
-saveRDS(objeto_08_attributions, archivo_08_attr)
-message("✔ [T-17] 08_attributions.rds guardado (Elastic Net alpha = ", modelo_elasticnet$alpha, ", R2 = ", objeto_08_attributions$metricas_modelo$r2_in_sample, ").")
+sentometrics_pipeline <- list(
+  corpus_sento     = corpus_sento,
+  lexicons_es      = lexicons_es,
+  sentiment_scores = sentiment_scores,
+  peak_docs        = objeto_04_peak_docs,
+  sento_measures   = medidas_sento,
+  measures_long    = objeto_06_measures_long,
+  global_index     = objeto_07_global_index,
+  attributions     = objeto_08_attributions,
+  meta             = list(
+    fecha_generacion       = Sys.time(),
+    n_noticias_recopiladas = nrow(df_noticias),
+    n_noticias_modelo      = nrow(df_noticias_enriquecida),
+    modalidades_objetivo   = modalidades_objetivo_noticias,
+    n_features             = length(cols_features),
+    features               = cols_features,
+    n_series               = ncol(medidas_sento$measures) - 1L
+  )
+)
+
+archivo_pipeline_rds <- file.path(ruta_proc, "sentometrics_pipeline.rds")
+saveRDS(sentometrics_pipeline, archivo_pipeline_rds)
+message(
+  "✔ [T-17] sentometrics_pipeline.rds guardado (36 series | Elastic Net alpha = ",
+  modelo_elasticnet$alpha, ", R2 = ", objeto_08_attributions$metricas_modelo$r2_in_sample, ")."
+)
 
 # 6. Fase 5: Consolidación del Panel Anual Localidad × Año (2022–2026) ----
 

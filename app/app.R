@@ -106,14 +106,9 @@ opciones_anio <- c(
 
 lista_esquemas_tiempo <- sort(unique(measures_long$time))
 names(lista_esquemas_tiempo) <- case_when(
-  lista_esquemas_tiempo == "linear"         ~ "Lineal (memoria gradual)",
-  lista_esquemas_tiempo == "exponential0.2" ~ "Exponencial (α = 0,2 · persistente)",
-  lista_esquemas_tiempo == "exponential0.5" ~ "Exponencial (α = 0,5 · rápida)",
-  lista_esquemas_tiempo == "beta11"         ~ "Beta (1, 1 · uniforme)",
-  lista_esquemas_tiempo == "beta12"         ~ "Beta (1, 2 · sesgo reciente)",
-  lista_esquemas_tiempo == "beta13"         ~ "Beta (1, 3 · alta ponderación reciente)",
+  lista_esquemas_tiempo == "linear"         ~ "Lineal (memoria uniforme en 6 meses)",
+  lista_esquemas_tiempo == "exponential0.5" ~ "Exponencial (α = 0,5 · foco reciente)",
   lista_esquemas_tiempo == "beta22"         ~ "Beta (2, 2 · pico intermedio)",
-  lista_esquemas_tiempo == "beta23"         ~ "Beta (2, 3 · pico retardado)",
   TRUE                                      ~ lista_esquemas_tiempo
 )
 
@@ -406,7 +401,7 @@ ui <- page_navbar(
       tarjeta_cifra("Tasa promedio de hurto", "kpi_tasa",
                     "hurtos por 100.000 habitantes al año", ambar),
       tarjeta_cifra("Noticias analizadas", "kpi_noticias",
-                    "Google News", azul),
+                    "3 modalidades objetivo · Google News", azul),
       tarjeta_cifra("Sentimiento neto promedio", "kpi_sentimiento",
                     "sentometrics", azul),
       tarjeta_cifra("Noticias con tono negativo", "kpi_negativas",
@@ -638,7 +633,7 @@ ui <- page_navbar(
       "De los titulares al modelo: <span style='color:", azul, "'>Sentometrics</span> ",
       "y <span style='color:", ambar, "'>Elastic Net</span>"
     ))),
-    p("364 series mensuales de sentimiento (26 features × 2 léxicos × 7 esquemas temporales) y descomposición de atribuciones sobre la tasa mensual de hurto.",
+    p("36 series mensuales de sentimiento (6 features × 2 léxicos × 3 esquemas temporales, 993 noticias objetivo) frente a la tasa mensual real SIEDCO.",
       style = paste0("color:", gris_texto)),
 
     layout_columns(
@@ -648,9 +643,9 @@ ui <- page_navbar(
       tarjeta_cifra("Calibración Elastic Net (BIC)", "kpi_hiper_modelo",
                     "mezcla L1/L2 y penalización óptima", azul),
       tarjeta_cifra("Series seleccionadas (β ≠ 0)", "kpi_activos_modelo",
-                    "de las 364 series candidatas", azul),
+                    "de las 36 series candidatas", azul),
       tarjeta_cifra("Error cuadrático medio (RMSE)", "kpi_rmse_modelo",
-                    "puntos de tasa mensual sobre 51 meses", ambar)
+                    "puntos de tasa mensual real sobre 51 meses", ambar)
     ),
 
     layout_columns(
@@ -662,8 +657,7 @@ ui <- page_navbar(
           "1. Grupo de features",
           choices = c(
             "Clústeres Territoriales (3)" = "Clúster Territorial",
-            "Tópicos / Modalidades DAI (4)" = "Tópico / Modalidad DAI",
-            "Localidades Individuales (19)" = "Localidad"
+            "Modalidades de Hurto (3)"    = "Modalidad de Hurto"
           ),
           selected = "Clúster Territorial"
         ),
@@ -708,10 +702,10 @@ ui <- page_navbar(
             "dim_attr_sento",
             "Descomponer por dimensión",
             choices = c(
-              "Clústeres K-Means (3)"             = "clusters",
-              "Tópicos / Modalidades DAI (4)"     = "temas",
+              "Clústeres K-Means (3)"              = "clusters",
+              "Modalidades de Hurto (3)"           = "temas",
               "Diccionarios (nrc_es vs crimen_es)" = "lexicons",
-              "Esquemas de memoria (Time)"        = "time"
+              "Esquemas de memoria (Time)"         = "time"
             ),
             selected = "clusters"
           ),
@@ -726,7 +720,7 @@ ui <- page_navbar(
         plotlyOutput("grafico_atribuciones_sento", height = "360px")
       ),
       card(
-        card_header("Tasa mensualizada: observada (ámbar) vs. predicha por Elastic Net (azul)"),
+        card_header("Tasa mensual real SIEDCO (ámbar) vs. predicha por Elastic Net (azul)"),
         plotlyOutput("grafico_ajuste_sento", height = "220px"),
         p(strong("Top 10 series con mayor magnitud en el modelo (|β|):"),
           style = paste0("color:", gris_texto, "; margin: 8px 0 4px 0; font-size: 13px")),
@@ -743,12 +737,12 @@ ui <- page_navbar(
       card(
         card_header("De dónde salen los números"),
         tags$ul(
-          tags$li("Hurtos: Secretaría Distrital de Seguridad, Convivencia y Justicia (SDSCJ / SIEDCO)."),
-          tags$li("Población: proyecciones demográficas de la Secretaría Distrital de Salud (SDS)."),
-          tags$li("Noticias: Google News RSS (3.916 noticias entre ene. 2022 y sep. 2026) reclasificadas en las 11 categorías de Delitos de Alto Impacto (DAI) de la SDSCJ."),
-          tags$li("Sentimiento: calculado con sentometrics (Ardia et al., 2021) usando dos léxicos en español (nrc_es y crimen_es), modificadores de valencia (negadores, amplificadores, atenuadores y adversativos) y agregación proportionalPol × proportional × 7 esquemas temporales (ventana móvil de 6 meses)."),
-          tags$li("Grupos territoriales: K-means (K* = 3, validado por coeficiente de Silueta) sobre las tres tasas de hurto estandarizadas (Z-score)."),
-          tags$li("Modelo econométrico: regresión penalizada Elastic Net (calibrada vía BIC, h = 1 mes) y descomposición aditiva con attributions().")
+          tags$li("Hurtos: microdatos mensuales oficiales SIEDCO del Observatorio SCJ (376.185 registros en 1.083 observaciones localidad × mes, ene. 2022–sep. 2026) en las tres modalidades objetivo: hurto a personas, residencias y motocicletas."),
+          tags$li("Población: proyecciones demográficas de la Secretaría Distrital de Salud (SDS) para expresar todas las cifras por cada 100.000 habitantes."),
+          tags$li("Noticias: Google News RSS (3.916 noticias recopiladas ene. 2022–sep. 2026), filtradas estrictamente a 993 noticias comparables de las 3 modalidades objetivo de hurto (736 personas, 141 residencias y 116 motocicletas)."),
+          tags$li("Sentimiento: calculado con sentometrics (Ardia et al., 2021) usando 2 léxicos en español (nrc_es y crimen_es), modificadores de valencia (negadores, amplificadores, atenuadores y adversativos), 6 features binarias (3 clústeres + 3 modalidades) y 3 esquemas temporales en ventana de 6 meses (linear, exponential0.5 y beta22) = 36 series."),
+          tags$li("Grupos territoriales: K-means (K* = 3, partición 13 / 5 / 1 validada por silueta y ARI = 1 con AGNES) sobre las tres tasas estandarizadas (Z-score)."),
+          tags$li("Modelo econométrico: regresión penalizada Elastic Net (calibrada vía BIC, h = 1 mes) directamente contra la tasa mensual empírica de SIEDCO, más descomposición aditiva con attributions().")
         ),
         p(strong("Advertencias metodológicas: "),
           "2026 tiene datos con corte a septiembre. Las tasas usan población residente (DANE/SDS),
@@ -1234,7 +1228,10 @@ server <- function(input, output, session) {
             span("● ", style = paste0("color:", ifelse(resaltada, colores_cluster_iluminado[g$cluster_nombre], colores_cluster[g$cluster_nombre]))),
             strong(g$cluster_nombre),
             span(
-              paste0(g$n_localidades, " localidades · Silueta media: ", formato(g$silueta_media, 2)),
+              paste0(
+                ifelse(g$n_localidades == 1, "1 localidad", paste0(g$n_localidades, " localidades")),
+                " · Silueta media: ", formato(g$silueta_media, 2)
+              ),
               style = paste0("float: right; color:", ifelse(resaltada, "#E9EDF2", gris_texto), "; font-size: 12.5px")
             )
           ),
@@ -1430,17 +1427,12 @@ server <- function(input, output, session) {
       arrange(feature_label)
 
     opciones <- setNames(df_sub$feature, df_sub$feature_label)
-    seleccion_inicial <- if (input$grupo_serie_sento == "Localidad") {
-      head(opciones, 4)
-    } else {
-      opciones
-    }
 
     selectizeInput(
       "features_sento_sel",
       "2. Series a comparar",
       choices  = opciones,
-      selected = seleccion_inicial,
+      selected = opciones,
       multiple = TRUE,
       options  = list(plugins = list("remove_button"))
     )
@@ -1572,23 +1564,24 @@ server <- function(input, output, session) {
   ## 6.6 Pestaña 6: Datos y método ----
 
   output$tabla_contrato_rds <- renderDT({
+    tam_bundle <- formato(round(file.info(ruta_bundle)$size / (1024^2), 2), 2)
     contrato_df <- tibble::tribble(
-      ~Tarea, ~Archivo, ~Clase_S3, ~Contenido,
-      "T-07", "01_sento_corpus.rds",     "sento_corpus",   "Corpus de 3.916 noticias con 26 features binarias (19 localidades + 3 clústeres + 4 tópicos DAI).",
-      "T-08", "figura3..9_*.png",        "corpus_summarize","Estadísticos descriptivos y evolución mensual/anual del corpus.",
-      "T-09", "02_lexicons_es.rds",      "sento_lexicons", "Léxicos nrc_es y crimen_es + modificadores de valencia en español (t = 1..4).",
-      "T-10", "03_sentiment_scores.rds", "sentiment",      "Puntajes por noticia (how = 'proportionalPol') y comparación frente a TF-IDF.",
-      "T-11", "04_peak_docs.rds",        "list/data.table","Noticias extremas extraídas con peakdocs() y tabla enriquecida.",
-      "T-13", "05_sento_measures.rds",   "sento_measures", "364 series mensuales (proportionalPol × proportional × 7 memorias, lag = 6m).",
-      "T-14", "06_measures_long.rds",    "list (long/wide)","18.928 observaciones en formato largo con continuidad auditada.",
-      "T-15", "07_global_index.rds",     "list/data.table","Índice global distrital y fechas críticas detectadas con peakdates().",
-      "T-17", "08_attributions.rds",     "sento_model",    "Modelo Elastic Net (BIC, h = 1) y descomposición aditiva de atribuciones."
+      ~Artefacto, ~Objeto_Interno, ~Clase_S3, ~Contenido,
+      "sentometrics_pipeline.rds", "corpus_sento",      "sento_corpus",     "993 noticias de las 3 modalidades objetivo con 6 features binarias (3 clústeres + 3 modalidades).",
+      "sentometrics_pipeline.rds", "lexicons_es",       "sento_lexicons",   "Diccionarios nrc_es y crimen_es + tabla de modificadores de valencia en español (t = 1..4).",
+      "sentometrics_pipeline.rds", "sentiment_scores",  "sentiment",        "Puntajes por noticia (how = 'proportionalPol') y validación de sensibilidad frente a TF-IDF.",
+      "sentometrics_pipeline.rds", "peak_docs",         "list/data.table",  "Noticias extremas extraídas con peakdocs() sobre las 993 noticias objetivo.",
+      "sentometrics_pipeline.rds", "sento_measures",    "sento_measures",   "36 series mensuales (6 features × 2 léxicos × 3 curvas temporales, lag = 6 meses).",
+      "sentometrics_pipeline.rds", "measures_long",     "list (long/wide)", "1.872 observaciones mensuales (52 meses × 36 series) auditadas con measures_fill().",
+      "sentometrics_pipeline.rds", "global_index",      "list/data.table",  "Índice distrital agregado (do.global = TRUE) y 8 fechas pico con peakdates().",
+      "sentometrics_pipeline.rds", "attributions",      "sento_model",      "Modelo Elastic Net (BIC, h = 1) contra la tasa mensual real SIEDCO y atribuciones marginales.",
+      "datos_consolidados_shiny.rds", "bundle_shiny",   "list",             paste0("Único paquete liviano (", tam_bundle, " MB) que carga app/app.R con paneles, geometrías, series y resultados.")
     )
 
     datatable(
       contrato_df,
       rownames = FALSE,
-      colnames = c("Tarea", "Artefacto", "Clase S3", "Descripción"),
+      colnames = c("Archivo .rds", "Componente", "Clase S3", "Descripción"),
       options  = list(dom = "t", pageLength = 10, scrollX = TRUE)
     )
   })

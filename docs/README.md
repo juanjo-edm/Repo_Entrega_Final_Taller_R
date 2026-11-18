@@ -29,9 +29,9 @@ docs/
 │
 └── diccionario_datos/                        # Diccionario de datos y contratos del proyecto
     ├── README.md                             # Índice maestro, linaje, llaves PK/FK y diagrama ER
-    ├── 01_datos_crudos.md                    # Capa cruda: GeoJSON, Parquet población y RSS
-    ├── 02_tablas_procesadas.md               # Capa procesada: paneles anuales, microdatos y clústeres
-    ├── 03_artefactos_sentometrics_shiny.md   # Capa analítica: 01..08 .rds y datos_consolidados_shiny.rds
+    ├── 01_datos_crudos.md                    # Capa cruda: SIEDCO.csv, GeoJSON, Parquet población y RSS
+    ├── 02_tablas_procesadas.md               # Capa procesada: paneles mensuales/anuales, microdatos y clústeres
+    ├── 03_artefactos_sentometrics_shiny.md   # Capa analítica: sentometrics_pipeline.rds y datos_consolidados_shiny.rds
     └── 04_tablas_salida.md                   # Capa de salida: tablas CSV resumen, sensibilidad y auditoría
 ```
 

@@ -48,9 +48,9 @@ El cuaderno metodológico (`notebook/metodologia/02_modelado_clustering_sentomet
 
 ## Insumos de partida y alcance temporal
 
-El panel anual oficial (`data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet`) tiene `95` filas: las `19` localidades urbanas de Bogotá en `5` cortes anuales de `2022` a `2026` (con cierre a septiembre de 2026 según SIEDCO/SDSCJ y proyecciones poblacionales de la SDS). Sumapaz (`codigo_localidad == "20"`) y los registros sin localidad (`"99"`) quedan fuera por su carácter rural, baja densidad y escasa presencia en prensa digital urbana.
+El panel mensual oficial (`data/processed/02_poblacion/panel_delitos_poblacion_mensual.parquet`, construido desde `SIEDCO.csv`) tiene `1.083` filas: las `19` localidades urbanas de Bogotá en `57` meses continuos desde enero de `2022` hasta septiembre de `2026`, cruzadas con las proyecciones poblacionales de la SDS. Sumapaz (`codigo_localidad == "20"`) y los registros sin localidad (`"99"`) quedan fuera por su carácter rural, baja densidad y escasa presencia en prensa digital urbana.
 
-El corpus periodístico (`data/processed/03_noticias/noticias_procesadas.parquet`) reúne `3.916` noticias publicadas entre enero de 2022 y septiembre de 2026, de las cuales `2.582` (`65,9 %`) entran en los 11 Delitos de Alto Impacto (DAI) de la SDSCJ. Al arrancar la ejecución, el cuaderno descarta cualquier columna precalculada de clúster o sentimiento para estimar todo desde cero.
+El corpus periodístico completo (`data/processed/03_noticias/noticias_procesadas.parquet`) reúne `3.916` noticias publicadas entre enero de 2022 y septiembre de 2026. De ellas, **`993` noticias (`25,4 %`, marcadas en `es_objetivo_3mod`)** corresponden directamente a las tres modalidades de hurto comparables con `SIEDCO.csv` (*Hurto a personas* `736`, *Hurto a residencias* `141` y *Hurto de motocicletas* `116`) y conforman el corpus analítico sobre el cual se estima `sentometrics`. Al arrancar la ejecución, el cuaderno descarta cualquier columna precalculada de clúster o sentimiento para estimar todo desde cero.
 
 ## Tasas por 100.000 habitantes y efecto de población flotante
 
@@ -60,9 +60,9 @@ $$
 \text{Tasa}_{i,m,t} = \frac{\text{Denuncias}_{i,m,t}}{\text{Población}_{i,t}} \times 100.000
 $$
 
-Los promedios distritales del panel son `2.910,7` en hurto a personas, `108,4` en hurto a residencias, `68,2` en hurto de motocicletas y `3.087,3` en la tasa combinada.
+Los promedios distritales anualizados del panel son `3.069,9` en hurto a personas, `112,4` en hurto a residencias, `73,5` en hurto de motocicletas y `3.255,8` en la tasa combinada.
 
-En el centro extendido aparece un sesgo claro en el denominador. Los Mártires (`8.757,4` hurtos totales/100k en promedio, con pico anual de `13.730,2` en 2024), La Candelaria (`7.856,9`), Chapinero (`6.875,6`) y Santa Fe (`6.364,1`) reciben cada día millones de personas que trabajan, estudian o comercian sin figurar en el censo local. Eso aumenta los delitos registrados en la calle mientras el denominador residente sigue siendo pequeño, lo que sube sus tasas muy por encima de localidades populosas como Suba o Kennedy.
+En el centro extendido aparece un sesgo claro en el denominador. Los Mártires (`9.743,6` hurtos totales/100k en promedio, con pico anual de `15.719,5` en 2024), La Candelaria (`8.781,6`), Santa Fe (`6.938,6`) y Chapinero (`6.932,5`) reciben cada día millones de personas que trabajan, estudian o comercian sin figurar en el censo local. Eso aumenta los delitos registrados en la calle mientras el denominador residente sigue siendo pequeño, lo que sube sus tasas muy por encima de localidades populosas como Suba o Kennedy.
 
 # Agrupamiento territorial no supervisado ($K$-Means)
 
@@ -70,13 +70,13 @@ El algoritmo de agrupamiento busca reemplazar un ordenamiento simple por una tip
 
 ## Por qué estandarizar con $Z$-score antes de $K$-Means
 
-Cada localidad $i \in \{1, \dots, 19\}$ entra al modelo como un vector de sus tasas promedio entre 2022 y septiembre de 2026:
+Cada localidad $i \in \{1, \dots, 19\}$ entra al modelo como un vector de sus tasas promedio anualizadas entre 2022 y septiembre de 2026:
 
 $$
 \mathbf{x}_i = \left(\text{Hurto personas}_i,\; \text{Hurto residencias}_i,\; \text{Hurto motos}_i\right) \in \mathbb{R}^3
 $$
 
-La media de hurto a personas (`2.910,7`) es más de 26 veces la de residencias (`108,4`) y más de 42 veces la de motocicletas (`68,2`). Si calculáramos distancias euclidianas con esas escalas brutas, hurto a personas dominaría por completo la partición y anularía las diferencias en las otras dos modalidades. Por eso estandarizamos cada columna $j \in \{1, 2, 3\}$:
+La media de hurto a personas (`3.069,9`) es más de 27 veces la de residencias (`112,4`) y más de 41 veces la de motocicletas (`73,5`). Si calculáramos distancias euclidianas con esas escalas brutas, hurto a personas dominaría por completo la partición y anularía las diferencias en las otras dos modalidades. Por eso estandarizamos cada columna $j \in \{1, 2, 3\}$:
 
 $$
 Z_{ij} = \frac{X_{ij} - \bar{X}_j}{s_j}
@@ -90,7 +90,7 @@ $$
 \min_{C_1,\dots,C_K} \; WSS(K) = \sum_{k=1}^{K} \sum_{i \in C_k} \|\mathbf{z}_i - \boldsymbol{\mu}_k\|_2^2
 $$
 
-La partición se evalúa para $K \in \{2, \dots, 6\}$ con el coeficiente de silueta $S(i) = \frac{b(i) - a(i)}{\max\{a(i), b(i)\}} \in [-1, +1]$, donde $a(i)$ es la distancia media intra-clúster y $b(i)$ la distancia al grupo vecino más cercano. El óptimo es $K^* = 3$, con silueta media de `0,5416`.
+La partición se evalúa para $K \in \{2, \dots, 6\}$ con el coeficiente de silueta $S(i) = \frac{b(i) - a(i)}{\max\{a(i), b(i)\}} \in [-1, +1]$, donde $a(i)$ es la distancia media intra-clúster y $b(i)$ la distancia al grupo vecino más cercano. El óptimo es $K^* = 3$, con silueta media de **`0,5211`**, **cero siluetas negativas** y partición **`13 / 5 / 1`**.
 
 Como `kmeans()` asigna números enteros que pueden cambiar según la semilla, los grupos se nombran automáticamente por sus centroides: el grupo máximo en hurto de motocicletas recibe el nombre Comercial y Automotor; entre los dos restantes, el mayor en hurto a personas queda como Céntrico e Institucional; y el tercero corresponde a Residencial y Periférico.
 
@@ -98,35 +98,34 @@ Como `kmeans()` asigna números enteros que pueden cambiar según la semilla, lo
 
 | Clúster | Loc. | Personas | Resid. | Motos | Total | Miembros principales |
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **1. Céntrico e Institucional** | 5 | 5.834,7 | 175,9 | 60,8 | 6.071,4 | La Candelaria, Chapinero, Santa Fe, Teusaquillo, Barrios Unidos |
-| **2. Comercial y Automotor** | 2 | 5.727,9 | 150,9 | 153,0 | 6.031,8 | Los Mártires, Antonio Nariño |
-| **3. Residencial y Periférico** | 12 | 1.222,8 | 73,3 | 57,1 | 1.353,2 | Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, R. Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa, Usme |
+| **1. Céntrico e Institucional** | 5 | 6.182,7 | 183,0 | 67,9 | 6.433,7 | La Candelaria, Chapinero, Santa Fe, Teusaquillo, Barrios Unidos |
+| **2. Comercial y Automotor** | 1 | 9.337,4 | 218,8 | 187,4 | 9.743,6 | Los Mártires |
+| **3. Residencial y Periférico** | 13 | 1.390,5 | 77,1 | 66,9 | 1.534,5 | Antonio Nariño, Puente Aranda, Fontibón, Engativá, Usaquén, Tunjuelito, Kennedy, R. Uribe Uribe, Suba, San Cristóbal, Ciudad Bolívar, Bosa, Usme |
 
 : Perfiles promedio de los tres clústeres de $K$-Means (tasas anuales por 100.000 habitantes)
 
-Antonio Nariño es un caso frontera interesante. Comparte el pico en hurto de motocicletas con Los Mártires (`127,8` frente a `178,2` por 100k hab.), pero su hurto a personas (`3.065,9`) queda muy por debajo del de Los Mártires (`8.389,9`). Por esa posición intermedia entre perfiles, su silueta individual es negativa (`-0,2116`).
+Con los registros mensuales reales de `SIEDCO.csv`, **Los Mártires** conforma en solitario el perfil *Comercial y Automotor* ($S = 0$ por ser grupo unitario), mientras **Antonio Nariño** ($3.087,8$ en personas y $135,7$ en motos) pasa al bloque *Residencial y Periférico* con silueta positiva (`+0,0926`), eliminando las siluetas negativas de la partición anterior.
 
 # Minería de texto y análisis de sentimiento (`sentometrics`)
 
-El paquete `sentometrics` convierte las noticias sin estructurar en series mensuales comparables para estimar el modelo de regresión.
+El paquete `sentometrics` convierte las `993` noticias objetivo de las tres modalidades comparables en series mensuales parsimoniosas para estimar el modelo de regresión.
 
-## Construcción de `sento_corpus` con 26 *features* binarias
+## Construcción de `sento_corpus` con `6` *features* binarias
 
-Cada artículo $d_i$ (`id`, `date`, `texts`) lleva `26` covariables binarias (`{0, 1}`):
+Cada artículo objetivo $d_i$ (`id`, `date`, `texts`) lleva **`6` covariables binarias (`{0, 1}`)** estructuradas en dos bloques temáticos y territoriales (omitiendo indicadores individuales de localidad para evitar explosión dimensional):
 
-* `19` variables de localidad (`loc_...`), que ubican geográficamente cada noticia.
-* `3` variables de clúster (`c_centro`, `c_comercial`, `c_residencial`), heredadas de $K$-Means.
-* `4` variables temáticas DAI (`tema_hurto_personas`, `tema_hurto_patrimonial`, `tema_violencia_vida`, `tema_institucional`).
+* **`3` variables de clúster territorial (`c_*`):** `c_centro`, `c_comercial`, `c_residencial`, heredadas de $K$-Means.
+* **`3` variables de modalidad objetivo (`tema_*`):** `tema_hurto_personas`, `tema_hurto_residencias`, `tema_hurto_motos`, alineadas uno a uno con las columnas de `SIEDCO.csv`.
 
 ## Diccionarios combinados y modificadores contextuales (`valenceIn`)
 
 En `sentometrics::sento_lexicons()` se integran dos diccionarios junto con una tabla de `30` modificadores contextuales (`tabla_valence_es`, con categorías $t \in \{1, 2, 3, 4\}$):
 
-1. `nrc_es`, derivado de NRC vía `syuzhet`, mide el tono emocional general del texto en español (su media distrital ronda la neutralidad).
-2. `crimen_es` (`lex_crimen_bogota`, `73` términos locales), asigna pesos negativos (`-1,0` a `-0,4`) a vocabulario delictivo de Bogotá (*homicidio, sicariato, fleteo, escopolamina, cosquilleo, raponazo, halado, desguazadero*) y pesos positivos (`+0,4` a `+0,9`) a resultados de control policial o judicial (*captura, desarticulación, incautación, esclarecimiento, megatoma*).
+1. `nrc_es`, derivado de NRC vía `syuzhet` (`4.388` términos), mide el tono emocional general del texto en español (su media en el corpus objetivo es `-0,1193`).
+2. `crimen_es` (`lex_crimen_bogota`, `105` términos locales), asigna pesos negativos (`-1,0` a `-0,4`) a vocabulario delictivo de Bogotá (*homicidio, sicariato, fleteo, escopolamina, cosquilleo, raponazo, halado, desguazadero*) y pesos positivos (`+0,4` a `+0,9`) a resultados de control policial o judicial (*captura, desarticulación, incautación, esclarecimiento, megatoma*; media `-0,4034`).
 3. `valenceIn` ajusta la vecindad sintáctica con negadores ($t = 1, y = -1{,}0$: *no, nunca, sin, ni*), amplificadores ($t = 2, y \in \{1{,}5, 1{,}8\}$: *muy, gravemente, brutalmente*), atenuadores ($t = 3, y \in \{0{,}2, 0{,}4\}$: *poco, apenas, casi*) y adversativos ($t = 4, y = -1{,}0$: *pero, aunque, obstante*).
 
-## Polaridad documental (`proportionalPol`) y agregación en 364 series
+## Polaridad documental (`proportionalPol`) y agregación parsimoniosa en `36` series
 
 Dentro de cada artículo $d_i$, `compute_sentiment(..., how = "proportionalPol")` divide la suma ponderada de valencias entre el número de palabras con carga polar $N_{\text{pol}}(d_i)$:
 
@@ -134,31 +133,31 @@ $$
 S_{\text{doc}}(d_i) = \frac{1}{N_{\text{pol}}(d_i)} \sum_{k \in d_i} \left( w_k \cdot v_k \right)
 $$
 
-Como el corpus mezcla notas cortas (~20 palabras) y crónicas largas (>500 palabras), dividir solo entre palabras polares evita que los párrafos descriptivos neutros diluyan el puntaje de los reportajes extensos. Como control de sensibilidad se calcula `TFIDF`. En todo el periodo, el puntaje neto promedio es `-0,1961`: `65,9 %` de notas negativas ($< -0{,}02$), `28,8 %` positivas ($> +0{,}02$) y `5,3 %` neutras.
+Como el corpus mezcla notas cortas (~20 palabras) y crónicas largas (>500 palabras), dividir solo entre palabras polares evita que los párrafos descriptivos neutros diluyan el puntaje de los reportajes extensos. Como control de sensibilidad se calcula `TFIDF` ($r = 0{,}7233$). En las `993` noticias objetivo, el puntaje neto promedio es **`-0,2613`**: **`74,8 %`** de notas negativas ($< -0{,}02$), **`20,8 %`** positivas ($> +0{,}02$) y **`4,3 %`** neutras.
 
-Después, `sentometrics::sento_measures()` combina ese cálculo por documento con la agregación mensual entre artículos (`howDocs = "proportional"`, `by = "month"`, `do.ignoreZeros = TRUE`) y `7` curvas de memoria en ventana móvil de `6` meses (`linear`, `exponential` con $\alpha \in \{0{,}2, 0{,}5\}$ y `beta` con pares $(a, b) \in \{(1, 2), (1, 3), (2, 2), (2, 3)\}$):
+Después, `sentometrics::sento_measures()` combina ese cálculo por documento con la agregación mensual entre artículos (`howDocs = "proportional"`, `by = "month"`, `do.ignoreZeros = TRUE`) y **`3` curvas de memoria** representativas en ventana móvil de `6` meses (`linear`, `exponential0.5` y `beta22`):
 
 $$
-2\text{ diccionarios} \times 26\text{ features} \times 7\text{ esquemas temporales} = 364\text{ series mensuales}
+2\text{ diccionarios} \times 6\text{ features} \times 3\text{ esquemas temporales} = 36\text{ series mensuales}
 $$
 
-Los meses sin menciones de una variable se completan con cero mediante `measures_fill(..., fill = "zero")`. Con `peakdocs()` se extraen las notas más extremas para lectura directa y con `peakdates()` se ubican los meses pico del índice distrital.
+Los meses sin menciones de una variable se completan con cero mediante `measures_fill(..., fill = "zero")` para obtener `52` meses efectivos (`2022-06-01` a `2026-09-01`). Con `peakdocs()` se extraen las notas más extremas (en tabla y gráfico horizontal divergente) y con `peakdates()` se ubican los meses pico del índice distrital.
 
 # Modelado econométrico Elastic Net y `attributions()`
 
-## Mensualización de la variable dependiente $y_t$
+## Variable dependiente mensual observada en `SIEDCO.csv` ($y_t$)
 
-Dado que el panel de denuncias es anual (`2022` a `2026`) y las series textuales son mensuales, la tasa anual distrital se reparte mes a mes con los pesos relativos `prop_mensual_dai` construidos a partir de las noticias estrictas de los 11 DAI (usando suavizamiento `+1` para evitar meses en cero).
+Al contar con microdatos mensuales oficiales en `SIEDCO.csv` (`panel_delitos_poblacion_mensual.parquet`), la serie dependiente $y_{t+1}$ se toma directamente como la tasa mensual agregada distrital observada por cada `100.000` habitantes de las tres modalidades en el mismo calendario mensual que las noticias (`2022-07-01` a `2026-09-01`, $51$ meses efectivos para $h = 1$), sin recurrir a prorrateos artificiales.
 
 ## Función objetivo Elastic Net y ajuste un paso adelante ($h = 1$)
 
-Con `364` series predictoras y menos de `60` meses de observación ($p \gg T$), mínimos cuadrados ordinarios se indetermina. `sento_model(..., type = "BIC", alphas = c(0.2, 0.5, 0.8), h = 1)` estima Elastic Net:
+Con el diseño parsimonioso de **`36` series predictoras** frente a **`51` meses efectivos** ($M = 36 < N = 51$), mínimos cuadrados ordinarios todavía sufriría colinealidad alta entre clústeres, modalidades y curvas temporales. `sento_model(..., type = "BIC", alphas = c(0.2, 0.5, 0.8), h = 1)` estima Elastic Net:
 
 $$
-\min_{\beta_0, \boldsymbol{\beta}} \; \frac{1}{2T_{\text{ef}}} \sum_{t=1}^{T_{\text{ef}}} \left( y_{t+h} - \beta_0 - \sum_{m=1}^{364} \beta_m S_{t,m} \right)^2 + \lambda \left[ \frac{1 - \alpha}{2} \sum_{m=1}^{364} \beta_m^2 + \alpha \sum_{m=1}^{364} |\beta_m| \right]
+\min_{\beta_0, \boldsymbol{\beta}} \; \frac{1}{2T_{\text{ef}}} \sum_{t=1}^{T_{\text{ef}}} \left( y_{t+h} - \beta_0 - \sum_{m=1}^{36} \beta_m S_{t,m} \right)^2 + \lambda \left[ \frac{1 - \alpha}{2} \sum_{m=1}^{36} \beta_m^2 + \alpha \sum_{m=1}^{36} |\beta_m| \right]
 $$
 
-El castigo $\ell_1$ ($\alpha$) lleva a cero los coeficientes irrelevantes y el castigo $\ell_2$ ($1 - \alpha$) estabiliza juntos los predictores correlacionados (*grouping effect*). El criterio BIC escoge $\alpha^* = 0{,}5$ y $\lambda^* = 2{,}9424$, retiene `36 de 364` series activas y logra $R^2 = 92{,}76\%$ dentro de muestra con $\text{RMSE} = 15{,}92$.
+El término de pérdida cuadrática mide el error de ajuste un mes adelante ($\hat{\beta}_0$ recoge el nivel basal de `275,99` hurtos/100k hab.); la penalización mixta ponderada por $\lambda$ combina el castigo $\ell_1$ ($\alpha$) que lleva a cero series redundantes y el castigo $\ell_2$ ($1 - \alpha$) que reparte el peso entre series correlacionadas (*grouping effect*). El criterio BIC escoge **$\alpha^* = 0{,}5$** y **$\lambda^* = 0{,}2521$**, retiene **`25 de 36` series activas** y logra **$R^2 = 88{,}99\%$** dentro de muestra con **$\text{RMSE} = 9{,}78$**.
 
 ## Descomposición exacta mediante `sentometrics::attributions()`
 
@@ -168,11 +167,11 @@ $$
 \hat{y}_{t+1} = \hat{\beta}_0 + \sum_{m \in \texttt{nrc\_es}} \hat{\beta}_m S_{t,m} + \sum_{m \in \texttt{crimen\_es}} \hat{\beta}_m S_{t,m}
 $$
 
-Así se identifica mes a mes qué parte del pronóstico viene del vocabulario emocional general (`nrc_es`) y qué parte proviene de términos locales de delito y control policial (`crimen_es`).
+Así se identifica mes a mes qué parte del pronóstico viene del vocabulario emocional general (`nrc_es`) y qué parte proviene de términos locales de delito y control policial (`crimen_es`), cuidando que el aporte en la fila de fecha $t$ (`2022-09-01`) corresponda al pronóstico del mes $t+1$ (`2022-10-01`) por el rezago $h = 1$.
 
 # Cartografía por modalidad, lectura de mapas y hurto de motocicletas
 
-## Tres comparaciones por modalidad (992 frente a 3.916 noticias)
+## Tres comparaciones por modalidad (`993` frente a `3.916` noticias)
 
 En la Sección 6.2 del cuaderno se cruza siempre la tasa anual de denuncias por 100.000 habitantes (columna izquierda, en morado oscuro a amarillo claro) frente a tres lecturas de prensa en la columna derecha (azul oscuro a aguamarina claro, evitando el negro puro en las escalas):
 
@@ -180,17 +179,17 @@ En la Sección 6.2 del cuaderno se cruza siempre la tasa anual de denuncias por 
 2. Conteo total acumulado de artículos publicados por localidad (`fig-mapa-desajuste-conteos`).
 3. Sentimiento neto promedio `sentimiento_score` por localidad y modalidad (`fig-mapa-delitos-sentimiento`).
 
-Las tres modalidades oficiales del panel (`hurto_personas`, `hurto_residencias`, `hurto_motos`) reúnen `992` noticias (`25,3 %` del corpus). Las `2.924` notas restantes (`74,7 %`) tratan otros delitos o categorías editoriales (`794` *No DAI*, `575` hurto de automotores, `540` hurto sin modalidad identificada, `452` homicidio y `349` hurto a comercio, entre otros) y se reportan por separado en la fila `Ref.: corpus`.
+Las tres modalidades oficiales del panel (`hurto_personas`, `hurto_residencias`, `hurto_motos`) reúnen **`993` noticias (`25,4 %` del corpus)**: `736` en personas, `141` en residencias y `116` en motos. Las **`2.923` notas restantes (`74,6 %`)** tratan otros delitos o categorías editoriales (`790` *No DAI*, `576` hurto de automotores, `538` hurto sin modalidad identificada, `453` homicidio y `350` hurto a comercio, entre otros) y se reportan por separado en la fila `Ref.: corpus`.
 
 | Modalidad | Notas | Del./100k | Not./100k | Sent. med. | $r$ (tasa) | $\rho$ (tasa) | $r$ (conteo) | $r$ (sent.) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Hurto personas** | 736 | 2.910,7 | 4,22 | -0,282 | 0,847 | 0,779 | 0,010 | 0,364 |
-| **Hurto residencias** | 140 | 108,4 | 0,63 | -0,268 | 0,648 | 0,704 | -0,185 | 0,101 |
-| **Hurto motos** | 116 | 68,2 | 0,65 | -0,168 | 0,605 | 0,402 | 0,176 | 0,333 |
-| **Total (3 mod.)** | 992 | 3.087,3 | 5,50 | -0,267 | 0,838 | 0,812 | -0,121 | 0,303 |
-| *Ref.: corpus* | *3.916* | *3.087,3* | *22,42* | *-0,199* | *0,748* | *0,714* | *-0,402* | *0,061* |
+| **Hurto personas** | 736 | 3.069,9 | 4,22 | -0,281 | 0,854 | 0,781 | -0,017 | 0,361 |
+| **Hurto residencias** | 141 | 112,4 | 0,63 | -0,267 | 0,643 | 0,721 | -0,241 | 0,109 |
+| **Hurto motos** | 116 | 73,5 | 0,65 | -0,168 | 0,621 | 0,374 | 0,151 | 0,344 |
+| **Total (3 mod.)** | 993 | 3.255,8 | 5,50 | -0,265 | 0,845 | 0,821 | -0,148 | 0,296 |
+| *Ref.: corpus* | *3.916* | *3.255,8* | *22,42* | *-0,198* | *0,759* | *0,721* | *-0,421* | *0,082* |
 
-: Resumen espacial por modalidad de denuncias por 100.000 hab. frente a tasas de noticias, conteos totales y sentimiento neto promedio ($n = 19$ localidades; $n = 18$ con tono en residencias y motos)
+: Resumen espacial por modalidad de denuncias por 100.000 hab. frente a tasas de noticias, conteos totales y sentimiento neto promedio ($n = 19$ localidades; $n = 18$ con tono en motos)
 
 ## Cómo interpretar los mapas de sentimiento neto promedio
 
@@ -198,15 +197,15 @@ En las dos primeras figuras (tasas per cápita y conteos totales), el azul oscur
 
 * **Azul oscuro** indica un promedio **más negativo** (cobertura dominada por reportes de hurtos y hechos violentos).
 * **Azul claro o aguamarina** indica un promedio **menos negativo o positivo**, donde pesan más las notas sobre capturas, recuperaciones u operativos policiales.
-* **Gris claro** corresponde a localidades con `0` artículos en esa modalidad (Usme en residencias y motocicletas).
+* **Gris claro** corresponde a localidades con `0` artículos en esa modalidad (solo Usme en hurto de motocicletas; en residencias las `19` localidades registran al menos una nota).
 
-En hurto a personas (`736` notas) y en el total comparable (`992` notas), las 19 localidades tienen promedio negativo, pero varias zonas residenciales e intermedias (Teusaquillo `-0,400` con `87,1 %` de notas negativas y `6,5 %` positivas; Tunjuelito `-0,396` con `89,5 %` negativas; Fontibón `-0,348`; Puente Aranda `-0,329`; Kennedy `-0,322`) salen en azul más oscuro que el centro (Chapinero `-0,201`; Santa Fe `-0,213`; La Candelaria `-0,240`, donde `35,3 %` de las notas son positivas) o que Suba (`-0,192`, `30,2 %` positivas). Como en los sectores céntricos las notas sobre operativos policiales moderan el balance negativo mientras sus tasas por 100k hab. son las más altas, la correlación lineal $r$ entre denuncias y sentimiento resulta positiva ($r = 0{,}364$ en personas y $r = 0{,}303$ en las tres modalidades).
+En hurto a personas (`736` notas) y en el total comparable (`993` notas), las 19 localidades tienen promedio negativo, pero varias zonas residenciales e intermedias (Tunjuelito `-0,396` con `89,5 %` de notas negativas; Teusaquillo `-0,389` con `87,1 %` negativas y `6,5 %` positivas; Fontibón `-0,348`; Puente Aranda `-0,329`; Kennedy `-0,306`) salen en azul más oscuro que el centro (Chapinero `-0,209`; Santa Fe `-0,213`; La Candelaria `-0,240`, donde `35,3 %` de las notas son positivas) o que Suba (`-0,192`, `30,2 %` positivas). Como en los sectores céntricos las notas sobre operativos policiales moderan el balance negativo mientras sus tasas por 100k hab. son las más altas, la correlación lineal $r$ entre denuncias y sentimiento resulta positiva ($r = 0{,}361$ en personas y $r = 0{,}296$ en las tres modalidades).
 
-En residencias (`140` notas) y motocicletas (`116` notas), varias localidades tienen entre 1 y 4 artículos. Allí una sola noticia sobre captura o recuperación vuelve positivo el promedio (Santa Fe en motos promedia `+0,625` sobre `2` notas de recuperación y taller clandestino, Puente Aranda `+0,295` sobre `4` notas y Fontibón `-0,900` sobre `1` nota de robo; en residencias Santa Fe marca `+0,500` con `1` artículo). Por eso estos mapas deben leerse junto con los conteos absolutos. Mientras tanto, el conteo bruto de noticias se concentra en localidades populosas (Chapinero `101`, Bosa `90`, Suba `79`, Engativá `78`, Usaquén `65`, Kennedy `60` y Ciudad Bolívar `55` en 3 mod.), lo que vuelve nula o negativa su correlación con la tasa delictiva ($r = -0{,}121$ en 3 mod. y $r = -0{,}402$ en el corpus).
+En residencias (`141` notas) y motocicletas (`116` notas), varias localidades tienen entre 1 y 4 artículos. Allí una sola noticia sobre captura o recuperación vuelve positivo el promedio (Santa Fe en motos promedia `+0,625` sobre `2` notas de recuperación y taller clandestino, Puente Aranda `+0,295` sobre `4` notas y Fontibón `-0,900` sobre `1` nota de robo; en residencias Santa Fe marca `+0,500` con `1` artículo). Por eso estos mapas deben leerse junto con los conteos absolutos. Mientras tanto, el conteo bruto de noticias se concentra en localidades populosas (Chapinero `101`, Bosa `90`, Suba `79`, Engativá `78`, Usaquén `65`, Kennedy `60` y Ciudad Bolívar `55` en 3 mod.), lo que vuelve nula o negativa su correlación con la tasa delictiva ($r = -0{,}148$ en 3 mod. y $r = -0{,}421$ en el corpus).
 
 ## Por qué el hurto de motocicletas tiene fuerte concentración periférica
 
-En los `22.733` hurtos de motocicletas oficiales entre 2022 y septiembre de 2026 aparecen dos patrones distintos. Por población y concentración de talleres y autopartes, lideran en tasas Los Mártires (`178,2`/100k), Antonio Nariño (`127,8`) y Puente Aranda (`92,5`). Pero a diferencia del hurto a personas o residencias, las tasas per cápita también son altas en el sur y suroccidente: Ciudad Bolívar (`82,2`, 4.° lugar), Kennedy (`78,1`, 5.°) y Rafael Uribe Uribe (`72,2`, 7.°) superan a La Candelaria (`64,7`), Santa Fe (`62,8`), Teusaquillo (`60,8`), Chapinero (`42,5`) y Usaquén (`16,6`). En casos absolutos, cinco localidades periféricas suman el `59,2 %` (`13.462` de `22.733`) de todos los robos: Kennedy (`4.278`, `18,8 %`), Ciudad Bolívar (`2.767`, `12,2 %`), Engativá (`2.434`, `10,7 %`), Bosa (`2.088`, `9,2 %`) y Suba (`1.895`, `8,3 %`), aunque sus tasas de prensa per cápita son mínimas (Kennedy `0,13`, Ciudad Bolívar `0,26`, Usme `0,00`).
+En los **`24.300` hurtos de motocicletas oficiales** de `SIEDCO.csv` entre enero de 2022 y septiembre de 2026 aparecen dos patrones distintos. Por población y concentración de talleres y autopartes, lideran en tasas Los Mártires (`187,4`/100k), Antonio Nariño (`135,7`) y Puente Aranda (`96,9`). Pero a diferencia del hurto a personas o residencias, las tasas per cápita también son altas en el sur y suroccidente: Ciudad Bolívar (`85,4`), Kennedy (`81,6`) y Rafael Uribe Uribe (`79,1`) superan a Santa Fe (`73,8`), La Candelaria (`73,1`), Teusaquillo (`67,4`), Chapinero (`45,3`) y Usaquén (`19,0`). En casos absolutos, cinco localidades periféricas suman el **`58,5 %` (`14.215` de `24.300`)** de todos los robos: Kennedy (`4.475`, `18,4 %`), Ciudad Bolívar (`2.882`, `11,9 %`), Engativá (`2.583`, `10,6 %`), Bosa (`2.212`, `9,1 %`) y Suba (`2.063`, `8,5 %`), aunque sus tasas de prensa per cápita son mínimas.
 
 Tres fuentes de movilidad y seguridad explican ese peso de la periferia:
 
@@ -216,33 +215,33 @@ Tres fuentes de movilidad y seguridad explican ese peso de la periferia:
 
 # Integración con R Shiny y arquitectura del tablero
 
-Para responder en milisegundos, `app/app.R` no ejecuta modelos en tiempo real ni lee archivos GeoJSON por sesión. Previamente `scripts/master.R` y `scripts/05_export_insumos_shiny.R` empaquetan `panel_consolidado`, los clústeres, `geo_bogota` en WGS84, `df_noticias_enriquecida`, `medidas_sento` y `objeto_attributions` en `datos_consolidados_shiny.rds`. Al iniciar la aplicación web, ese archivo único alimenta los mapas Leaflet (`input$mapa_panorama_shape_click`) y los gráficos interactivos (`plotly_click`), que filtran las fichas por localidad, tono y titulares extremos (`peakdocs`).
+Para responder en milisegundos, `app/app.R` no ejecuta modelos en tiempo real ni lee archivos GeoJSON por sesión. Previamente `scripts/master.R`, `scripts/03_analisis_sentometrics.R` (empaquetado en `data/processed/sentometrics_pipeline.rds`) y `scripts/05_export_insumos_shiny.R` consolidan `panel_consolidado`, los clústeres, `geo_bogota` en WGS84, las `36` series sobre `993` noticias objetivo y los resultados de Elastic Net en `datos_consolidados_shiny.rds`. Al iniciar la aplicación web, ese archivo único alimenta los mapas Leaflet (`input$mapa_panorama_shape_click`), la visualización tridimensional de clústeres (`plotly`) y las series de `sentometrics`, filtrando en vivo fichas locales, tono y titulares extremos (`peakdocs`).
 
 # Banco de preguntas y respuestas para sustentación
 
 1. **¿Por qué se estandarizan las variables con $Z$-score antes de ejecutar $K$-Means?**
-   Porque la tasa media de hurto a personas (`2.910,7`/100k) supera más de 26 veces a la de residencias (`108,4`) y 42 veces a la de motocicletas (`68,2`). Como Hartigan-Wong usa distancia euclidiana, sin estandarizar a media `0` y desviación `1` el algoritmo ignoraría residencias y motos y agruparía casi solo por hurto a personas.
+   Porque la tasa media de hurto a personas (`3.069,9`/100k) supera más de 27 veces a la de residencias (`112,4`) y 41 veces a la de motocicletas (`73,5`). Como Hartigan-Wong usa distancia euclidiana, sin estandarizar a media `0` y desviación `1` el algoritmo ignoraría residencias y motos y agruparía casi solo por hurto a personas.
 
-2. **¿Cómo se interpreta la silueta negativa de Antonio Nariño (`-0,2116`) y por qué se mantiene $K^* = 3$?**
-   Antonio Nariño comparte el pico de hurto de motocicletas (`127,8`/100k) con Los Mártires (`178,2`), razón por la cual pertenece al perfil Comercial y Automotor, pero en hurto a personas (`3.065,9`) está más cerca de localidades vecinas que de Los Mártires (`8.389,9`). Esa silueta negativa muestra un caso frontera real entre grupos y no un fallo del algoritmo, mientras la silueta media distrital alcanza `0,5416`.
+2. **¿Cómo se interpreta la partición `13 / 5 / 1` de `K* = 3` con silueta `0,5211` y por qué Los Mártires queda solo?**
+   Con los datos mensuales reales de `SIEDCO.csv`, Los Mártires concentra las tasas más altas de hurto a personas (`9.337,4`), residencias (`218,8`) y motocicletas (`187,4`), formando un polo comercial único ($S = 0$ por ser unitario), mientras Antonio Nariño ($3.087,8$ en personas y $135,7$ en motos) se agrupa con el bloque Residencial y Periférico ($S = +0,0926$), logrando cero localidades con silueta negativa.
 
 3. **¿Cómo se conectan $K$-Means y `sentometrics` en el pipeline?**
-   Las asignaciones territoriales de `04_clustering_kmeans.R` se convierten en tres covariables binarias (`c_centro`, `c_comercial`, `c_residencial`) dentro de `sento_corpus()`. Eso permite construir series mensuales de sentimiento por clúster y medir su aporte dentro de Elastic Net y `attributions()`.
+   Las asignaciones territoriales de `04_clustering_kmeans.R` se convierten en tres covariables binarias (`c_centro`, `c_comercial`, `c_residencial`) dentro de `sento_corpus()`, combinadas con las 3 modalidades objetivo (`tema_*`). Eso permite construir las `36` series mensuales de sentimiento y medir su aporte dentro de Elastic Net y `attributions()`.
 
 4. **¿Por qué combinar `nrc_es` y `crimen_es` con modificadores de valencia (`valenceIn`)?**
-   Un diccionario general traducido ronda la neutralidad y desconoce términos locales como *fleteo*, *cosquilleo*, *escopolamina*, *halado* o *megatoma*. Al sumar `crimen_es` (`73` términos de dominio) y las `30` reglas de `valenceIn` ($t \in \{1, 2, 3, 4\}$), se corrige el signo en frases con negación (*"operativo sin capturas"*) y se separan hechos delictivos de operativos policiales.
+   Un diccionario general traducido ronda la neutralidad y desconoce términos locales como *fleteo*, *cosquilleo*, *escopolamina*, *halado* o *megatoma*. Al sumar `crimen_es` (`105` términos de dominio) y las `30` reglas de `valenceIn` ($t \in \{1, 2, 3, 4\}$), se corrige el signo en frases con negación (*"operativo sin capturas"*) y se separan hechos delictivos de operativos policiales.
 
 5. **¿Por qué dividir por $N_{\text{pol}}(d_i)$ (`proportionalPol`) y no por el total de palabras del artículo?**
-   En el corpus conviven notas breves de ~20 palabras y crónicas largas de más de 500 palabras. Dividir entre palabras con carga polar evita que los párrafos neutros de un reportaje extenso diluyan su tono, y su ordenamiento concuerda con `TFIDF`.
+   En el corpus conviven notas breves de ~20 palabras y crónicas largas de más de 500 palabras. Dividir entre palabras con carga polar evita que los párrafos neutros de un reportaje extenso diluyan su tono, y su ordenamiento concuerda con `TFIDF` ($r = 0{,}7233$).
 
-6. **¿Por qué usar Elastic Net en lugar de MCO tradicional para modelar la tasa mensual de hurto?**
-   Hay `364` series predictoras (`2` diccionarios $\times$ `26` features $\times$ `7` esquemas temporales) frente a menos de `60` observaciones mensuales ($p \gg T$). MCO se indetermina y sobreajusta; Ridge ($\alpha = 0$) conserva variables irrelevantes; y LASSO ($\alpha = 1$) escoge una serie al azar dentro de grupos correlacionados. Elastic Net ($\alpha^* = 0{,}5$ por BIC) retiene `36` series relevantes y estabiliza los bloques informativos ($R^2 = 92{,}76\%$, $h = 1$).
+6. **¿Por qué reducir de `364` a `36` series y usar Elastic Net para modelar la tasa mensual de hurto?**
+   Con `2` diccionarios $\times$ `6` *features* $\times$ `3` curvas (`linear`, `exponential0.5`, `beta22`) obtenemos un diseño parsimonioso de $M = 36$ series menor que las $N = 51$ observaciones mensuales ($M < N$). Aún así existe fuerte colinealidad entre diccionario, clúster, modalidad y rezagos. Elastic Net ($\alpha^* = 0{,}5$, $\lambda^* = 0{,}2521$ por BIC) selecciona `25` series activas y estabiliza bloques correlacionados ($R^2 = 88{,}99\%$, $\text{RMSE} = 9{,}78$, $h = 1$) sin sufrir inestabilidad ni sobreajuste.
 
-7. **¿Por qué la comparación por modalidad de la Sección 6.2 usa `992` noticias y no las `3.916` del corpus completo?**
-   Porque las denuncias oficiales del panel solo cubren tres tipos de hurto (`hurto_personas`, `hurto_residencias` y `hurto_motos`), equivalentes a `992` noticias (`25,3 %`). Sumar allí las `2.924` notas de homicidio, automotores, comercio o *No DAI* sesgaría la comparación contra las denuncias; por eso `Total (3 mod.)` compara numeradores iguales y `Ref.: corpus` reporta el agregado completo por aparte.
+7. **¿Por qué `sentometrics` y la comparación por modalidad se restringen a `993` noticias y no usan las `3.916` del corpus completo?**
+   Porque las denuncias oficiales de `SIEDCO.csv` en el panel solo cubren tres tipos de hurto (`hurto_personas`, `hurto_residencias` y `hurto_motos`), equivalentes a `993` noticias (`25,4 %`). Incluir allí las `2.923` notas de homicidio, automotores, comercio o *No DAI* introduciría ruido temático ajeno a la variable explicada; por eso tanto `corpus_sento` como `Total (3 mod.)` comparan numeradores iguales y `Ref.: corpus` reporta las `3.916` notas completas por aparte.
 
 8. **¿Qué explica que la prensa cubra menos en términos per cápita el hurto de motocicletas en localidades como Kennedy y Ciudad Bolívar?**
-   Influyen tanto el sesgo editorial hacia el centro político y comercial como el contraste entre dónde viven los usuarios y dónde se cubren operativos. Según la Encuesta de Movilidad 2023 (SDM) y ProBogotá, la tenencia (Kennedy >92.000 motos) y cerca del `90 %` de los orígenes de viaje (estratos 1 a 3) se concentran en la periferia, donde ocurre el `59,2 %` de los hurtos absolutos (sobre todo por *halado* en vía pública según SDSCJ/MEBOG), mientras la prensa prioriza incidentes de alto impacto en corredores céntricos como Los Mártires y Antonio Nariño.
+   Influyen tanto el sesgo editorial hacia el centro político y comercial como el contraste entre dónde viven los usuarios y dónde se cubren operativos. Según la Encuesta de Movilidad 2023 (SDM) y ProBogotá, la tenencia (Kennedy >92.000 motos) y cerca del `90 %` de los orígenes de viaje (estratos 1 a 3) se concentran en la periferia, donde ocurre el `58,5 %` de los hurtos absolutos (sobre todo por *halado* en vía pública según SDSCJ/MEBOG), mientras la prensa prioriza incidentes de alto impacto en corredores céntricos como Los Mártires, Antonio Nariño y Puente Aranda.
 
-9. **¿Cómo se interpreta el mapa de sentimiento neto promedio (`fig-mapa-delitos-sentimiento`) y por qué el centro se ve más claro que localidades como Teusaquillo o Kennedy?**
-   En ese mapa, azul oscuro indica promedio más negativo (más carga de robos y violencia sin balance favorable) y azul claro indica promedio menos negativo o positivo, porque la escala ordena `sentimiento_score` de menor a mayor (el gris corresponde a cero noticias). En hurto a personas, Teusaquillo (`-0,400`, `87,1 %` de notas negativas), Tunjuelito (`-0,396`), Fontibón (`-0,348`) y Kennedy (`-0,322`) casi solo registran reportes de atracos; en cambio, en corredores céntricos (`-0,201` a `-0,242`) o en Suba (`-0,192`) aumenta el peso de noticias sobre capturas y recuperaciones (`21,7 %` a `35,3 %` de notas positivas), lo que acerca el promedio a cero y vuelve positiva la correlación $r = 0{,}364$. En residencias y motos, donde muchas localidades suman entre `1` y `4` notas, una o dos noticias de operativos bastan para mover el promedio a positivo (Santa Fe `+0,625` en motos con `2` notas).
+9. **¿Cómo se interpreta el mapa de sentimiento neto promedio (`fig-mapa-delitos-sentimiento`) y por qué el centro se ve más claro que localidades como Teusaquillo o Tunjuelito?**
+   En ese mapa, azul oscuro indica promedio más negativo (más carga de robos y violencia sin balance favorable) y azul claro indica promedio menos negativo o positivo, porque la escala ordena `sentimiento_score` de menor a mayor (el gris corresponde a cero noticias). En hurto a personas, Tunjuelito (`-0,396`, `89,5 %` negativas), Teusaquillo (`-0,389`, `87,1 %` de notas negativas), Fontibón (`-0,348`) y Kennedy (`-0,306`) casi solo registran reportes de atracos; en cambio, en corredores céntricos (`-0,209` a `-0,242`) o en Suba (`-0,192`) aumenta el peso de noticias sobre capturas y recuperaciones (`21,7 %` a `35,3 %` de notas positivas), lo que acerca el promedio a cero y vuelve positiva la correlación $r = 0{,}361$. En residencias y motos, donde muchas localidades suman entre `1` y `4` notas, una o dos noticias de operativos bastan para mover el promedio a positivo (Santa Fe `+0,625` en motos con `2` notas).

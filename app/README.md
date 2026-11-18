@@ -49,11 +49,11 @@ La aplicación **no ejecuta procesos pesados de scraping ni recalcula matrices l
    - Cartografía (`{leaflet}`) y tarjetas comparativas (incluyendo tasa total y desagregada por modalidad) de los 3 grupos territoriales hallados con K-Means ($K^* = 3$): *Céntrico e Institucional* (`#B08CF0`), *Comercial y Automotor* (`#E86A50`) y *Residencial y Periférico* (`#3FB8A6`).
    - Tarjeta expandible (`full_screen = TRUE`) con el **gráfico tridimensional interactivo (`{plotly}` `scatter3d`)** de las 19 localidades, radios intra-clúster y centroides $\mu_k$: incluye controles `bslib::input_switch()` para mostrar u ocultar nombres y alternar entre tasas por 100.000 habitantes y $Z$-scores estandarizados, más sincronización bidireccional al hacer clic en esferas, mapa o tarjetas.
 5. **`Sentometrics y Elastic Net`**:
-   - Indicadores de desempeño del modelo regularizado Elastic Net ($\text{BIC}$, $h = 1$ mes: $R^2$, $\alpha^*$, $\lambda^*$, series activas y $\text{RMSE}$).
-   - Explorador interactivo de las **364 series mensuales de sentimiento** (`sento_measures`) por grupo de *features* (clústeres, tópicos DAI o localidades), léxico (`crimen_es` vs. `nrc_es`) y esquema de memoria temporal (`lag = 6` meses), incluyendo las fechas críticas detectadas con `peakdates()`.
-   - Descomposición aditiva de **atribuciones** (`attributions()`) por clúster, tópico, léxico y memoria temporal, serie observada vs. predicha ($\hat{y}_t$) y ranking de los 10 coeficientes $|\beta|$ de mayor magnitud.
+   - Indicadores de desempeño del modelo regularizado Elastic Net ($\text{BIC}$, $h = 1$ mes: $R^2$, $\alpha^*$, $\lambda^*$, series activas y $\text{RMSE}$), ajustado sobre las **993 noticias objetivo** de las 3 modalidades SIEDCO (*Hurto a personas*, *Hurto a residencias* y *Hurto de motocicletas*).
+   - Explorador interactivo de las **36 series mensuales de sentimiento** (`sento_measures`, `2 léxicos × 6 covariables binarias × 3 curvas temporales`) por grupo de *features* (`Clúster Territorial` o `Modalidad de Hurto`), léxico (`crimen_es` vs. `nrc_es`) y esquema de memoria temporal (`lag = 6` meses: `linear`, `exponential0.5`, `beta22`), incluyendo las fechas críticas detectadas con `peakdates()`.
+   - Descomposición aditiva de **atribuciones** (`attributions()`) por clúster, modalidad de hurto, léxico y memoria temporal frente a la tasa mensual observada de `SIEDCO.csv` ($\hat{y}_{t+1}$ vs. $y_{t+1}$), junto con el ranking de los 10 coeficientes $|\beta|$ de mayor magnitud.
 6. **`Datos y método`**:
-   - Síntesis de fuentes oficiales, advertencias metodológicas (corte septiembre 2026 y efecto de población flotante en el centro) y tabla interactiva con el contrato de los artefactos `.rds` del pipeline.
+   - Síntesis de fuentes oficiales (`SIEDCO.csv` + proyecciones SDS + corpus de 993 notas objetivo sobre 3.916 recopiladas), advertencias metodológicas (corte septiembre 2026 y efecto de población flotante en el centro) y tabla interactiva con el contrato de los 2 artefactos `.rds` del pipeline (`sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds`).
 
 ---
 

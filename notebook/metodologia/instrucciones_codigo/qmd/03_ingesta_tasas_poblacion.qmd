@@ -518,11 +518,11 @@ Además comprobamos con el archivo del repositorio que la fila del total de Bogo
 
 # Script de procesamiento: `procesamiento_poblacion.R`
 
-Este script toma la población cruda y la deja en un solo número por localidad y año. Luego la une con las denuncias para calcular las tasas de hurto por 100.000 habitantes. Está en `scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R`, lee `poblacion_localidades_raw.parquet` y `delitos_localidad_anual.parquet`, y escribe `data/processed/02_poblacion/panel_delitos_poblacion_localidad.parquet`.
+Este script toma la población cruda y la deja en un solo número por localidad y año. Luego la une con el panel mensual de denuncias para calcular las tasas mensuales de hurto por 100.000 habitantes. Está en `scripts/02_procesamiento/02_poblacion/procesamiento_poblacion.R`, lee `poblacion_localidades_raw.parquet` y `delitos_localidad_mensual.parquet`, y escribe `data/processed/02_poblacion/panel_delitos_poblacion_mensual.parquet`.
 
 ## Encabezado y configuración
 
-La configuración es la misma del script de ingesta. Cambian las librerías, porque se suma `stringr` para trabajar con texto, y las rutas, que ahora incluyen los tres archivos del proceso.
+La configuración es la misma del script de ingesta. Cambian las librerías, porque se suma `stringr` para trabajar con texto, y las rutas, que ahora apuntan al insumo mensual de delitos y al panel mensual de salida.
 
 ::: {.columns}
 ::: {.column width="52%"}
@@ -547,13 +547,13 @@ conflict_prefer("lag",    "dplyr", quiet = TRUE)
 conflict_prefer("select", "dplyr", quiet = TRUE)
 
 ## 1.3 Rutas relativas y directorios ----
-ruta_raw_pob      <- here::here("data", "raw", "poblacion")
-ruta_proc_delitos <- here::here("data", "processed", "01_delitos")
-ruta_proc_pob     <- here::here("data", "processed", "02_poblacion")
+ruta_raw_pob      <- here("data", "raw", "poblacion")
+ruta_proc_delitos <- here("data", "processed", "01_delitos")
+ruta_proc_pob     <- here("data", "processed", "02_poblacion")
 
-archivo_pob_raw   <- file.path(ruta_raw_pob, "poblacion_localidades_raw.parquet")
-archivo_delitos   <- file.path(ruta_proc_delitos, "delitos_localidad_anual.parquet")
-archivo_salida    <- file.path(ruta_proc_pob, "panel_delitos_poblacion_localidad.parquet")
+archivo_pob_raw     <- file.path(ruta_raw_pob, "poblacion_localidades_raw.parquet")
+archivo_delitos_mes <- file.path(ruta_proc_delitos, "delitos_localidad_mensual.parquet")
+archivo_salida_mes  <- file.path(ruta_proc_pob, "panel_delitos_poblacion_mensual.parquet")
 
 if (!dir.exists(ruta_proc_pob)) {
   dir.create(ruta_proc_pob, recursive = TRUE, showWarnings = FALSE)
@@ -567,7 +567,7 @@ if (!dir.exists(ruta_proc_pob)) {
 
 ::: {.column width="45%"}
 
-Se fijan las opciones generales y la semilla del proyecto, se cargan `here`, `conflicted`, `arrow`, `readr`, `dplyr` y `stringr`, y se definen las rutas. La población cruda y los delitos procesados son las entradas y el panel final es la salida. Si la carpeta de salida no existe, se crea.
+Se fijan las opciones generales y la semilla del proyecto, se cargan `here`, `conflicted`, `arrow`, `readr`, `dplyr` y `stringr`, y se definen las rutas. La población cruda y el panel mensual de delitos (`delitos_localidad_mensual.parquet`) son las entradas y el panel mensual con tasas es la salida. Si la carpeta de salida no existe, se crea.
 
 :::
 :::
@@ -584,12 +584,17 @@ Antes de transformar nada, el script revisa que existan los dos archivos de entr
 if (!file.exists(archivo_pob_raw)) {
   stop("No se encontró '", archivo_pob_raw, "'. Ejecute primero: source('scripts/01_ingesta/02_poblacion/descarga_poblacion_sds.R')")
 }
-if (!file.exists(archivo_delitos)) {
-  stop("No se encontró '", archivo_delitos, "'. Ejecute primero: source('scripts/02_procesamiento/01_delitos/procesamiento_delitos.R')")
+if (!file.exists(archivo_delitos_mes)) {
+  stop("Falta '", archivo_delitos_mes, "'. Ejecute primero: source('scripts/02_procesamiento/01_delitos/procesamiento_delitos.R')")
 }
 
-df_pob_raw    <- arrow::read_parquet(archivo_pob_raw)
-panel_delitos <- arrow::read_parquet(archivo_delitos)
+leer_parquet_seguro <- function(ruta) {
+  tam <- file.info(ruta)$size
+  read_parquet(readBin(ruta, what = "raw", n = tam + 1024L))
+}
+
+df_pob_raw            <- leer_parquet_seguro(archivo_pob_raw)
+panel_delitos_mensual <- leer_parquet_seguro(archivo_delitos_mes)
 ```
 
 :::
@@ -601,9 +606,9 @@ panel_delitos <- arrow::read_parquet(archivo_delitos)
 
 **Líneas 44--49.** Si no existe el archivo de población o el de delitos, `stop()` termina el script e indica cuál ejecutar antes. *Sin los datos no se puede calcular nada, y es mejor avisar que fallar a mitad de camino.*
 
-**Línea 51.** `df_pob_raw` es la tabla cruda de población, con 131.502 filas.
+**Líneas 51--54.** `leer_parquet_seguro()` lee el binario completo en memoria antes de parsearlo, protegiendo las lecturas en unidades sincronizadas en la nube.
 
-**Línea 52.** `panel_delitos` es el panel de denuncias por localidad y año, con 95 filas.
+**Líneas 56--57.** `df_pob_raw` es la tabla cruda de población (`131.502` filas) y `panel_delitos_mensual` es el panel mensual de SIEDCO (`1.083` filas: `19` localidades $\times$ `57` meses).
 
 :::
 :::
@@ -615,7 +620,8 @@ La tabla cruda trae una fila por localidad, año, edad y sexo, pero para una tas
 ::: {.columns}
 ::: {.column width="52%"}
 
-```{.r .numberLines startFrom="57"}
+```{.r .numberLines startFrom="61"}
+## 3.1 Agregación anual de habitantes y homologación territorial ----
 poblacion_anual <- df_pob_raw |>
   rename(
     año = ANO,
@@ -626,30 +632,6 @@ poblacion_anual <- df_pob_raw |>
   filter(codigo_localidad != 0) |> # Excluir total consolidado de Bogotá
   group_by(codigo_localidad, localidad, año) |>
   summarise(poblacion = sum(poblacion, na.rm = TRUE), .groups = "drop") |>
-```
-
-:::
-
-::: {.column width="3%"}
-:::
-
-::: {.column width="45%"}
-
-**Línea 57.** `poblacion_anual` se construye desde la tabla cruda, encadenando pasos con el pipe nativo `|>`.
-
-**Líneas 58--63.** `rename(nuevo = viejo)` cambia los nombres originales (`ANO`, `CODIGO_LOCALIDAD`, `NOMBRE_LOCALIDAD` y `POBLACION`) por `año`, `codigo_localidad`, `localidad` y `poblacion`. *Les ponemos nombres más cómodos a las columnas.*
-
-**Línea 64.** `filter(codigo_localidad != 0)` quita el total consolidado de Bogotá, que de otro modo se contaría dos veces. *Sacamos la fila de Bogotá completa para no duplicar habitantes.*
-
-**Líneas 65--66.** `group_by()` agrupa por código, nombre y año, y `summarise(poblacion = sum(...))` suma las 202 filas de cada grupo, que salen de 101 edades por 2 sexos. `.groups = "drop"` quita el agrupamiento al terminar. Quedan 620 filas, de 20 localidades por 31 años. *Pasamos de una fila por edad y sexo a un solo total de habitantes por localidad y año.*
-
-:::
-:::
-
-::: {.columns}
-::: {.column width="52%"}
-
-```{.r .numberLines startFrom="67"}
   mutate(
     codigo_localidad = sprintf("%02d", as.integer(codigo_localidad)),
     localidad = str_to_title(trimws(localidad)),
@@ -674,45 +656,30 @@ poblacion_anual <- df_pob_raw |>
 
 ::: {.column width="45%"}
 
-**Línea 68.** `sprintf("%02d", ...)` escribe el código con dos dígitos y como texto, por ejemplo `"09"`, igual que en la tabla de delitos. *Así los códigos de las dos tablas se pueden cruzar sin problema.*
+**Línea 62.** `poblacion_anual` se construye desde la tabla cruda encadenando pasos con el pipe nativo `|>`.
 
-**Línea 69.** `trimws()` quita los espacios sobrantes y `str_to_title()` deja cada palabra con inicial mayúscula.
+**Líneas 63--68.** `rename()` estandariza los nombres (`año`, `codigo_localidad`, `localidad`, `poblacion`).
 
-**Líneas 70--80.** `case_when()` corrige algunos nombres. Devuelve las tildes, por ejemplo de `"Usaquen"` a `"Usaquén"`, y escribe `"La Candelaria"` y `"Los Mártires"` con su nombre oficial. La regla final, `TRUE ~ localidad`, deja igual los nombres que no necesitan cambio. El cruce con la tabla de delitos usa solo el código y el año, así que los nombres sirven para presentar resultados. *Arreglamos tildes y nombres para que las localidades se vean bien escritas.*
+**Línea 69.** `filter(codigo_localidad != 0)` excluye el total de Bogotá para no duplicar habitantes.
+
+**Líneas 70--71.** `group_by()` + `summarise()` suman edades y sexos en un total único por localidad y año (`620` filas: `20` localidades $\times$ `31` años).
+
+**Líneas 72--85.** `sprintf("%02d", ...)` formatea el código en texto de dos dígitos y `case_when()` corrige las tildes y nombres oficiales.
 
 :::
 :::
 
 ## Cruce con las denuncias y cálculo de tasas
 
-Ahora se agrega la población a cada fila del panel de delitos y se calculan las tasas por 100.000 habitantes con esta fórmula. $$\text{Tasa}_{it} = \frac{\text{Denuncias}_{it}}{\text{Población}_{it}} \times 100.000$$ Por ejemplo, en Fontibón en 2022 hubo 14.252 denuncias de hurto a personas y una población proyectada de 384.590 habitantes. Eso da $14.252 / 384.590 \times 100.000 = 3.705{,}76$ denuncias por cada 100.000 habitantes.
+Ahora se agrega la población anual a cada mes del panel de delitos y se calculan las tasas mensuales por 100.000 habitantes con esta fórmula: $$\text{Tasa}_{i,m,t} = \frac{\text{Denuncias}_{i,m,t}}{\text{Población}_{i,a(t)}} \times 100.000$$ Por ejemplo, en Fontibón en enero de 2022 (`2022-01-01`) hubo `609` denuncias de hurto a personas sobre `384.590` habitantes proyectados, lo que equivale a $609 / 384.590 \times 100.000 = 158{,}35$ denuncias por cada 100.000 habitantes.
 
 ::: {.columns}
 ::: {.column width="52%"}
 
-```{.r .numberLines startFrom="86"}
-panel_indicadores <- panel_delitos |>
+```{.r .numberLines startFrom="90"}
+## 4.1 Fusión de delitos mensuales con población proyectada ----
+panel_indicadores_mensual <- panel_delitos_mensual |>
   left_join(poblacion_anual |> select(codigo_localidad, año, poblacion), by = c("codigo_localidad", "año")) |>
-```
-
-:::
-
-::: {.column width="3%"}
-:::
-
-::: {.column width="45%"}
-
-**Línea 86.** El punto de partida es el panel de delitos, con 95 filas que salen de 19 localidades urbanas por 5 años.
-
-**Línea 87.** `left_join()` conserva todas las filas del panel y le agrega la población, cruzando por `codigo_localidad` y `año`. Sumapaz queda fuera porque el panel solo tiene las 19 localidades urbanas. Si alguna combinación no encuentra población, queda `NA`. *A cada localidad y año le pegamos cuántos habitantes tenía.*
-
-:::
-:::
-
-::: {.columns}
-::: {.column width="52%"}
-
-```{.r .numberLines startFrom="88"}
   mutate(
     tasa_hurto_personas    = round((hurto_personas / poblacion) * 100000, 2),
     tasa_hurto_residencias = round((hurto_residencias / poblacion) * 100000, 2),
@@ -728,11 +695,11 @@ panel_indicadores <- panel_delitos |>
 
 ::: {.column width="45%"}
 
-**Línea 88.** `mutate()` crea las nuevas columnas.
+**Línea 91.** Parte del panel mensual de SIEDCO (`1.083` filas = `19` localidades $\times$ `57` meses de enero de 2022 a septiembre de 2026).
 
-**Líneas 89--91.** Las tasas de hurto a personas, a residencias y a motocicletas son las denuncias divididas por la población y multiplicadas por 100.000. `round(..., 2)` deja dos decimales.
+**Línea 92.** `left_join()` pega el denominador poblacional por `(codigo_localidad, año)`.
 
-**Línea 92.** La tasa total suma primero las denuncias de los tres tipos y luego divide. *Convertimos los conteos en tasas para poder comparar localidades de tamaños muy distintos.*
+**Líneas 93--98.** Calcula las cuatro tasas mensuales por cada 100.000 habitantes (`personas`, `residencias`, `motos` y `total`) redondeadas a dos decimales.
 
 :::
 :::
@@ -742,15 +709,17 @@ panel_indicadores <- panel_delitos |>
 ::: {.columns}
 ::: {.column width="52%"}
 
-```{.r .numberLines startFrom="97"}
-## 5.1 Comprobación de integridad del panel (19 localidades x 5 años = 95 obs) ----
-stopifnot(nrow(panel_indicadores) == 95)
-stopifnot(length(unique(panel_indicadores$codigo_localidad)) == 19)
-stopifnot(all(!is.na(panel_indicadores$tasa_hurto_personas)))
+```{.r .numberLines startFrom="100"}
+# 5. Control de Calidad y Almacenamiento ----
+
+## 5.1 Comprobación de integridad (19 localidades x 57 meses = 1.083 obs) ----
+stopifnot(nrow(panel_indicadores_mensual) == 1083L)
+stopifnot(length(unique(panel_indicadores_mensual$codigo_localidad)) == 19L)
+stopifnot(all(!is.na(panel_indicadores_mensual$tasa_hurto_personas)))
 
 ## 5.2 Exportación a Apache Parquet ----
-arrow::write_parquet(panel_indicadores, archivo_salida)
-message("✔ Panel de delitos y población guardado exitosamente en: ", archivo_salida)
+write_parquet(panel_indicadores_mensual, archivo_salida_mes)
+message("✔ Panel mensual de delitos y población guardado en: ", archivo_salida_mes, " (", nrow(panel_indicadores_mensual), " filas)")
 ```
 
 :::
@@ -760,13 +729,13 @@ message("✔ Panel de delitos y población guardado exitosamente en: ", archivo_
 
 ::: {.column width="45%"}
 
-**Línea 98.** El panel debe tener exactamente 95 filas, de 19 localidades por 5 años. Si el cruce duplicara filas, esta revisión fallaría.
+**Línea 103.** Verifica que el panel mensual conserve exactas `1.083` filas (`19` localidades $\times$ `57` meses).
 
-**Línea 99.** Debe haber 19 códigos de localidad distintos.
+**Línea 104.** Confirma la presencia completa de las `19` localidades urbanas.
 
-**Línea 100.** Ninguna tasa de hurto a personas puede ser `NA`, porque un vacío significaría que una localidad no encontró su población. *Son tres revisiones rápidas para asegurar que el cruce quedó completo y sin huecos.*
+**Línea 105.** Garantiza que ninguna tasa mensual tenga `NA`.
 
-**Líneas 103--104.** `write_parquet()` guarda el panel y se imprime la ruta como confirmación. *Este archivo es el resultado final del proceso de población.*
+**Líneas 108--109.** Guarda el panel mensual en `data/processed/02_poblacion/panel_delitos_poblacion_mensual.parquet`.
 
 :::
 :::
@@ -779,8 +748,8 @@ La siguiente tabla resume lo que se le hace a la población en cada etapa del pi
 |:---|:---|:---|:---|
 |1|Ingesta (API de la SDS)|Se descarga por páginas y se guarda sin modificar.|131.502 filas (31 años $\times$ 21 códigos $\times$ 202)|
 |2|Agregación por localidad-año|Se descarta el código 0, se suman las 202 filas (edad $\times$ sexo) y se homologan códigos y nombres.|620 filas (20 localidades $\times$ 31 años)|
-|3|Unión con las denuncias|Se une por código de localidad y año y quedan solo las 19 localidades urbanas de 2022 a 2026.|95 filas|
-|4|Cálculo de tasas|Se divide cada tipo de denuncia por la población y se multiplica por 100.000.|95 filas, 4 tasas nuevas|
+|3|Unión con las denuncias mensuales|Se une por código de localidad y año sobre los 57 meses oficiales de `SIEDCO.csv` (2022–sep. 2026).|1.083 filas (`19` $\times$ `57`)|
+|4|Cálculo de tasas mensuales|Se divide cada tipo de denuncia mensual por la población anual y se multiplica por 100.000.|1.083 filas, 4 tasas mensuales nuevas|
 
 : Cómo cambia la tabla de población en cada etapa {#tbl-seguimiento}
 
