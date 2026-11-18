@@ -1,16 +1,10 @@
 # Cuadernos Quarto (`notebook/`)
 
-En esta carpeta se encuentran los cuadernos computacionales y documentos académicos del proyecto desarrollados en Quarto (`.qmd`), organizados en dos subcarpetas según su propósito:
+En esta carpeta se encuentran los cuadernos metodológicos y guías de estudio/código del proyecto desarrollados en Quarto (`.qmd`) bajo `metodologia/`. Las entregas evaluativas formales del curso se trasladaron a [`output/entregas/`](../output/entregas/README.md).
 
 ```text
 notebook/
 ├── README.md
-├── entregas/
-│   ├── 01_entrega_1_propuesta_eda.qmd                # Documento evaluativo de la Primera Entrega
-│   ├── 01_entrega_1_propuesta_eda.html               # Versión web autocontenida
-│   ├── 01_entrega_1_propuesta_eda.pdf                # Versión PDF de 3 páginas (Semana 11)
-│   ├── 01_respuestas_evaluador_entrega_1.qmd         # Respuestas detalladas al evaluador (Entrega 1)
-│   └── 01_respuestas_evaluador_entrega_1.pdf
 └── metodologia/
     ├── 02_modelado_clustering_sentometrics.qmd       # Guía metodológica y pedagógica integral
     ├── 02_modelado_clustering_sentometrics.html      # Reporte interactivo con código y gráficos
@@ -34,28 +28,16 @@ notebook/
 
 ---
 
-## 1. Subcarpeta `notebook/entregas/`
+## 1. Entregas académicas (ahora en [`output/entregas/`](../output/entregas/README.md))
 
-Contiene los informes académicos preparados específicamente para cumplir con las rúbricas y límites formales de entrega del curso:
+Los documentos evaluativos de Primera Entrega (`01_entrega_1_propuesta_eda.*`, `01_propuesta_retroalimentada_evaluador.pdf` y `01_respuestas_evaluador_entrega_1.*`) junto con las plantillas de Co-evaluación (Grupo 1), Presentación Plenaria y Documento Final ahora residen en [`output/entregas/`](../output/entregas/README.md).
 
-* [**`01_entrega_1_propuesta_eda.qmd`**](entregas/01_entrega_1_propuesta_eda.qmd):
-  * **Hito evaluativo:** Primera Entrega (Propuesta de Trabajo Final y Análisis Exploratorio de Datos - EDA).
-  * **Límite formal:** Máximo 3 páginas en formato PDF con márgenes académicos de 18mm y tablas LaTeX estandarizadas.
-  * **Estructura del texto:**
-    * Pregunta de investigación ($\le 150$ palabras).
-    * Motivación ($\le 150$ palabras).
-    * Descripción de los datos ($\le 150$ palabras).
-    * Metodología y plan de manejo ($\le 150$ palabras).
-    * Análisis preliminar y storytelling ($\le 700$ palabras, con tabla resumen sincronizada con el panel consolidado y dos figuras analíticas autocontenidas).
-* [**`01_respuestas_evaluador_entrega_1.qmd`**](entregas/01_respuestas_evaluador_entrega_1.qmd) ([PDF](entregas/01_respuestas_evaluador_entrega_1.pdf)): Síntesis técnica de ajustes y respuestas a las observaciones de la Primera Entrega.
-
-### Cómo compilar la Entrega 1:
 ```bash
-# Compilar a versión PDF académica (3 páginas exactas):
-quarto render notebook/entregas/01_entrega_1_propuesta_eda.qmd --to pdf
+# Compilar la Entrega 1 desde su nueva ruta:
+quarto render output/entregas/01_primera_entrega/01_entrega_1_propuesta_eda.qmd --to pdf
 
-# Compilar a versión HTML interactiva:
-quarto render notebook/entregas/01_entrega_1_propuesta_eda.qmd --to html
+# Compilar plantilla del Documento Final (máx. 5 páginas + Anexos):
+quarto render output/entregas/04_documento_final/plantilla_documento_final.qmd --to pdf
 ```
 
 ---

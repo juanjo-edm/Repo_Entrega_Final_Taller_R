@@ -47,7 +47,7 @@ Si necesitas revisar los detalles de alguna parte del proyecto, aquí tienes los
 | :--- | :--- | :--- |
 | **Plan de trabajo y sub-equipos** | [**`docs/proyecto/plan_de_trabajo.md`**](docs/proyecto/plan_de_trabajo.md) | Distribución en dos sub-equipos de 3, facilitadores, cronograma con hitos al 17 de noviembre y flujo en Git. |
 | **Propuesta y metodología** | [**`docs/proyecto/propuesta_proyecto.md`**](docs/proyecto/propuesta_proyecto.md) | Pregunta, hipótesis, fuentes, variables, `sentometrics` y plan de análisis. |
-| **Enunciados y rúbricas del curso** | [**`docs/enunciados/README.md`**](docs/enunciados/README.md) | Reglas oficiales de la [Primera Entrega (20 de octubre)](docs/enunciados/enunciado_primera_entrega.md) y la [Entrega Final (17 de noviembre)](docs/enunciados/enunciado_entrega_final_y_presentacion.md). |
+| **Enunciados y rúbricas del curso** | [**`docs/enunciados/README.md`**](docs/enunciados/README.md) | Reglas oficiales organizadas por hito: [Primera Entrega](docs/enunciados/01_primera_entrega/enunciado_primera_entrega.md), [Entrega Final](docs/enunciados/02_entrega_final_y_presentacion/enunciado_entrega_final_y_presentacion.md) y [Asignaciones Grupo 3 ↔ Grupo 1](docs/enunciados/03_asignaciones_y_coevaluacion/asignaciones_rubrica_plenaria.md). |
 | **Documentación de sentometrics** | [**`docs/sentometrics/README.md`**](docs/sentometrics/README.md) | Paper JSS de Ardia et al. (2021), manual oficial de CRAN y resumen metodológico del paquete. |
 | **Diccionario de datos** | [**`docs/diccionario_datos/README.md`**](docs/diccionario_datos/README.md) | Esquema campo a campo, llaves (`PK`/`FK`), linaje y diagrama ER de las 4 capas de datos. |
 | **Reglas de código del grupo** | [**`docs/guias/estandares_programacion.md`**](docs/guias/estandares_programacion.md) | Guía de estilo MECA: Outline `----`, rutas con `{here}`, `{conflicted}` y control con `stopifnot()`. |
@@ -70,10 +70,11 @@ Repo_Entrega_Final_Taller_R/
 │
 ├── docs/                                     # Documentos del proyecto
 │   ├── README.md                             # Índice general de documentación
-│   ├── enunciados/                           # Pautas oficiales y rúbricas del curso
-│   │   ├── README.md                         # Resumen de entregables y ponderaciones
-│   │   ├── enunciado_primera_entrega.md      # Instrucciones y rúbrica (20 de octubre: 10%)
-│   │   └── enunciado_entrega_final_y_presentacion.md # Instrucciones de presentación y entrega (17 de noviembre: 30%)
+│   ├── enunciados/                           # Pautas oficiales, rúbricas y asignaciones por etapa
+│   │   ├── README.md                         # Índice de enunciados y cronograma de Grupo 3
+│   │   ├── 01_primera_entrega/               # Enunciado .docx/.md + retroalimentación evaluada
+│   │   ├── 02_entrega_final_y_presentacion/  # Enunciado .docx/.md de Documento Final y Presentación
+│   │   └── 03_asignaciones_y_coevaluacion/   # Cronograma plenarias (18 y 25 nov) y rúbricas oficiales
 │   ├── proyecto/                             # Planificación y formulación de la investigación
 │   │   ├── README.md                         # Visión general y sub-equipos
 │   │   ├── propuesta_proyecto.md             # Propuesta metodológica completa
@@ -108,9 +109,15 @@ Repo_Entrega_Final_Taller_R/
 │       ├── clusters_localidades_kmeans.parquet        # Asignaciones de clústeres K-means (K* = 3)
 │       └── datos_consolidados_shiny.rds               # Insumo consolidado para la aplicación Shiny
 │
-├── output/                                   # Resultados generados
+├── output/                                   # Resultados generados y entregables del curso
 │   ├── tables/                               # 8 tablas CSV (K-Means, sensibilidad, descriptivos y DAI)
-│   └── figures/                              # Figuras exploratorias (figura1..9) y K-Means (kmeans_*.png)
+│   ├── figures/                              # Figuras exploratorias (figura1..9) y K-Means (kmeans_*.png)
+│   └── entregas/                             # Entregables académicos de Grupo 3 + checklist maestro
+│       ├── README.md                         # Checklist completo de qué entregar, fechas y formatos
+│       ├── 01_primera_entrega/               # Propuesta (QMD/HTML/PDF), copia evaluada y respuestas
+│       ├── 02_coevaluacion_grupo_1/          # Guion y plantilla Word (.docx) de 4 min (mié 18 nov)
+│       ├── 03_presentacion_plenaria/         # Plantilla PowerPoint (.pptx) de 15 min (mié 25 nov)
+│       └── 04_documento_final/               # Plantillas Quarto (.qmd/.pdf) y Word (.docx) máx. 5 págs + Anexos
 │
 ├── scripts/                                  # Código en R
 │   ├── README.md                             # Explicación del pipeline
@@ -128,11 +135,8 @@ Repo_Entrega_Final_Taller_R/
 │   ├── 05_export_insumos_shiny.R             # Empaquetado de artefactos para Shiny
 │   └── 06_descriptivos_corpus.R              # Estadísticos descriptivos del corpus (corpus_summarize)
 │
-├── notebook/                                 # Documentos Quarto
+├── notebook/                                 # Cuadernos metodológicos en Quarto
 │   ├── README.md                             # Instrucciones para compilar y guía de cuadernos
-│   ├── entregas/                             # Documentos evaluativos para el curso
-│   │   ├── 01_entrega_1_propuesta_eda.*      # Primera Entrega (QMD, HTML, PDF)
-│   │   └── 01_respuestas_evaluador_entrega_1.* # Respuestas a observaciones (QMD, PDF)
 │   └── metodologia/                          # Cuadernos metodológicos y guías de estudio/código
 │       ├── 02_modelado_clustering_sentometrics.* # Tasas, clustering K-means y Sentometrics (QMD, HTML, PDF)
 │       ├── guia_estudio/
@@ -144,8 +148,8 @@ Repo_Entrega_Final_Taller_R/
 │           ├── 06_flujo_noticias_scraping_procesamiento.pdf
 │           ├── 07_flujo_sentometrics_elasticnet_shiny.pdf
 │           └── qmd/                          # Cuadernos fuente (.qmd) 03 a 07
-│
-└── app/                                      # Aplicación Shiny
+
+└── app/                                      # Aplicación Shiny ("Bogo-Atrack")
     ├── README.md                             # Cómo funciona el tablero
     ├── app.R                                 # Código de la aplicación (interfaz y servidor)
     └── www/                                  # Hojas de estilo CSS (custom.css)
@@ -153,13 +157,14 @@ Repo_Entrega_Final_Taller_R/
 
 ---
 
-## 4. Entregas del curso (40% de la nota)
+## 4. Entregas del curso (Grupo 3 — ver [Checklist detallado](output/entregas/README.md))
 
-| Cuándo | Qué se entrega | Peso | Requisitos clave |
-| :--- | :--- | :---: | :--- |
-| **Semana 11** | **Primera Entrega: Propuesta y EDA** | **10%** | Documento Quarto (PDF de máximo 3 páginas) con pregunta, motivación, descripción de datos, plan de análisis y estadísticas con al menos 2 gráficos reales. |
-| **Por definir** | **Presentación del avance** | **15%** | Exposición de 20 minutos en clase con diapositiva de resumen, descriptivos y metodología. Se envían las diapositivas 24 horas antes. |
-| **Semana 16** | **Entrega Final: Informe + Script + Shiny** | **15%** | Documento académico (máx. 5 páginas + anexo), script reproducible de principio a fin y tablero interactivo en Shiny. |
+| Cuándo | Qué se entrega | Formato / Alcance | Requisitos clave |
+| :--- | :--- | :--- | :--- |
+| **Semana 11 (24 oct)** | **Primera Entrega: Propuesta y EDA (10 %)** | PDF máx. 3 págs (`output/entregas/01_primera_entrega/`) | Pregunta, motivación, datos, plan de análisis, $\ge 2$ gráficos y réplica metodológica al evaluador. |
+| **Mié 18 nov (6:25 p. m.)** | **Co-evaluación al Grupo 1** | Oral 4 min (`02_coevaluacion_grupo_1/`) | Resumen (25 %), $\ge 2$ elogios concretos (25 %), $\ge 2$ mejoras viables (30 %); todos presentes (2 escogidos al azar). |
+| **Mié 25 nov (6:25 p. m.)** | **Presentación Plenaria (Grupo 3)** | `.pptx` 15 min (`03_presentacion_plenaria/`) | Enviar **24 h antes (mar 24 nov, 7:30 p. m.)** al equipo pedagógico y Grupo 1; exponen todos los 6 integrantes. |
+| **Semana 16 / Cierre** | **Documento Final + Script + Shiny (`Bogo-Atrack`)** | Máx. 5 págs + Anexos (`04_documento_final/`) | Informe en `.qmd`/`.pdf` o `.docx`, `scripts/master.R`, `app/app.R` y trazabilidad de retroalimentación (Criterio 7: 15 %). |
 
 ---
 
@@ -187,7 +192,10 @@ source(here::here("scripts", "master.R"))
 ### Paso 4: Compilar los cuadernos Quarto (HTML / PDF)
 ```bash
 # Primera Entrega (PDF académico):
-quarto render notebook/entregas/01_entrega_1_propuesta_eda.qmd --to pdf
+quarto render output/entregas/01_primera_entrega/01_entrega_1_propuesta_eda.qmd --to pdf
+
+# Plantilla Documento Final (PDF máx. 5 págs + Anexos):
+quarto render output/entregas/04_documento_final/plantilla_documento_final.qmd --to pdf
 
 # Cuaderno metodológico integral (HTML y PDF):
 quarto render notebook/metodologia/02_modelado_clustering_sentometrics.qmd --to html

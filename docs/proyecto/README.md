@@ -1,6 +1,6 @@
 # Gestión y Definición del Proyecto
 
-En esta carpeta se encuentran los documentos que definen tanto el marco conceptual y metodológico de la investigación, como la organización y el plan de trabajo colaborativo del **Grupo 10**.
+En esta carpeta se encuentran los documentos que definen tanto el marco conceptual y metodológico de la investigación, como la organización y el plan de trabajo colaborativo del **Grupo 3** (plenario asignado con el Prof. Camilo Ramírez y el Grupo 1).
 
 ---
 
@@ -17,7 +17,7 @@ En esta carpeta se encuentran los documentos que definen tanto el marco conceptu
 
 ```mermaid
 flowchart TD
-    subgraph G10["Grupo 10: Hurtos y Percepción Mediática en Bogotá"]
+    subgraph G3["Grupo 3: Hurtos y Percepción Mediática en Bogotá"]
         direction TB
         subgraph Sub1["Sub-equipo 1: Datos y Modelado"]
             M1["Miguelangel Palma (Facilitador)"]

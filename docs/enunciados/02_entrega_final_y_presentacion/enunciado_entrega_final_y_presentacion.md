@@ -1,5 +1,7 @@
 # Enunciado Presentación y Documento de Trabajo Final: Taller de Programación Aplicada a R
 
+> **Actualización de plenarias:** las fechas oficiales de exposición (**Grupo 3: miércoles 25 de noviembre de 2026, 6:25 p. m.**, co-evaluación al **Grupo 1: miércoles 18 de noviembre, 6:25 p. m.**), el ajuste de exposición a **15 minutos** (y 4 min de co-evaluación), la regla del envío 24 h antes (**martes 24 de noviembre, 7:30 p. m.**) y las rúbricas actualizadas de presentación y co-evaluación rigen según [`asignaciones_rubrica_plenaria.md`](../03_asignaciones_y_coevaluacion/asignaciones_rubrica_plenaria.md).
+
 **Ponderación Total:** 30% de la nota final del curso
 * **Presentaciones del trabajo final:** 15% (Semana 16 — 17 de noviembre de 2026)
 * **Documento de trabajo final + Script + Shiny App:** 15% (Semana 16 — 17 de noviembre de 2026)

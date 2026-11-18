@@ -1,0 +1,93 @@
+---
+title: "Bogo-Atrack: Hurtos y Sentimiento Mediático en Bogotá (2022–2026)"
+subtitle: "Documento de Trabajo Final — Taller de Programación Aplicada a R (MECA)"
+author:
+  - "Juan Esteban Carvajal Cruz — 202614312"
+  - "Gabriel Arturo Echeverry Castaño — 201016705"
+  - "Juan José Echeverry De Mendoza — 202616233"
+  - "Sergio Alejandro López Valderrama — 202111932"
+  - "Miguelangel Palma Rojas — 202621481"
+  - "Olga Lucía Ramírez Contreras — 202624900"
+date: "2026-11-25"
+lang: es
+format:
+  pdf:
+    pdf-engine: pdflatex
+    documentclass: article
+    papersize: letter
+    geometry:
+      - top=18mm
+      - bottom=18mm
+      - left=18mm
+      - right=18mm
+    fontsize: 10pt
+    linestretch: 1.08
+    number-sections: true
+    toc: false
+    colorlinks: true
+    fig-pos: "H"
+    include-in-header:
+      text: |
+        \usepackage{booktabs}
+        \usepackage{microtype}
+        \usepackage{titlesec}
+        \titlespacing*{\section}{0pt}{8pt plus 2pt minus 1pt}{3pt plus 1pt minus 1pt}
+        \titlespacing*{\subsection}{0pt}{6pt plus 1pt minus 1pt}{2pt plus 1pt minus 1pt}
+        \setlength{\parskip}{3pt}
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+> **Control de formato (borrar esta nota antes de entregar):** El cuerpo principal (Secciones 1 a 5 más resumen de Script y Shiny) no debe superar **5 páginas**. A partir del salto `\newpage` se ubican los **Anexos** (gráficos y tablas adicionales), que no computan dentro del límite de 5 páginas según el enunciado oficial.
+
+# Introducción: Pregunta Problema y Motivación
+
+**[Completar — Peso en rúbrica: 15 % junto con contexto e hipótesis]**
+
+- **Pregunta de investigación:** `[Formular la pregunta final delimitada: relación entre tasas de hurto registradas (personas, residencias y motocicletas) y cobertura/sentimiento mediático en las 19 localidades urbanas de Bogotá entre enero de 2022 y septiembre de 2026.]`
+- **Hipótesis:** `[Explicitar divergencias territoriales esperadas entre zonas céntricas comerciales y periferias residenciales.]`
+- **Relevancia económica y social:** `[Sintetizar los tres canales económicos: (1) asimetría de información y decisiones comerciales/costos privados en seguridad; (2) desamenidad urbana y valor del suelo/arrendamientos; (3) presión mediática sobre asignación de bienes públicos y vigilancia.]`
+
+# Datos, Fuentes y Análisis Exploratorio (EDA)
+
+**[Completar — Pesos en rúbrica: 10 % Datos y Fuentes + 15 % Estadísticas Descriptivas y EDA]**
+
+- **Fuentes primarias y justificación:**
+  - `SIEDCO.csv` (Observatorio de Seguridad, Convivencia y Justicia): `376.185` registros filtrados a las 3 modalidades patrimoniales cotidianas (`hurto_personas`, `hurto_residencias`, `hurto_motos`), elegidas sobre homicidios según la literatura local porque responden a percepción cotidiana y permiten contrastar delitos con alto subregistro frente a bajo subregistro (motocicletas).
+  - Proyecciones demográficas de la Secretaría Distrital de Salud (SDS): población anual para las `19` localidades urbanas (excluyendo Sumapaz rural), expresando tasas por cada `100.000` habitantes.
+  - Corpus propio de prensa (`Google News RSS`, `2022-01` a `2026-09`): `3.916` notas depuradas con desambiguación de homonimias y clasificadas en `993` notas comparables de las 3 modalidades objetivo.
+- **Integración y limpieza:** `[Resumir panel mensual (1.083 filas = 19 × 57 meses) y notas objetivo (993), tratamiento del sesgo de población flotante en el centro y análisis descriptivo autocontenido.]`
+
+# Metodología
+
+**[Completar — Peso en rúbrica: 20 % Metodología y Análisis]**
+
+- **Segmentación territorial no supervisada ($K$-Means):** `[Justificar uso de tasas anuales promedio frente a mensuales (etiqueta fija para sentometrics, escala demográfica SDS e invariancia Z-score), estandarización Z-score frente a Min-Max / PCA 2D / Robusto / Log+Z, y elección de K* = 3 (silueta 0,5211, 0 negativas, partición 13 / 5 / 1).]`
+- **Minería de texto con `sentometrics` y Elastic Net:** `[Explicar léxicos nrc_es + crimen_es (valenceIn), puntuación proportionalPol, diseño parsimonioso de M = 36 series (2 × 6 × 3, lag = 6) menor a N = 51 meses, y regresión regularizada Elastic Net por BIC para h = 1 contra la tasa mensual real de SIEDCO.]`
+
+# Resultados, Storytelling e Incorporación de Retroalimentación
+
+**[Completar — Pesos en rúbrica: 15 % Resultados/Storytelling + 15 % Incorporación de Retroalimentación]**
+
+- **Hallazgos principales y respuesta a la pregunta:** `[Articular divergencia tasas vs. conteos brutos, desempeño de Elastic Net (R² = 88,99 %, 25 series activas, RMSE = 9,78), subcobertura per cápita de motos en periferia (58,5 % de hurtos absolutos) y efecto de noticias sobre capturas en el tono neto del centro.]`
+- **Incorporación explícita de retroalimentación (Criterio 7, 15 %):** `[Resumir aquí —y detallar en el Anexo si es necesario— cómo se integraron los 4 comentarios de Entrega 1 y las observaciones recibidas en plenaria de Co-evaluación (Grupo 1) y equipo pedagógico (Camilo Ramírez / Santiago Neira).]`
+
+# Script Replicable, Aplicación Shiny (`Bogo-Atrack`) y Referencias
+
+**[Completar — Peso en rúbrica: 10 % Referencias, Script y Reproducibilidad]**
+
+- **Reproducibilidad integral:** El análisis se reproduce de extremo a punta ejecutando `scripts/master.R` sobre un proyecto RStudio con `{here}`, generando los paquetes consolidados `data/processed/sentometrics_pipeline.rds` y `data/processed/datos_consolidados_shiny.rds`.
+- **Aplicación Shiny (`Bogo-Atrack`):** Tablero interactivo en `app/app.R` con 6 pestañas (*Panorama*, *Mi localidad*, *Hurto vs. prensa*, *Clusters*, *Sentometrics y Elastic Net*, *Datos y método*) para explorar en vivo la geografía del delito frente a la agenda mediática.
+- **Referencias:**
+  - Ardia, D., Bluteau, K., Borms, S., & Boudt, K. (2021). *The R Package sentometrics to Compute, Aggregate and Predict with Textual Sentiment*. Journal of Statistical Software, 99(2), 1–40.
+  - Restrepo, E. M., & Moreno, A. J. (2007). *Bogotá: ¿más crimen?, ¿más miedo?*. Desarrollo y Sociedad, (59), 165–214. DOI: `10.13043/dys.59.5`.
+  - Secretaría Distrital de Seguridad, Convivencia y Justicia — SDSCJ (2026). *SIEDCO: Delitos de Alto Impacto en Bogotá*.
+  - Secretaría Distrital de Salud — SDS (2026). *Proyecciones de población por localidades de Bogotá 2005–2035*.
+
+\newpage
+
+# Anexos (Figuras y Tablas Complementarias — No cuentan en las 5 páginas) {.unnumbered}
+
+**[Espacio libre para anexar figuras clave de `output/figures/`, tablas de `output/tables/` (`tabla_clustering_kmeans_perfiles.csv`, `tabla_sensibilidad_escalamientos_pca.csv`, `tabla_comparacion_modelos_distancias.csv`, `tabla_descriptivos_corpus.csv`) y matriz ampliada de respuesta a retroalimentación.]**

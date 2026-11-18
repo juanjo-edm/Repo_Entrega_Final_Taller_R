@@ -1,6 +1,6 @@
 # Documentación del Proyecto
 
-Bienvenido al centro de documentación del proyecto de investigación sobre hurtos y percepción mediática en Bogotá (**Grupo 10 — Maestría en Economía Aplicada, Universidad de los Andes**).
+Bienvenido al centro de documentación del proyecto de investigación sobre hurtos y percepción mediática en Bogotá (**Grupo 3 — Maestría en Economía Aplicada, Universidad de los Andes**).
 
 Para facilitar la navegación y el mantenimiento del repositorio, los documentos están organizados en cinco subcarpetas temáticas:
 
@@ -8,10 +8,11 @@ Para facilitar la navegación y el mantenimiento del repositorio, los documentos
 docs/
 ├── README.md                                 # Índice general de la documentación
 │
-├── enunciados/                               # Pautas oficiales y rúbricas del curso
-│   ├── README.md                             # Resumen de entregables y ponderaciones
-│   ├── enunciado_primera_entrega.md          # Pautas de la Primera Entrega (20 de octubre: 10%)
-│   └── enunciado_entrega_final_y_presentacion.md # Pautas de presentación y entrega final (17 de noviembre: 30%)
+├── enunciados/                               # Pautas oficiales, rúbricas y asignaciones por etapa
+│   ├── README.md                             # Resumen de entregables y cronograma de Grupo 3
+│   ├── 01_primera_entrega/                   # Enunciado .docx/.md + retroalimentación evaluada
+│   ├── 02_entrega_final_y_presentacion/      # Enunciado .docx/.md de Documento Final y Presentación
+│   └── 03_asignaciones_y_coevaluacion/       # Cronograma plenarias (18 y 25 nov) y rúbricas oficiales
 │
 ├── proyecto/                                 # Definición conceptual y gestión del equipo
 │   ├── README.md                             # Visión general de la investigación y sub-equipos
@@ -40,14 +41,17 @@ docs/
 ## 📂 Contenido por Subcarpeta
 
 ### 1. [Enunciados y Rúbricas (`docs/enunciados/`)](enunciados/README.md)
-Documentos emitidos por el equipo docente con las pautas y rúbricas oficiales de calificación:
-* [**`enunciado_primera_entrega.md`**](enunciados/enunciado_primera_entrega.md): Requisitos de la Primera Entrega (20 de octubre de 2026, 10% de la nota), límites de palabras por sección y rúbrica detallada.
-* [**`enunciado_entrega_final_y_presentacion.md`**](enunciados/enunciado_entrega_final_y_presentacion.md): Pautas de la Presentación en clase (15%) y del Documento Final + Script replicable + Shiny App (15%) para el 17 de noviembre de 2026.
+Documentos emitidos por el equipo docente organizados en tres subcarpetas:
+* [**`01_primera_entrega/`**](enunciados/01_primera_entrega/enunciado_primera_entrega.md): Requisitos de la Primera Entrega (`Enunciado_Primera_Entrega.docx` / `.md`, máx. 3 páginas) y copia retroalimentada + réplica metodológica en `retroalimentacion/`.
+* [**`02_entrega_final_y_presentacion/`**](enunciados/02_entrega_final_y_presentacion/enunciado_entrega_final_y_presentacion.md): Pautas generales de Presentación y Documento Final (`Enunciado_Presentacion_y_Documento_Final.docx` / `.md`, máx. 5 páginas + Anexo, Script y Shiny App).
+* [**`03_asignaciones_y_coevaluacion/`**](enunciados/03_asignaciones_y_coevaluacion/asignaciones_rubrica_plenaria.md): Cronograma oficial de plenarias (**Grupo 3 ↔ Grupo 1**, sesiones del **18 y 25 de noviembre**), regla de envío 24 h antes (**mar 24 nov, 7:30 p. m.**) y rúbricas de presentación (15 min) y co-evaluación (4 min).
+
+> Los entregables, plantillas y el checklist maestro del equipo están en [`output/entregas/README.md`](../output/entregas/README.md).
 
 ---
 
 ### 2. [Proyecto y Planificación (`docs/proyecto/`)](proyecto/README.md)
-Documentos de formulación teórica, metodológica y operativa del proyecto del Grupo 10:
+Documentos de formulación teórica, metodológica y operativa del proyecto del Grupo 3:
 * [**`propuesta_proyecto.md`**](proyecto/propuesta_proyecto.md): Marco conceptual, pregunta problema, justificación, fuentes de datos abiertos, modelo NLP con `sentometrics` y clustering con $K$-means.
 * [**`plan_de_trabajo.md`**](proyecto/plan_de_trabajo.md): Conformación de los sub-equipos temáticos de 3 integrantes, facilitadores, cronograma con fechas límite hasta el cierre del 17 de noviembre y protocolo de ramas en Git.
 

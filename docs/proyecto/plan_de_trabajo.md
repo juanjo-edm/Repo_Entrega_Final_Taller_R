@@ -1,6 +1,6 @@
 # Plan de Trabajo Colaborativo (Cierre al 17 de Noviembre de 2026)
 
-Este documento detalla la organización interna, la distribución de responsabilidades y el cronograma de trabajo del **Grupo 10** para la entrega final de Taller de R (con fecha límite de cierre el **17 de noviembre de 2026**). 
+Este documento detalla la organización interna, la distribución de responsabilidades y el cronograma base de trabajo del **Grupo 3** para Taller de R (con hitos de cierre hasta noviembre de 2026; ver calendario actualizado de plenarias —**18 y 25 de noviembre**— en [`output/entregas/README.md`](../../output/entregas/README.md)).
 
 El equipo trabaja bajo un esquema horizontal y colaborativo, dividido en dos sub-equipos temáticos de tres integrantes cada uno, acompañados por un facilitador que ayuda a coordinar avances, resolver dudas técnicas y asegurar la integración de todas las partes del proyecto.
 
@@ -10,7 +10,7 @@ El equipo trabaja bajo un esquema horizontal y colaborativo, dividido en dos sub
 
 ```mermaid
 flowchart TD
-    subgraph G10["Grupo 10: Hurtos y Percepción en Bogotá"]
+    subgraph G3["Grupo 3: Hurtos y Percepción en Bogotá"]
         direction TB
         subgraph Sub1["Sub-equipo de Datos y Modelado"]
             M1["Miguelangel Palma<br/>(Facilitador — 202621481)"]
