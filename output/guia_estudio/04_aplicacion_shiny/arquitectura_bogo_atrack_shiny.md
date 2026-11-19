@@ -22,7 +22,7 @@ flowchart TD
 
     subgraph Runtime["Ciclo de Ejecución de app/app.R"]
         B --> GL["Carga Global readRDS() + stopifnot(19 localidades)"]
-        GL --> PRE["Pre-cálculo Global: datos_promedio_global y datos_clusters_3d"]
+        GL --> PRE["Pre-cálculo Global: datos_promedio_global, datos_clusters_3d y datos_silueta"]
         PRE --> UI["page_navbar 'pestanas' (6 nav_panel)"]
         UI --> SV["server(): Reactives con bindCache() + Observers + Renderers"]
     end
@@ -35,15 +35,15 @@ sequenceDiagram
     participant U as Usuario
     participant Pan as Panorama (leaflet + plotly)
     participant Loc as Mi localidad (DT + plotly)
-    participant Clu as Clusters 3D (leaflet + tarjetas + plotly)
+    participant Clu as Clusters 3D y Siluetas (leaflet + tarjetas + plotly + DT)
 
     U->>Pan: Clic en polígono (mapa_panorama_shape_click)
     Pan->>Loc: observeEvent actualiza input$localidad y llama nav_select("pestanas", "localidad")
     Loc-->>U: Abre ficha local, puestos 1..19 y 10 noticias extremas
 
-    U->>Clu: Clic en mapa_clusters, tarjeta HTML o esfera/diamante scatter3d
-    Clu->>Clu: Alterna input$grupo_resaltado entre clúster seleccionado y "Todos"
-    Clu-->>U: Ilumina polígono, tarjeta y radio/centroide 3D manteniendo uirevision de cámara
+    U->>Clu: Clic en mapa_clusters, tarjeta HTML, esfera scatter3d o fila DT silueta
+    Clu->>Clu: alternar_grupo_resaltado() conmuta input$grupo_resaltado entre clúster y "Todos"
+    Clu-->>U: Ilumina polígono, tarjeta, cubo 3D y filas DT de silueta manteniendo uirevision
 ```
 
 ---
@@ -62,6 +62,7 @@ sequenceDiagram
   - `resumir_panel()`: consolida tasas promedio (`2022–2026`) o filtra por año, y cuando `modalidad != "tasa_hurto_total"` recalcula en vivo `noticias_conteo`, `sentimiento_promedio` y `prop_negativas` desde `tabla_noticias` para empatar el numerador mediático con la modalidad delictiva activa.
   - `datos_promedio_global`: invoca `resumir_panel("todos", "tasa_hurto_total")` al arranque para abastecer rankings fijos, clústeres y tarjetas base.
   - `preparar_datos_clusters_3d()`: pre-calcula coordenadas reales y estandarizadas (`scale()`), centroides $\mu_k$ y segmentos radiales con separadores `NA_real_` para que el cubo `scatter3d` dibuje `3` trazas por clúster (`puntos`, `segmentos`, `centroides`) en milisegundos.
+  - `clasificar_silueta()`, `etiqueta_cluster_badge_html()`, `preparar_tablas_silueta()` y `datos_silueta`: calculan una sola vez al arranque las tablas ordenadas `por_localidad` (`19` filas) y `por_cluster` (`3` filas), los diagnósticos uniformes (`"Grupo unitario (S = 0)"` para `Los Mártires`), los indicadores HTML escapados y los resúmenes globales (`0,521` media global, `0` siluetas negativas).
   - `paleta_cuartiles()`: genera cortes por cuartiles (`colorBin()`) con respaldo uniforme cuando el subgrupo tiene rango nulo.
   - `estilo_plotly()`, `tarjeta_cifra()` y `agregar_mapa_base()`: encapsulan la identidad oscura (`#0E1116` / `#171B22`) y aplican teselas gratuitas de OpenStreetMap con filtro CSS invertido (sin necesidad de llave API).
 
@@ -72,7 +73,7 @@ sequenceDiagram
 | **`panorama`** | `modalidad`, `anio`, `capa_mapa`, `medida`, `mapa_panorama_shape_click` | `datos_panorama()` (con `bindCache()`), `capa_panorama()`, `observeEvent()` de salto a `localidad` | `kpi_*`, `titulo_*`, `nota_top5_panorama`, `mapa_panorama`, `grafico_top5` |
 | **`localidad`** | `localidad`, `modalidad_loc` | Helpers internos `puesto()` y `valor_loc()` sobre `datos_promedio_global` | `ficha_titulo`, `loc_*`, `grafico_evolucion`, `grafico_tono`, `tabla_noticias_loc` |
 | **`prensa`** | `anio_prensa`, `modalidad_prensa`, `plotly_click` (`source = "dispersion"`) | `datos_prensa()` (con `bindCache()`), `localidad_prensa` (`reactiveVal("Teusaquillo")`) | `grafico_dispersion`, `explicacion_lineas_corte`, `ficha_prensa` |
-| **`clusters`** | `grupo_resaltado`, `mapa_clusters_shape_click`, `clic_tarjeta_cluster`, `plotly_click` (`clusters_3d`), `mostrar_nombres_3d`, `escala_z_3d` | `observeEvent()` bidireccionales que alternan `grupo_resaltado` | `mapa_clusters`, `tarjetas_clusters`, `grafico_clusters_3d` (con `bindCache()` y `uirevision`) |
+| **`clusters`** | `grupo_resaltado`, `mapa_clusters_shape_click`, `clic_tarjeta_cluster`, `plotly_click` (`clusters_3d`), `tabla_silueta_loc_rows_selected`, `tabla_silueta_resumen_rows_selected`, `mostrar_nombres_3d`, `escala_z_3d` | `alternar_grupo_resaltado()` y `observeEvent()` bidireccionales que alternan `grupo_resaltado` | `mapa_clusters`, `tarjetas_clusters`, `grafico_clusters_3d` (con `bindCache()` y `uirevision`), `card_siluetas_clusters` (`badge_silueta_activa` en caché, `tabla_silueta_loc` y `tabla_silueta_resumen` vía `construir_dt_silueta()`) |
 | **`sentometrics`** | `grupo_serie_sento`, `features_sento_sel`, `lexico_sento`, `tiempo_sento`, `ver_picos_sento`, `dim_attr_sento`, `escala_attr_sento` | UI dinámica `selector_features_sento`, filtrado directo sobre `measures_long` y `attr_long_*` | `kpi_*_modelo`, `grafico_series_sento`, `grafico_atribuciones_sento`, `grafico_ajuste_sento`, `grafico_coefs_sento` |
 | **`metodo`** | Sin filtros dinámicos | Construcción tabular de auditoría | `tabla_contrato_rds` (resume `sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds`) |
 
@@ -88,7 +89,7 @@ sequenceDiagram
 
 ## Configuración y Convenciones de Entorno
 
-- **Tema visual:** `tema_dos_lecturas` (`bslib::bs_theme(version = 5)`) define fuentes Google (`Archivo` y `IBM Plex Mono`), fondo `#0E1116`, tarjetas `#171B22` y bordes `#2A303A`.
+- **Tema visual:** `tema_dos_lecturas` (`bslib::bs_theme(version = 5) |> bslib::bs_add_rules(...)`) define fuentes Google (`Archivo` y `IBM Plex Mono`), fondo `#0E1116`, tarjetas `#171B22`, bordes `#2A303A` y estilos oscuros específicos para `{DT}` y `.nav-underline` (`#1D2430` en cabeceras, `#232A35` en hover, `#1E2530` en filas activas).
 - **Control numérico y conflictos:** `options(scipen = 999)` desactiva notación científica; `{conflicted}` fija prioridad explícita para `dplyr::filter`, `dplyr::lag`, `dplyr::select` y `plotly::layout`.
 - **Rutas y ejecución:** usa exclusivamente `here::here()` relativo a `Repo_Entrega_Final_Taller_R.Rproj` y se lanza con `shiny::runApp(here::here("app"))`. No requiere variables de entorno ni claves externas.
 
@@ -100,10 +101,10 @@ sequenceDiagram
 | :--- | :--- | :--- |
 | Empaquetador del bundle | `scripts/05_export_insumos_shiny.R` | `bundle_shiny`, `sf::st_simplify()`, `corpus_summarize()`, `saveRDS()` |
 | Catálogo y pre-cálculo global | `app/app.R` | `resumir_panel()`, `preparar_datos_clusters_3d()`, `paleta_cuartiles()`, `datos_promedio_global`, `datos_clusters_3d` |
-| Estilo UI y tema `{bslib}` | `app/app.R`, `app/www/custom.css` | `tema_dos_lecturas`, `estilo_plotly()`, `tarjeta_cifra()`, `agregar_mapa_base()`, `page_navbar` |
+| Estilo UI y tema `{bslib}` | `app/app.R`, `app/www/custom.css` | `tema_dos_lecturas`, `bs_add_rules()`, `estilo_plotly()`, `tarjeta_cifra()`, `agregar_mapa_base()`, `page_navbar` |
 | Navegación `Panorama` ↔ `Localidad` | `app/app.R` | `datos_panorama()`, `capa_panorama()`, `mapa_panorama_shape_click`, `grafico_top5`, `ficha_titulo` |
 | Cuadrantes `Hurto vs. prensa` | `app/app.R` | `datos_prensa()`, `localidad_prensa`, `grafico_dispersion`, `explicacion_lineas_corte`, `ficha_prensa` |
-| Interacción bidireccional `Clusters 3D` | `app/app.R` | `mapa_clusters`, `tarjetas_clusters`, `grafico_clusters_3d`, `clic_tarjeta_cluster` |
+| Interacción bidireccional `Clusters 3D` y siluetas | `app/app.R` | `clasificar_silueta()`, `etiqueta_cluster_badge_html()`, `preparar_tablas_silueta()`, `datos_silueta`, `alternar_grupo_resaltado()`, `construir_dt_silueta()`, `mapa_clusters`, `tarjetas_clusters`, `grafico_clusters_3d`, `clic_tarjeta_cluster`, `badge_silueta_activa`, `tabla_silueta_loc`, `tabla_silueta_resumen`, `tabla_silueta_loc_rows_selected`, `tabla_silueta_resumen_rows_selected` |
 | Explorador `Sentometrics` y contrato | `app/app.R` | `selector_features_sento`, `grafico_series_sento`, `grafico_atribuciones_sento`, `tabla_contrato_rds` |
 
 ---
