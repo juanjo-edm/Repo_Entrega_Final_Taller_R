@@ -108,9 +108,9 @@ Cada integrante dispone de **`2 minutos y 30 segundos`** efectivos. Ensayar con 
    - Señalar el gráfico de ranking (en colores coherentes con los 3 perfiles): media anual distrital no ponderada en panel (`n = 95`) de **`3.255,8`/100k hab.** (`3.069,9` personas, `112,4` residencias y `73,5` motos).
    - **Explicar con precisión el sesgo de denominador:** las proyecciones SDS miden población **residente**, mientras el centro ampliado (**Los Mártires `9.743,6`** con pico `15.719,5` en 2024; **La Candelaria `8.781,6`**) recibe población flotante diaria, superando por más de ocho veces a **Usme (`761,2`)**.
    - Destacar la estabilidad del tono en prensa (`67,0 %` a `78,4 %` negativo por año; promedio `-0,2613` por artículo en las `993` notas objetivo y media distrital `-0,265` por localidad).
-   - **Frase de entrega:** *"Como hurto a personas domina en escala sobre residencias y motos, Sergio explica cómo estandarizamos con K-Means y convertimos el texto en series mensuales."*
+   - **Frase de entrega:** *"Como hurto a personas domina en escala sobre residencias y motos, Juan José explica cómo estandarizamos con K-Means y convertimos el texto en series mensuales."*
 
-## Turno 4: Sergio Alejandro López (`7:30 – 10:00` · Diapositiva 6 y mitad izquierda de 7)
+## Turno 4: Juan José Echeverry (`7:30 – 10:00` · Diapositiva 6 y mitad izquierda de 7)
 
 1. **Diapositiva 6 · Tipología K-Means (`7:30 – 9:20`):**
    - Defender las **dos decisiones metodológicas clave**:
@@ -133,9 +133,9 @@ Cada integrante dispone de **`2 minutos y 30 segundos`** efectivos. Ensayar con 
 2. **Diapositiva 8 · Resultados y Storytelling (`11:05 – 12:30`):**
    - Contrastar Panel A vs. Panel B: correlación per cápita fuerte (**$r = +0{,}845$**) vs. conteo bruto negativo (**$r = -0{,}148$**; `69,2 %` de las notas cae en localidades Residenciales y Periféricas como Bosa, Suba y Engativá).
    - Resaltar **dos hallazgos específicos**: (1) en **motocicletas** (`rho = +0,374`), cinco localidades periféricas suman el `58,5 %` de denuncias (`14.215` de `24.300`) por tenencia residencial y *halado* en vía pública (SDM/ProBogotá, 2023), con mínima cobertura per cápita; (2) en **tono neto**, la relación transversal no se vuelve más negativa con mayores tasas (**$r = +0{,}296$, n. s.** en total; **$r = +0{,}361$** en personas), porque noticias de capturas moderan el tono en el centro y Suba frente a Tunjuelito (`-0,396`).
-   - **Frase de entrega:** *"Para ver todas estas capas reunidas en una herramienta abierta y replicable, Juan José cierra con la arquitectura de `master.R` y `Bogo-Atrack`."*
+   - **Frase de entrega:** *"Para ver todas estas capas reunidas en una herramienta abierta y replicable, Sergio cierra con la arquitectura de `master.R` y `Bogo-Atrack`."*
 
-## Turno 6: Juan José Echeverry (`12:30 – 15:00` · Diapositivas 9 y 10)
+## Turno 6: Sergio Alejandro López (`12:30 – 15:00` · Diapositivas 9 y 10)
 
 1. **Diapositiva 9 · `Bogo-Atrack` y Reproducibilidad (`12:30 – 14:15`):**
    - Mostrar cómo `scripts/master.R` orquesta el pipeline completo con rutas relativas `{here}` hasta empaquetar dos artefactos livianos (`sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds` de `0,87` MB), permitiendo que `app/app.R` responda sin recalcular modelos ni geometrías en vivo.

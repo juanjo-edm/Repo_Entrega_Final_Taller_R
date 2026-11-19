@@ -79,7 +79,7 @@ El mapa coroplético usa `{leaflet}` sobre OpenStreetMap con un filtro CSS inver
 
 # Libreto de demo en vivo (`75` segundos en la Diapositiva 9)
 
-Si durante la exposición del **25 de noviembre** muestran la app en vivo dentro del turno de **Juan José (`12:30–14:15`)**, seguir exactamente esta secuencia evita perder segundos buscando botones:
+Si durante la exposición del **25 de noviembre** muestran la app en vivo dentro del turno de **Sergio (`12:30–15:00`)**, seguir exactamente esta secuencia evita perder segundos buscando botones:
 
 ::: {.callout-tip}
 ## Guion cronometrado de demostración (tenerla abierta en segundo plano antes de empezar)

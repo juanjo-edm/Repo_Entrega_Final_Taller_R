@@ -87,9 +87,9 @@ flowchart LR
     1. *Miguelangel Palma (`0:00–2:30`):* resumen ejecutivo, pregunta problema, hipótesis y los 3 canales económicos.
     2. *Gabriel Arturo Echeverry (`2:30–5:00`):* fuentes (`SIEDCO`, `SDS`, `Google News`), depuración y filtro a `993` notas.
     3. *Juan Esteban Carvajal (`5:00–7:30`):* estadísticas descriptivas, efecto denominador por población flotante y volumen frente a tasa.
-    4. *Sergio Alejandro López (`7:30–10:00`):* $K$-Means sobre tasas anuales y `Z-score` ($K^*=3$) + construcción de corpus y `36` series en `sentometrics`.
+    4. *Juan José Echeverry (`7:30–10:00`):* $K$-Means sobre tasas anuales y `Z-score` ($K^*=3$) + construcción de corpus y `36` series en `sentometrics`.
     5. *Olga Lucía Ramírez (`10:00–12:30`):* Elastic Net ($R^2 = 88{,}99\,\%$), hallazgos por modalidad, motos en periferia y tono mediático.
-    6. *Juan José Echeverry (`12:30–15:00`):* recorrido breve por `Bogo-Atrack` (`app/app.R`), síntesis de respuestas a la retroalimentación y cierre.
+    6. *Sergio Alejandro López (`12:30–15:00`):* recorrido breve por `Bogo-Atrack` (`app/app.R`), síntesis de respuestas a la retroalimentación y cierre.
 
 ### 4. Documento Final + Script Replicable + Shiny App *(Semana 16 — Entrega escrita por Bloque Neón)*
 

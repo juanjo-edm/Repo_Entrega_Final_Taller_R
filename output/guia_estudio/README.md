@@ -40,9 +40,9 @@ output/guia_estudio/
 | **Miguelangel Palma** | `0:00 – 2:30` (Diapositivas `1–3`) | `02_presentacion_plenaria` (introducción, respuesta directa y `3` canales) + `03_documento_final` (Sección 1 y coherencia numérica). |
 | **Gabriel Arturo Echeverry** | `2:30 – 5:00` (Diapositiva `4`) | `02_presentacion_plenaria` (fuentes SIEDCO, SDS, RSS, Sumapaz y filtro `993`) + `01_metodologia_sustentacion` (Sección 1 y Q&A #9, #10, #20). |
 | **Juan Esteban Carvajal** | `5:00 – 7:30` (Diapositiva `5`) | `02_presentacion_plenaria` (tasas, población flotante y tono) + `01_metodologia_sustentacion` (Secciones 1 y 5, distinción `285,6` vs. `154,1`, Q&A #19). |
-| **Sergio Alejandro López** | `7:30 – 10:00` (Diapositivas `6–7a`) | `01_metodologia_sustentacion` (Secciones 2–3, `Z-score`, sensibilidad `ARI = 1`, `proportionalPol`, `36` series, Q&A #1–#8, #15, #18). |
+| **Juan José Echeverry** | `7:30 – 10:00` (Diapositivas `6–7a`) | `01_metodologia_sustentacion` (Secciones 2–3, `Z-score`, sensibilidad `ARI = 1`, `proportionalPol`, `36` series, Q&A #1–#8, #15, #18) + `02_presentacion_plenaria`. |
 | **Olga Lucía Ramírez** | `10:00 – 12:30` (Diapositivas `7b–8`) | `01_metodologia_sustentacion` (Secciones 4–5, Elastic Net *in-sample*, motos periféricas, `r = +0,296 n.s.`, Q&A #11–#17) + `02_presentacion_plenaria`. |
-| **Juan José Echeverry** | `12:30 – 15:00` (Diapositivas `9–10`) | `04_aplicacion_shiny` (libreto `75 s` y arquitectura `Bogo-Atrack`) + `03_documento_final` (trazabilidad Entrega 1 y `C7`) + `02_presentacion_plenaria`. |
+| **Sergio Alejandro López** | `12:30 – 15:00` (Diapositivas `9–10`) | `04_aplicacion_shiny` (libreto `75 s` y arquitectura `Bogo-Atrack`) + `03_documento_final` (trazabilidad Entrega 1 y `C7`) + `02_presentacion_plenaria`. |
 
 ---
 
