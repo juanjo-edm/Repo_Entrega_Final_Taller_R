@@ -63,7 +63,7 @@ El mapa coroplético usa `{leaflet}` sobre OpenStreetMap con un filtro CSS inver
 # Arquitectura en tres capas (cómo responde en milisegundos)
 
 1. **Capa offline (`scripts/master.R` $\rightarrow$ `05_export_insumos_shiny.R`):** simplifica polígonos con `sf::st_simplify()` en `WGS84`, calcula resúmenes longitudinales con `corpus_summarize()` y serializa un único paquete liviano `data/processed/datos_consolidados_shiny.rds` (`0,87 MB`).
-2. **Capa global al arranque (`app/app.R`):** carga el `.rds` una única vez (`readRDS()`), valida con `stopifnot()` la cobertura de las `19` localidades urbanas y pre-calcula `datos_promedio_global` y `datos_clusters_3d` (coordenadas reales, $Z$-scores y radios $\mu_k$) fuera de `server()`.
+2. **Capa global al arranque (`app/app.R`):** carga el `.rds` una única vez (`readRDS()`), valida con `stopifnot()` la cobertura de las `19` localidades urbanas y pre-calcula `datos_promedio_global`, `datos_clusters_3d` (coordenadas reales, $Z$-scores y radios $\mu_k$) y `datos_silueta` (detalle de `19` localidades + resumen de `3` clústeres) fuera de `server()`.
 3. **Capa reactiva (`server` + `bindCache()`):** filtra en memoria mediante `resumir_panel()` y memoriza combinaciones repetidas (`datos_panorama`, `datos_prensa`, `grafico_clusters_3d`). Al elegir una modalidad distinta de *Total*, `resumir_panel()` recalcula en vivo las métricas de prensa desde `tabla_noticias` (`993` objetivo) para empatar el numerador con SIEDCO.
 
 # Qué hace cada una de las `6` pestañas (`page_navbar`)
@@ -73,19 +73,19 @@ El mapa coroplético usa `{leaflet}` sobre OpenStreetMap con un filtro CSS inver
 | **1. `Panorama`** | Foto general de tasas oficiales y cobertura/tono por año (`2022–2026` o promedio) y modalidad (`Total`, `Personas`, `Residencias`, `Motocicletas`). | Cambiar mapa entre *Denuncias (hurto)* (ámbar) y *Prensa* (azul) sincroniza mapa, paleta y `Top 5`. Clic en un polígono salta automáticamente a `Mi localidad`. |
 | **2. `Mi localidad`** | Ficha individual con puesto `1..19` en cada modalidad, serie anual comparada frente al promedio de Bogotá, composición de tono y tabla `{DT}` extrema. | Muestra las `5` noticias más negativas y `5` más positivas con enlace al titular original; responde tanto a clic desde `Panorama` como al selector superior. |
 | **3. `Hurto vs. prensa`** | Contrasta tasa oficial (eje X) frente a `%` de notas negativas (eje Y) dividido por los promedios distritales dinámicos $(\bar{X}, \bar{Y})$. | Los **cuatro cuadrantes** muestran convergencia (`superior derecho`) frente a posible estigma mediático (`superior izquierdo`, baja tasa pero prensa dura). Clic en una burbuja actualiza la ficha lateral. |
-| **4. `Clusters`** | Expone los `3` perfiles K-Means ($K^* = 3$): *Céntrico e Institucional* (`#B08CF0`), *Comercial y Automotor* (`#E86A50`) y *Residencial y Periférico* (`#3FB8A6`). | **Sincronización bidireccional** entre mapa `leaflet`, tarjetas comparativas y cubo `plotly` `scatter3d`, más switches de nombres y escala `Z-score` exacta. |
+| **4. `Clusters`** | Expone los `3` perfiles K-Means ($K^* = 3$): *Céntrico e Institucional* (`#B08CF0`), *Comercial y Automotor* (`#E86A50`) y *Residencial y Periférico* (`#3FB8A6`). | **Sincronización bidireccional** entre mapa `leaflet`, tarjetas comparativas, cubo `plotly` `scatter3d` (con `Escala Z-score`) y tarjeta inferior `navset_card_underline` de **coeficientes de silueta $S(i)$** (`19` localidades y resumen de `3` clústeres). |
 | **5. `Sentometrics y Elastic Net`** | Explora las `36` series mensuales ($2 \times 6 \times 3$, `lag = 6`), los `8` meses críticos de `peakdates()`, el ajuste `h = 1` vs. SIEDCO y `attributions()`. | Permite descomponer mes a mes qué clúster, modalidad, léxico o memoria empuja $\hat{y}_{t+1}$, y ver el Top 10 de coeficientes $|\beta|$. |
 | **6. `Datos y método`** | Resume fuentes, advertencias (`2026` corte a septiembre y sesgo por población flotante) y contrato técnico `.rds`. | Tabla interactiva con los `8` componentes de `sentometrics_pipeline.rds` y el bundle `datos_consolidados_shiny.rds`. |
 
 # Libreto de demo en vivo (`75` segundos en la Diapositiva 9)
 
-Si durante la exposición del **25 de noviembre** muestran la app en vivo dentro del turno de **Juan José (`12:30–14:15`)**, seguir exactamente esta secuencia evita perder segundos buscando botones:
+Si durante la exposición del **25 de noviembre** muestran la app en vivo dentro del turno de **Sergio (`12:30–15:00`)**, seguir exactamente esta secuencia evita perder segundos buscando botones:
 
 ::: {.callout-tip}
 ## Guion cronometrado de demostración (tenerla abierta en segundo plano antes de empezar)
 - **`0:00 – 0:15` (`Panorama`):** mostrar mapa ámbar de *Denuncias* y cambiar el radio button a *Prensa* para evidenciar cómo cambian mapa y `Top 5` a paleta azul.
 - **`0:15 – 0:30` (`Mi localidad`):** hacer clic en **Los Mártires** o **Chapinero** en el mapa para saltar directo a la ficha (`puesto 1 de 19`), señalar la evolución frente a Bogotá y la tabla de noticias extremas.
-- **`0:30 – 0:50` (`Hurto vs. prensa` y `Clusters`):** abrir `Hurto vs. prensa` mostrando los 4 cuadrantes $(\bar{X}, \bar{Y})$; pasar a `Clusters`, activar `Escala Z-score` en el cubo `3D` y hacer clic en *Comercial y Automotor* para iluminar a **Los Mártires** en las tres vistas.
+- **`0:30 – 0:50` (`Hurto vs. prensa` y `Clusters`):** abrir `Hurto vs. prensa` mostrando los 4 cuadrantes $(\bar{X}, \bar{Y})$; pasar a `Clusters`, activar `Escala Z-score` en el cubo `3D`, hacer clic en *Comercial y Automotor* y bajar un segundo a la tabla de **siluetas (`0,521` global, `0` negativas)** en sus pestañas `19` / `3`.
 - **`0:50 – 1:15` (`Sentometrics` y `Datos y método`):** mostrar la curva `observado vs. predicho` y cerrar en `Datos y método` señalando el contrato único de `.rds` generado por `scripts/master.R`.
 :::
 
