@@ -140,7 +140,7 @@ kable(res_eda, col.names = c("Indicador", "Media", "Mediana", "Desv. Est.", "Mí
 
 Elegimos `Z-score` sobre cuatro transformaciones alternativas en `{recipes}`: `Min-Max [0, 1]` (`0,5614`) y `PCA 2D` (`0,5539`, `96,89 %` de varianza) arrojan siluetas numéricas superiores únicamente porque la métrica se calcula en la matriz de distancias propia de cada receta, pero producen exactamente la misma partición ($\text{ARI} = 1{,}0000$, cero siluetas negativas). `Z-score` mantiene unidades directas en desviaciones estándar sin anclarse a extremos muestrales ni descartar el `3,11 %` de `PC3`, superando a `Robusto` (`0,4562`, `1` negativa, $\text{ARI} = 0{,}8484$) y `Log(1 + x) + Z-score` (`0,4442`, $\text{ARI} = 0{,}3380$). Con $K^* = 3$ (coincidente con `AGNES Ward.D2`, $\text{ARI} = 1{,}0000$), resultan tres perfiles: *Céntrico e Institucional* (`5`: La Candelaria, Chapinero, Santa Fe, Teusaquillo, Barrios Unidos), *Comercial y Automotor* (`1`: Los Mártires) y *Residencial y Periférico* (`13` restantes).
 
-**Minería de texto y Elastic Net (`sentometrics`).** Construimos `sento_corpus()` sobre las `993` noticias objetivo con seis covariables binarias sin guiones (`c_*` y `tema_*`). Computamos la polaridad documental mediante `how = "proportionalPol"` integrando `nrc_es`, el léxico local `crimen_es` (`105` términos como *fleteo*, *cosquilleo*, *halado* y *megatoma*) y `30` reglas contextuales `valenceIn` ($t \in \{1, 2, 3, 4\}$); su ordenamiento concuerda con `TF-IDF` ($r = 0{,}7233$). Para evitar sobreajuste, reemplazamos `364` series originales por un diseño parsimonioso de $M = 36$ series mensuales (`2` léxicos $\times$ `6` covariables $\times$ `3` curvas con `lag = 6`: `linear`, `exponential0.5`, `beta22`), inferior al número de observaciones ($N = 51$ meses). Estimamos Elastic Net calibrado por BIC para pronosticar la tasa mensual real distrital observada en SIEDCO con horizonte $h = 1$.
+**Minería de texto y Elastic Net (`sentometrics`).** Construimos `sento_corpus()` sobre las `993` noticias objetivo con seis covariables binarias sin guiones (`c_*` y `tema_*`). Computamos la polaridad documental mediante `how = "proportionalPol"` integrando `nrc_es`, el léxico local `crimen_es` (`105` términos como *fleteo*, *cosquilleo*, *halado* y *megatoma*) y `30` reglas contextuales `valenceIn` ($t \in \{1, 2, 3, 4\}$); su ordenamiento concuerda con `TF-IDF` ($r = 0{,}7285$). Para evitar sobreajuste, reemplazamos `364` series originales por un diseño parsimonioso de $M = 36$ series mensuales (`2` léxicos $\times$ `6` covariables $\times$ `3` curvas con `lag = 6`: `linear`, `exponential0.5`, `beta22`), inferior al número de observaciones ($N = 51$ meses). Estimamos Elastic Net calibrado por BIC para pronosticar la tasa mensual real distrital observada en SIEDCO con horizonte $h = 1$.
 
 # Resultados, Storytelling e Incorporación de Retroalimentación
 
@@ -161,15 +161,17 @@ ggplot(aj, aes(x = date, y = Tasa, color = Serie, linetype = Serie)) +
   scale_x_date(date_breaks = "6 months", date_labels = "%b %Y") +
   labs(
     title = "Ajuste predictivo mensual de sento_model frente a SIEDCO real",
-    subtitle = sprintf("alpha* = %.1f · lambda* = %.4f (BIC) · 25 de 36 series activas · R^2 = %.2f%% · RMSE = %.2f",
-                       met$alpha_optimo, met$lambda_optimo, met$r2_in_sample * 100, met$rmse),
+    subtitle = sprintf("alpha* = %.1f · lambda* = %.4f (BIC) · %d/%d activas · R^2 in-sample = %.2f%% · RMSE = %.2f (OOS: %.2f, -%.1f%% vs AR1)",
+                       met$alpha_optimo, met$lambda_optimo, met$n_activos, met$n_predictores,
+                       met$r2_in_sample * 100, met$rmse, met$rmse_oos_en, met$reduccion_rmse_vs_ar1),
     x = NULL, y = "Tasa mensual / 100k hab.", color = NULL, linetype = NULL
   ) +
   theme_minimal(base_size = 8.8) +
-  theme(legend.position = "bottom", plot.title = element_text(face = "bold", size = 10))
+  theme(legend.position = "bottom", plot.title = element_text(face = "bold", size = 10),
+        plot.subtitle = element_text(size = 8.2))
 ```
 
-Cuatro hallazgos responden la pregunta de investigación. **Primero**, el modelo Elastic Net ($\alpha^* = 0{,}5$, $\lambda^* = 0{,}2521$) retiene `25` series activas y explica el **`88,99 %`** de la varianza mensual ($\text{RMSE} = 9{,}78$), con mayores pesos positivos en `crimen_es--c_centro--linear` (`+124,8`) y `crimen_es--tema_hurto_residencias--beta22` (`+99,8`). **Segundo**, al cruzar tasas por `100.000` habitantes la asociación espacial entre denuncias y noticias es estrecha ($r = 0{,}845$, $\rho = 0{,}821$ en las tres modalidades; $r = 0{,}854$ en personas), encabezada por La Candelaria y Los Mártires; pero al evaluar el conteo acumulado de artículos sin ajustar por población, la correlación se torna negativa ($r = -0{,}148$ en las tres modalidades y $r = -0{,}421$ sobre las `3.916` notas), pues Bosa (`90` notas), Suba (`79`) y Engativá (`78`) reciben más cobertura bruta que La Candelaria (`21`).
+Cuatro hallazgos responden la pregunta de investigación. **Primero**, el modelo Elastic Net ($\alpha^* = 0{,}8$, $\lambda^* = 0{,}3341$) retiene `21` series activas y explica dentro de muestra el **`84,55 %`** de la varianza mensual ($\text{RMSE} = 11{,}57$; fuera de muestra con ventana expansiva `do.iter = TRUE` reduce el error en **`29,9 %`** frente a un benchmark AR(1): $\text{RMSE}_{\text{OOS}} = 24{,}35$ vs. $34{,}71$), con mayores pesos positivos en `nrc_es--tema_hurto_personas--exponential0.5` (`+83,4`) y `crimen_es--tema_hurto_personas--linear` (`+78,5`), y ajuste estructural en `nrc_es--c_residencial--linear` (`-88,2`). **Segundo**, al cruzar tasas por `100.000` habitantes la asociación espacial entre denuncias y noticias es estrecha ($r = 0{,}845$, $\rho = 0{,}821$ en las tres modalidades; $r = 0{,}854$ en personas), encabezada por La Candelaria y Los Mártires; pero al evaluar el conteo acumulado de artículos sin ajustar por población, la correlación se torna negativa ($r = -0{,}148$ en las tres modalidades y $r = -0{,}421$ sobre las `3.916` notas), pues Bosa (`90` notas), Suba (`79`) y Engativá (`78`) reciben más cobertura bruta que La Candelaria (`21`).
 
 ```{r}
 #| label: fig-desajuste
@@ -209,9 +211,9 @@ ggplot(df_long, aes(x = tasa_total_prom, y = y_val, color = cluster_nombre)) +
         strip.text = element_text(face = "bold", size = 9, color = "#1B365D"))
 ```
 
-**Tercero**, el hurto de motocicletas muestra la concordancia ordinal más baja ($\rho = 0{,}374$): cinco localidades periféricas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba) concentran el `58,5 %` de las `24.300` denuncias absolutas (`14.215` casos), por su tenencia residencial (más de `92.000` motos en Kennedy y ~`90 %` de viajes en estratos 1 a 3 según SDM y ProBogotá, 2023) y el *halado* en vía pública, pero reciben mínima cobertura per cápita frente a Los Mártires o Antonio Nariño. **Cuarto**, el sentimiento neto en hurto a personas presenta correlación positiva con la tasa ($r = +0{,}361$): Tunjuelito (`-0,396`, `89,5 %` negativas) y Teusaquillo (`-0,389`) concentran reportes de robos sin balance favorable, mientras en el centro y Suba (`-0,192`) las noticias de capturas moderan el tono neto.
+**Tercero**, el hurto de motocicletas muestra la concordancia ordinal más baja ($\rho = 0{,}374$): cinco localidades periféricas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba) concentran el `58,5 %` de las `24.300` denuncias absolutas (`14.215` casos), por su tenencia residencial (más de `92.000` motos en Kennedy y ~`90 %` de viajes en estratos 1 a 3 según SDM y ProBogotá, 2023) y el *halado* en vía pública, pero reciben mínima cobertura per cápita frente a Los Mártires o Antonio Nariño. **Cuarto**, el sentimiento neto en hurto a personas presenta correlación positiva con la tasa ($r = +0{,}398$): Teusaquillo (`-0,402`, `90,3 %` negativas) y Tunjuelito (`-0,397`, `89,5 %` negativas) concentran reportes de robos sin balance favorable, mientras en el centro y Suba (`-0,186`) las noticias de capturas moderan el tono neto.
 
-**Síntesis frente a la pregunta.** El volumen de prensa acompaña la geografía del delito al normalizar por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve estadísticamente más negativo el sentimiento entre localidades ($r = +0{,}296$, $p = 0{,}219$); es decir, el sesgo mediático opera más por visibilidad selectiva y peso demográfico que por endurecimiento del tono.
+**Síntesis frente a la pregunta.** El volumen de prensa acompaña la geografía del delito al normalizar por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve estadísticamente más negativo el sentimiento entre localidades ($r = +0{,}334$, $p = 0{,}163$); es decir, el sesgo mediático opera más por visibilidad selectiva y peso demográfico que por endurecimiento del tono.
 
 ```{=latex}
 \Needspace{10\baselineskip}
@@ -232,7 +234,7 @@ kable(
     `Ajuste incorporado en el proyecto y documento final` = c(
       "Tres canales económicos explícitos (asimetría de información, arriendos y bienes públicos).",
       "Contraste empírico de brechas per cápita frente a estigma bruto y noticias operativas.",
-      "Integración de K-Means (Z-score, K*=3) y Elastic Net mensual sobre 36 series (R² = 88,99 %).",
+      "Integración de K-Means (Z-score, K*=3) y Elastic Net mensual sobre 36 series (R² in-sample = 84,55 %; -29,9 % RMSE OOS vs. AR(1)).",
       "Explicación del contagio reputacional en prensa y contraste personas (alto subregistro) vs. motos (mínimo)."
     )
   )

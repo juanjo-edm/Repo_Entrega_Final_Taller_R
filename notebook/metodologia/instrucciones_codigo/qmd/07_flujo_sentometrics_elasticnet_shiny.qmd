@@ -316,13 +316,13 @@ lex_crimen_bogota <- tribble(
   # Términos de alta negatividad (delitos y violencia)
   "homicidio",      -1.0,  "homicidios",     -1.0,  "asesinato",      -1.0,
   "sicariato",      -1.0,  "feminicidio",    -1.0,  "masacre",        -1.0,
-  "extorsion",      -0.9,  "secuestro",      -1.0,  "atraco",         -0.9,
+  "extorsión",      -0.9,  "secuestro",      -1.0,  "atraco",         -0.9,
   "fleteo",         -0.9,  "escopolamina",   -0.9,  "cosquilleo",     -0.7,
   "raponazo",       -0.7,  "rompevidrios",   -0.7,  "apartamenteros", -0.8,
   # ... (105 términos de delitos, violencia y respuesta policial/judicial) ...
-  "captura",         0.7,  "desarticulacion", 0.9,  "recuperacion",    0.8,
-  "incautacion",     0.7,  "rescate",         0.8,  "judicializacion", 0.8,
-  "esclarecimiento", 0.8,  "reduccion",       0.8,  "patrullaje",      0.6
+  "captura",         0.7,  "desarticulación", 0.9,  "recuperación",    0.8,
+  "incautación",     0.7,  "rescate",         0.8,  "judicialización", 0.8,
+  "esclarecimiento", 0.8,  "reducción",       0.8,  "patrullaje",      0.6
 ) |>
   group_by(x) |>
   summarise(y = mean(y), .groups = "drop") |>
@@ -346,7 +346,7 @@ tabla_valence_es <- tribble(
   ~x,               ~y,   ~t,
   # Negadores (t = 1)
   "no",            -1.0,  1L,   "nunca",         -1.0,  1L,
-  "sin",           -1.0,  1L,   "ningun",        -1.0,  1L,
+  "sin",           -1.0,  1L,   "ningún",        -1.0,  1L,
   # Amplificadores (t = 2)
   "muy",            1.8,  2L,   "gravemente",     1.8,  2L,
   "brutalmente",    1.8,  2L,   "bastante",       1.5,  2L,
@@ -689,7 +689,7 @@ df_coeficientes <- tibble(variable = rownames(coefs_sparse), coeficiente = as.nu
 
 - **L562–575**: Configura Elastic Net gaussiano con selección de $\alpha$ y $\lambda$ vía criterio BIC y horizonte predictivo de un mes adelante ($h = 1$, $51$ observaciones frente a $36$ series).
 - **L578–590**: Calcula las atribuciones aditivas crudas (en puntos de tasa) y normalizadas en $[-1, 1]$ con `attributions()`.
-- **L593–624**: Alinea los predictores en $t$ con la tasa observada en $t + 1$, obtiene predicciones y residuales, y extrae únicamente las `25` variables activas cuyo $|\beta| > 0$. *Estimamos el modelo parsimonioso y abrimos la caja negra para medir qué impulsa la predicción mensual.*
+- **L593–624**: Alinea los predictores en $t$ con la tasa observada en $t + 1$, obtiene predicciones y residuales, y extrae únicamente las `21` variables activas cuyo $|\beta| > 0$. *Estimamos el modelo parsimonioso y abrimos la caja negra para medir qué impulsa la predicción mensual.*
 
 :::
 ::::
@@ -728,7 +728,7 @@ arrow::write_parquet(panel_consolidado, file.path(ruta_proc, "panel_consolidado_
 
 ::: {}
 
-- **L672–697**: Empaqueta los 8 bloques analíticos de `sentometrics` más `meta` en un único archivo consolidado `data/processed/sentometrics_pipeline.rds` ($\alpha^* = 0{,}5$, $R^2 = 0{,}8899$, `25/36` activas).
+- **L672–697**: Empaqueta los 8 bloques analíticos de `sentometrics` más `meta` en un único archivo consolidado `data/processed/sentometrics_pipeline.rds` ($\alpha^* = 0{,}8$, $R^2_{\text{in-sample}} = 0{,}8455$, `21/36` activas; $\text{RMSE}_{\text{OOS}} = 24{,}35$ vs. $34{,}71$ en AR(1)).
 - **L702–737**: Agrega sobre las `993` noticias objetivo las métricas anuales de sentimiento y conteo, las cruza con el panel demográfico y delictivo oficial (`panel_delitos`), verifica `95` filas ($19 \times 5$) y guarda `panel_consolidado_localidad_anual.parquet`. *Evitamos dispersar múltiples `.rds` y cerramos el panel anual unificado.*
 
 :::

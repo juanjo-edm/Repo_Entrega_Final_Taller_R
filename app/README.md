@@ -3,7 +3,7 @@
 **Proyecto:** Hurtos y sentimiento mediático en Bogotá (2022–2026)  
 **Subtítulo en tablero:** *Observatorio de hurto y sentimiento mediático*  
 **Programa:** Maestría en Economía Aplicada (MECA) — *Taller de Programación en R*  
-**Autores:** Olga Lucía Ramírez, Juan José Echeverry, Sergio López, Miguelangel Palma, Gabriel Echeverry, Juan Esteban Carvajal (Grupo 10)  
+**Autores:** Olga Lucía Ramírez, Juan José Echeverry, Sergio López, Miguelangel Palma, Gabriel Echeverry, Juan Esteban Carvajal (Grupo 3)  
 
 ---
 

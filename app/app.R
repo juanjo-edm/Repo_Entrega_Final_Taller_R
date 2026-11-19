@@ -2,7 +2,7 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # ARCHIVO: app/app.R
 # ROL: App Shiny "Bogo-Atrack" (Observatorio de hurto y sentimiento mediático)
-# AUTORA: Olga Lucía Ramírez — Grupo 10 (Juan José Echeverry, Sergio López,
+# AUTORA: Olga Lucía Ramírez — Grupo 3 (Juan José Echeverry, Sergio López,
 #         Miguelangel Palma, Gabriel Echeverry, Juan Esteban Carvajal)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # LEE: data/processed/datos_consolidados_shiny.rds (generado por scripts/master.R)
@@ -652,14 +652,14 @@ ui <- page_navbar(
 
     layout_columns(
       col_widths = c(3, 3, 3, 3),
-      tarjeta_cifra("Bondad de ajuste (R²)", "kpi_r2_modelo",
-                    "varianza mensual explicada (h = 1 mes)", ambar),
+      tarjeta_cifra("Bondad de ajuste in-sample (R²)", "kpi_r2_modelo",
+                    "varianza mensual explicada dentro de muestra (h = 1 mes)", ambar),
       tarjeta_cifra("Calibración Elastic Net (BIC)", "kpi_hiper_modelo",
                     "mezcla L1/L2 y penalización óptima", azul),
       tarjeta_cifra("Series seleccionadas (β ≠ 0)", "kpi_activos_modelo",
                     "de las 36 series candidatas", azul),
       tarjeta_cifra("Error cuadrático medio (RMSE)", "kpi_rmse_modelo",
-                    "puntos de tasa mensual real sobre 51 meses", ambar)
+                    "puntos in-sample (OOS: 24,3 vs 34,7 AR(1), -29,9 %)", ambar)
     ),
 
     layout_columns(

@@ -2,7 +2,7 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022–2026)
 # SCRIPT: scripts/06_descriptivos_corpus.R
 # ROL: Estadísticos descriptivos y visualizaciones del corpus (Tarea T-08)
-# AUTORES: Olga Lucía Ramírez, Juan José Echeverry, Sergio López (Grupo 10)
+# AUTORES: Olga Lucía Ramírez, Juan José Echeverry, Sergio López (Grupo 3)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # PRODUCE:
 #   - output/figures/figura3_noticias_por_anio.png

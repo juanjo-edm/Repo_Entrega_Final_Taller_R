@@ -221,7 +221,7 @@ erDiagram
 | **`valenceIn`** | Tabla de modificadores contextuales de valencia en español con cuatro tipos: `t = 1` (negadores), `t = 2` (amplificadores), `t = 3` (atenuadores) y `t = 4` (adversativos). |
 | **Población flotante** | Población no residente que transita diariamente por localidades céntricas (La Candelaria, Santa Fe, Chapinero, Los Mártires). Genera tasas por 100.000 habitantes residentes estructuralmente elevadas porque el numerador incluye hechos contra visitantes y el denominador solo cuenta residentes. |
 | **Silueta ($S_i$)** | Métrica de cohesión y separación en $[-1, 1]$ usada para validar la partición $K$-means. Con datos mensuales reales de `SIEDCO.csv`, la partición óptima en $K^* = 3$ obtiene una silueta promedio de `0,5211` con cero localidades en silueta negativa (`13 / 5 / 1`). |
-| **Elastic Net (`BIC`, `h = 1`)** | Regresión penalizada mixta $L_1/L_2$ estimada con `sentometrics::sento_model()` sobre las `36` series (`M < N = 51`) para predecir la tasa mensual observada de hurtos en `SIEDCO.csv` a un mes vista ($h = 1$) seleccionando hiperparámetros por criterio bayesiano de información ($\alpha^* = 0,5$, $\lambda^* = 0,2521$, $R^2 = 0,8899$). |
+| **Elastic Net (`BIC`, `h = 1`)** | Regresión penalizada mixta $L_1/L_2$ estimada con `sentometrics::sento_model()` sobre las `36` series (`M < N = 51`) para predecir la tasa mensual observada de hurtos en `SIEDCO.csv` a un mes vista ($h = 1$) seleccionando hiperparámetros por criterio bayesiano de información ($\alpha^* = 0,8$, $\lambda^* = 0,3341$, $R^2_{\text{in-sample}} = 0,8455$, $21/36$ series activas; $\text{RMSE}_{\text{OOS}} = 24,347$ vs. $34,713$ en AR(1)). |
 
 ---
 

@@ -2,7 +2,7 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022–septiembre de 2026)
 # SCRIPT: scripts/04_clustering_kmeans.R
 # ROL: Agrupamiento Territorial (K-Means) y Experimentación con Lógica Tidymodels
-# AUTORES: Grupo 10 — Taller de Programación en R (MECA, Universidad de los Andes)
+# AUTORES: Grupo 3 — Taller de Programación en R (MECA, Universidad de los Andes)
 # PRODUCE: data/processed/clusters_localidades_kmeans.parquet
 #          output/tables/tabla_clustering_kmeans_perfiles.csv
 #          output/tables/tabla_sensibilidad_escalamientos_pca.csv

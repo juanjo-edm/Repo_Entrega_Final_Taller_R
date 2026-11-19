@@ -82,7 +82,7 @@ tabla_desc <- readr::read_csv(
 | `localidades` | `numeric` | No nula (`0 NA`) | `19` (constante) | `n_distinct(localidad)` | Número de localidades urbanas cubiertas en el año (cobertura completa 19/19 en todos los años). |
 | `media_palabras` | `numeric` | No nula (`0 NA`) | `18,7` (`2026`) a `433,2` (`2025`) | `round(mean(palabras_cuerpo), 1)` | Promedio anual de palabras en el cuerpo limpio de la noticia. |
 | `mediana_palabras` | `numeric` | No nula (`0 NA`) | `18` (`2026`) a `411` (`2024`) | `median(palabras_cuerpo)` | Mediana anual de palabras en `cuerpo`. |
-| `sentimiento_prom` | `numeric` | No nula (`0 NA`) | `[-0,4246, -0,1483]` | `round(mean(sentimiento_score), 4)` | Promedio anual del índice compuesto de sentimiento sobre el corpus objetivo. |
+| `sentimiento_prom` | `numeric` | No nula (`0 NA`) | `[-0,4269, -0,1492]` | `round(mean(sentimiento_score), 4)` | Promedio anual del índice compuesto de sentimiento sobre el corpus objetivo. |
 
 ---
 

@@ -2,7 +2,7 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/03_analisis_sentometrics.R
 # ROL: Pipeline Integral de Sentometrics (3 Modalidades Objetivo, 36 Series)
-# AUTORES: Juan José Echeverry, Sergio López, Olga Lucía Ramírez (Grupo 10)
+# AUTORES: Juan José Echeverry, Sergio López, Olga Lucía Ramírez (Grupo 3)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # PRODUCE:
 #   - data/processed/sentometrics_pipeline.rds (único artefacto S3 intermedio)
@@ -156,11 +156,11 @@ lex_crimen_bogota <- tribble(
   "homicidio",      -1.0,  "homicidios",     -1.0,  "asesinato",      -1.0,
   "asesinado",      -1.0,  "asesinada",      -1.0,  "sicariato",      -1.0,
   "sicario",        -1.0,  "sicarios",       -1.0,  "feminicidio",    -1.0,
-  "masacre",        -1.0,  "cadaver",        -0.9,  "cadaveres",      -0.9,
+  "masacre",        -1.0,  "cadáver",        -0.9,  "cadáveres",      -0.9,
   "embolsado",      -1.0,  "embolsados",     -1.0,  "balacera",       -0.9,
-  "tiroteo",        -0.9,  "baleado",        -0.9,  "apunalado",      -0.9,
-  "punalada",       -0.8,  "extorsion",      -0.9,  "extorsiones",    -0.9,
-  "secuestro",      -1.0,  "violacion",      -1.0,  "abuso",          -0.8,
+  "tiroteo",        -0.9,  "baleado",        -0.9,  "apuñalado",      -0.9,
+  "puñalada",       -0.8,  "extorsión",      -0.9,  "extorsiones",    -0.9,
+  "secuestro",      -1.0,  "violación",      -1.0,  "abuso",          -0.8,
   "atraco",         -0.9,  "atracos",        -0.9,  "atracador",      -0.9,
   "atracadores",    -0.9,  "robo",           -0.8,  "robos",          -0.8,
   "robaron",        -0.8,  "hurtaron",       -0.8,  "hurto",          -0.7,
@@ -168,24 +168,24 @@ lex_crimen_bogota <- tribble(
   "fleteo",         -0.9,  "fleteros",       -0.9,  "escopolamina",   -0.9,
   "burundanga",     -0.9,  "cosquilleo",     -0.7,  "raponazo",       -0.7,
   "rompevidrios",   -0.7,  "apartamenteros", -0.8,  "halado",         -0.7,
-  "desguazadero",   -0.8,  "microtrafico",   -0.8,  "narcomenudeo",   -0.8,
+  "desguazadero",   -0.8,  "microtráfico",   -0.8,  "narcomenudeo",   -0.8,
   "delincuencia",   -0.8,  "delincuentes",   -0.8,  "criminales",     -0.8,
   "banda",          -0.6,  "bandas",         -0.6,  "inseguridad",    -0.8,
-  "miedo",          -0.7,  "temor",          -0.7,  "panico",         -0.8,
-  "zozobra",        -0.8,  "impunidad",      -0.8,  "victima",        -0.6,
-  "victimas",       -0.6,  "herido",         -0.7,  "heridos",        -0.7,
+  "miedo",          -0.7,  "temor",          -0.7,  "pánico",         -0.8,
+  "zozobra",        -0.8,  "impunidad",      -0.8,  "víctima",        -0.6,
+  "víctimas",       -0.6,  "herido",         -0.7,  "heridos",        -0.7,
   "lesionado",      -0.6,  "peligro",        -0.7,  "amenaza",        -0.7,
   "amenazas",       -0.7,  "denuncia",       -0.4,  "denuncias",      -0.4,
   # Términos positivos de respuesta institucional, judicialización y prevención
   "captura",         0.7,  "capturas",        0.7,  "capturado",       0.7,
-  "capturados",      0.7,  "desarticulacion", 0.9,  "desarticulada",   0.9,
-  "desarticulan",    0.9,  "recuperacion",    0.8,  "recuperado",      0.8,
-  "recuperados",     0.8,  "incautacion",     0.7,  "incautaron",      0.7,
-  "rescate",         0.8,  "rescatado",       0.8,  "judicializacion", 0.8,
+  "capturados",      0.7,  "desarticulación", 0.9,  "desarticulada",   0.9,
+  "desarticulan",    0.9,  "recuperación",    0.8,  "recuperado",      0.8,
+  "recuperados",     0.8,  "incautación",     0.7,  "incautaron",      0.7,
+  "rescate",         0.8,  "rescatado",       0.8,  "judicialización", 0.8,
   "judicializados",  0.8,  "condena",         0.6,  "condenado",       0.6,
-  "esclarecimiento", 0.8,  "reduccion",       0.8,  "disminucion",     0.8,
-  "disminuyo",       0.8,  "bajo",            0.4,  "prevencion",      0.7,
-  "proteccion",      0.7,  "seguridad",       0.5,  "seguro",          0.7,
+  "esclarecimiento", 0.8,  "reducción",       0.8,  "disminución",     0.8,
+  "disminuyó",       0.8,  "bajó",            0.4,  "prevención",      0.7,
+  "protección",      0.7,  "seguridad",       0.5,  "seguro",          0.7,
   "segura",          0.7,  "patrullaje",      0.6,  "operativo",       0.5,
   "operativos",      0.5,  "megatoma",        0.6,  "convivencia",     0.8,
   "tranquilidad",    0.8,  "justicia",        0.7,  "apoyo",           0.5
@@ -203,11 +203,11 @@ tabla_valence_es <- tribble(
   # Negadores (t = 1)
   "no",            -1.0,  1L,
   "nunca",         -1.0,  1L,
-  "jamas",         -1.0,  1L,
+  "jamás",         -1.0,  1L,
   "sin",           -1.0,  1L,
   "ni",            -1.0,  1L,
   "tampoco",       -1.0,  1L,
-  "ningun",        -1.0,  1L,
+  "ningún",        -1.0,  1L,
   "ninguna",       -1.0,  1L,
   # Amplificadores (t = 2)
   "muy",            1.8,  2L,
@@ -648,6 +648,31 @@ df_attr_long_norm <- bind_rows(
   convertir_attr_long(atribuciones_norm, "time")
 )
 
+# Validación fuera de muestra (do.iter = TRUE, nSample = 30 -> 21 pronósticos OOS) y benchmark AR(1)
+control_modelo_oos <- sentometrics::ctr_model(
+  model       = "gaussian",
+  type        = "BIC",
+  alphas      = c(0.2, 0.5, 0.8),
+  h           = 1,
+  do.iter     = TRUE,
+  nSample     = 30,
+  do.progress = FALSE
+)
+modelo_oos <- suppressWarnings(sentometrics::sento_model(
+  sento_measures = medidas_sento,
+  y              = y_vector,
+  ctr            = control_modelo_oos
+))
+oos_real <- as.numeric(modelo_oos$performance$raw[, "response"])
+ar1_preds_oos <- numeric(length(oos_real))
+for (k in seq_along(oos_real)) {
+  fin_tr <- 30L + k - 1L
+  fit_ar1_k <- stats::lm(y_vector[2:fin_tr] ~ y_vector[1:(fin_tr - 1L)])
+  ar1_preds_oos[k] <- stats::coef(fit_ar1_k)[1] + stats::coef(fit_ar1_k)[2] * y_vector[fin_tr]
+}
+rmse_oos_en  <- round(modelo_oos$performance$RMSFE, 3)
+rmse_oos_ar1 <- round(sqrt(mean((oos_real - ar1_preds_oos)^2)), 3)
+
 objeto_08_attributions <- list(
   modelo            = modelo_elasticnet,
   attributions_raw  = atribuciones_raw,
@@ -657,15 +682,18 @@ objeto_08_attributions <- list(
   ajuste_temporal   = df_ajuste_modelo,
   coeficientes      = df_coeficientes,
   metricas_modelo   = list(
-    alpha_optimo    = modelo_elasticnet$alpha,
-    lambda_optimo   = modelo_elasticnet$lambda,
-    horizonte_h     = control_modelo$h,
-    criterio        = control_modelo$type,
-    r2_in_sample    = round(cor(df_ajuste_modelo$observado, df_ajuste_modelo$predicho)^2, 4),
-    rmse            = round(sqrt(mean(df_ajuste_modelo$residual^2)), 3),
-    n_observaciones = nrow(df_ajuste_modelo),
-    n_predictores   = sum(modelo_elasticnet$nVar),
-    n_activos       = nrow(df_coeficientes)
+    alpha_optimo          = modelo_elasticnet$alpha,
+    lambda_optimo         = modelo_elasticnet$lambda,
+    horizonte_h           = control_modelo$h,
+    criterio              = control_modelo$type,
+    r2_in_sample          = round(cor(df_ajuste_modelo$observado, df_ajuste_modelo$predicho)^2, 4),
+    rmse                  = round(sqrt(mean(df_ajuste_modelo$residual^2)), 3),
+    rmse_oos_en           = rmse_oos_en,
+    rmse_oos_ar1          = rmse_oos_ar1,
+    reduccion_rmse_vs_ar1 = round(100 * (rmse_oos_ar1 - rmse_oos_en) / rmse_oos_ar1, 1),
+    n_observaciones       = nrow(df_ajuste_modelo),
+    n_predictores         = sum(modelo_elasticnet$nVar),
+    n_activos             = nrow(df_coeficientes)
   )
 )
 

@@ -2,7 +2,7 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/master.R
 # ROL: Orquestador Maestro del Pipeline Reproducible de Punta a Punta
-# AUTORES: Grupo 10 — Taller de Programación en R (MECA, Uniandes)
+# AUTORES: Grupo 3 — Taller de Programación en R (MECA, Uniandes)
 # ==============================================================================
 
 # 1. Configuración Global ----

@@ -2,7 +2,7 @@
 
 **Proyecto:** Hurtos y sentimiento mediático en Bogotá  
 **Programa:** Maestría en Economía Aplicada (MECA) — *Taller de Programación en R*  
-**Integrantes:** Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)  
+**Integrantes:** Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 3)  
 
 ---
 

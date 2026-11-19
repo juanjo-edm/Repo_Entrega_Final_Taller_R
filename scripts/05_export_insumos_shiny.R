@@ -2,7 +2,7 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/05_export_insumos_shiny.R
 # ROL: Consolidación y Empaquetado de Insumos para la Aplicación R Shiny
-# AUTORES: Juan José Echeverry, Sergio López, Olga Lucía Ramírez (Grupo 10)
+# AUTORES: Juan José Echeverry, Sergio López, Olga Lucía Ramírez (Grupo 3)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # PRODUCE: data/processed/datos_consolidados_shiny.rds
 # ==============================================================================

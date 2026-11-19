@@ -1,7 +1,7 @@
 # PROYECTO: Hurtos y Sentimiento Mediático en Bogotá (2022-2026)
 # SCRIPT: scripts/01_ingesta/03_noticias/scraping_google_news.R
 # ROL: Ingesta y Consolidación de Prensa Digital (Flujo Tidyverse)
-# AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 10)
+# AUTORES: Juan José Echeverry, Miguelangel Palma, Sergio López (Grupo 3)
 # PROGRAMA: Maestría en Economía Aplicada (MECA) — Universidad de los Andes
 # PRODUCE: data/raw/noticias/noticias_google_news_consolidado.parquet y .rds
 

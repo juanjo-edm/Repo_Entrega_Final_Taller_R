@@ -61,7 +61,7 @@ El enunciado impone un tope estricto de **5 páginas de cuerpo principal** sin c
 | :---: | :--- | :--- | :--- |
 | **1** | **1. Introducción** y **2. Datos (texto)** | Pregunta e hipótesis, `3` canales económicos, Restrepo y Moreno (2007), detalle de SIEDCO, SDS y Google News (`3.916` → `993`). | Qué estudiamos, por qué importa económicamente y cómo empatan numeradores y geografías. |
 | **2** | **Tabla 1, Figura 1** y **3. Metodología** | Descriptivos del panel (`n = 95`), ranking de tasas con perfil K-Means, justificación anual + `Z-score` + `{recipes}` y diseño `36 < 51`. | Cómo se construyeron los `3` clústeres y por qué el diseño textual evita sobreajuste dimensional. |
-| **3** | **4. Resultados** (`Figura 2`, `Figura 3` y síntesis) | Serie observada vs. Elastic Net (`R² = 88,99 %`), desajuste tasas vs. conteos ($r = +0{,}845$ vs. `-0,148`), motos (`58,5 %`), tono ($r = +0{,}361$) y **Síntesis frente a la pregunta**. | Cómo se relacionan denuncias y prensa en volumen y sentimiento, y dónde opera el sesgo mediático. |
+| **3** | **4. Resultados** (`Figura 2`, `Figura 3` y síntesis) | Serie observada vs. Elastic Net (`R² in-sample = 84,55 %`, `-29,9 %` RMSE OOS), desajuste tasas vs. conteos ($r = +0{,}845$ vs. `-0,148`), motos (`58,5 %`), tono ($r = +0{,}398$) y **Síntesis frente a la pregunta**. | Cómo se relacionan denuncias y prensa en volumen y sentimiento, y dónde opera el sesgo mediático. |
 | **4** | **Tabla 2** y **5. Script, Shiny y Referencias** | Trazabilidad de los `4` comentarios de Entrega 1, flujo `master.R` → `Bogo-Atrack` y `5` referencias completas. | Cómo se reproduce todo desde cero y cómo se atendió la retroalimentación previa. |
 | **5** *(Anexo)* | **Anexos** (fuera de las 5 págs.) | `Tabla 3` (correlaciones por modalidad y `Ref.: corpus`), `Tabla 4` (sensibilidad K-Means), mapa `K* = 3` y distribución anual del tono. | Respaldo cuantitativo desagregado para preguntas detalladas sin recargar el cuerpo principal. |
 
@@ -72,9 +72,9 @@ El enunciado impone un tope estricto de **5 páginas de cuerpo principal** sin c
 | **1. Motivación e Introducción (`15 %`)** | **Completo (`4,6–4,9`)** | Articula asimetría de información, desamenidad/suelo y presión sobre bienes públicos con alcance explícitamente descriptivo y predictivo. | Ningún cambio estructural necesario; mantener acotado que no estima precios de arriendo directamente. |
 | **2. Datos y Fuentes (`10 %`)** | **Completo (`4,7–5,0`)** | Explica exclusión de Sumapaz rural y código `99`, filtro anti-homonimia, `993` objetivo y efecto denominador flotante. | — |
 | **3. Estadísticas Descriptivas y EDA (`15 %`)** | **Completo (`4,6–4,9`)** | `Tabla 1`, `Figura 1`, más `Tabla 3`, `Tabla 4` y gráficos complementarios en Anexos con comas decimales consistentes. | — |
-| **4. Metodología y Análisis (`20 %`)** | **Sólido (`4,5–4,8`)** | K-Means (`ARI = 1` con Min-Max/PCA/AGNES), `proportionalPol` ($r = 0{,}7233$ vs. TF-IDF) y `M = 36` en Elastic Net. | Asegurar en la versión post-plenaria una frase explícita aclarando que `R² = 88,99 %` es ajuste *in-sample* y mide sincronía temporal (`h = 1`). |
-| **5. Resultados y Storytelling (`15 %`)** | **Completo (`4,7–4,9`)** | Cuatro hallazgos + párrafo **Síntesis frente a la pregunta** integrando tasas, conteos, motos y tono ($r = +0{,}296$, $p = 0{,}219$). | — |
-| **6. Referencias, Script y Shiny (`10 %`)** | **Casi listo (`4,5–4,8`)** | `5` referencias completas, `scripts/master.R` con `{here}` y `Bogo-Atrack` funcional. | 1) Correr `Rscript scripts/master.R` desde sesión limpia antes de radicar. 2) Cambiar `Grupo 10` → `Grupo 3` en los comentarios de encabezado `.R`. |
+| **4. Metodología y Análisis (`20 %`)** | **Completo (`4,7–4,9`)** | K-Means (`ARI = 1` con Min-Max/PCA/AGNES), `proportionalPol` ($r = 0{,}7285$ vs. TF-IDF), `M = 36` en Elastic Net (`R² in-sample = 84,55 %`) y validación OOS vs. AR(1) (`-29,9 %` RMSE). | Mantener la distinción explícita entre ajuste *in-sample* y capacidad fuera de muestra (`RMSE_OOS = 24,35` vs. `34,71`). |
+| **5. Resultados y Storytelling (`15 %`)** | **Completo (`4,7–4,9`)** | Cuatro hallazgos + párrafo **Síntesis frente a la pregunta** integrando tasas, conteos, motos y tono ($r = +0{,}334$, $p = 0{,}163$). | — |
+| **6. Referencias, Script y Shiny (`10 %`)** | **Completo (`4,7–5,0`)** | `5` referencias completas, `scripts/master.R` ejecutado desde sesión limpia con `{here}`, encabezados unificados a `Grupo 3` y `Bogo-Atrack` funcional. | Re-ejecutar `Rscript scripts/master.R` tras incorporar eventuales ajustes post-plenaria antes de radicar. |
 | **7. Retroalimentación (`15 %`)** | **Parcial hoy (`4,0–4,4`)** | `Tabla 2` integra claramente los `4` comentarios de **Entrega 1**. | Añadir filas en `Tabla 2` y los ajustes textuales derivados de la **plenaria del 25 de noviembre** (Grupo 1, Camilo Ramírez y Santiago Neira). |
 
 # Trazabilidad de los `4` comentarios de Entrega 1 (`Tabla 2`)
@@ -83,7 +83,7 @@ Si en sustentación preguntan cómo evolucionó el trabajo desde la Primera Entr
 
 1. **Relevancia económica de la pregunta:** pasamos de enunciar efectos genéricos a formalizar **tres canales** de economía urbana (costos privados por asimetría informativa, castigo a arriendos por desamenidad barrial y reasignación de patrullaje).
 2. **Evidencia sobre decisiones económicas:** demostramos empíricamente la brecha entre señal pública y riesgo per cápita al contrastar tasas ($r = +0{,}845$) frente a conteo acumulado de titulares ($r = -0{,}148$), identificando periferias con alto volumen bruto de prensa frente a bajas tasas relativas (Bosa `90`, Suba `79`, Engativá `78` vs. La Candelaria `21`).
-3. **Estrategia empírica más allá de bivariados:** integramos **K-Means (`K* = 3`, `Z-score`, sensibilidad `{recipes}` y `AGNES`)** para crear covariables territoriales sin sobreajuste y **Elastic Net (`sento_model`, `36` series mensuales, `R² = 88,99 %`)** directamente sobre la serie mensual real de `SIEDCO.csv`.
+3. **Estrategia empírica más allá de bivariados:** integramos **K-Means (`K* = 3`, `Z-score`, sensibilidad `{recipes}` y `AGNES`)** para crear covariables territoriales sin sobreajuste y **Elastic Net (`sento_model`, `36` series mensuales, `R² in-sample = 84,55 %`, `-29,9 %` RMSE OOS vs. AR(1))** directamente sobre la serie mensual real de `SIEDCO.csv`.
 4. **Hotspots microterritoriales y subregistro:** explicamos el **contagio reputacional** de noticias sin geolocalización de esquina sobre la localidad completa y utilizamos la comparación entre **hurto a personas** (alto subregistro) y **hurto de motocicletas** (denuncia obligatoria por seguro/Fiscalía) para verificar que la brecha territorial de prensa persiste aun cuando el subregistro es mínimo (`rho = +0,374`).
 
 # Control de consistencia numérica (evitar contradicciones en vivo)
@@ -92,12 +92,12 @@ Al estudiar el documento, la presentación y `Bogo-Atrack`, conviene tener prese
 
 | Magnitud aparente | Dónde aparece | Qué calcula exactamente |
 | :--- | :--- | :--- |
-| **`-0,2613` vs. `-0,265` vs. `-0,251`** | Guía metodológica (`-0,2613`), Anexo Tabla 3 (`-0,265`), Tabla 1 (`-0,251`) | Promedio simple sobre las **`993` noticias** (`-0,2613`) vs. media simple entre **`19` localidades** (`-0,265`) vs. media del panel anual **`n = 95` localidad-año** (`-0,251`). |
+| **`-0,2634` vs. `-0,268` vs. `-0,255`** | Guía metodológica (`-0,2634`), Anexo Tabla 3 (`-0,268`), Tabla 1 (`-0,255`) | Promedio simple sobre las **`993` noticias** (`-0,2634`) vs. media simple entre **`19` localidades** (`-0,268`) vs. media del panel anual **`n = 95` localidad-año** (`-0,255`). |
 | **`3.255,8` vs. `285,6` vs. `154,1`** | Tabla 1 (`3.255,8`), EDA mensual (`285,6`), `sento_model` (`154,1`) | Media anual no ponderada (`n = 95`), media mensual no ponderada (`n = 1.083`) y tasa mensual **agregada distrital** ponderada por población total (`51` meses). |
 | **`993` vs. `3.916` noticias** | Cuerpo y Anexos (`Total 3 mod.` vs. `Ref.: corpus`) | `993` coincide exactamente con personas, residencias y motos (`SIEDCO`); `3.916` incluye homicidio, automotores, comercio, lesiones y *No DAI*. |
 
 # Lista corta de verificación antes de entregar en Semana 16
 
 - [ ] Incorporar en [`documento_final_grupo_3.qmd`](../../entregas/04_documento_final/documento_final_grupo_3.qmd) y `.docx` las mejoras pedidas el **25 de noviembre** (sin rebasar la **página 5** de cuerpo principal).
-- [ ] Ejecutar en consola limpia: `Rscript scripts/master.R` y confirmar que regenera `sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds` sin errores.
-- [ ] Revisar en `scripts/master.R`, `scripts/03_analisis_sentometrics.R` y `app/app.R` los encabezados de comentarios (`Grupo 10` → `Grupo 3`) y verificar que `quarto render` + `shiny::runApp(here::here("app"))` abran sin advertencias críticas.
+- [x] Ejecutar en consola limpia: `Rscript scripts/master.R` y confirmar que regenera `sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds` sin errores.
+- [x] Revisar en `scripts/master.R`, `scripts/03_analisis_sentometrics.R` y `app/app.R` los encabezados de comentarios (unificados a `Grupo 3`) y verificar que `quarto render` + `shiny::runApp(here::here("app"))` abran sin advertencias críticas.

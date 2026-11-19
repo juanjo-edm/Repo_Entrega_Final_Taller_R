@@ -72,8 +72,8 @@ $$\text{Nota presentación} = 0{,}15 N_1 + 0{,}10 N_2 + 0{,}15 N_3 + 0{,}20 N_4 
 | **1. Motivación** | `15 %` | `2, 3` | Argumentar pregunta, 3 canales económicos y **contexto completo** (periodo `2022–sept. 2026`, `19` localidades urbanas, hurto patrimonial). Omitir un dato de contexto baja a `4,5`. |
 | **2. Datos y Fuentes** | `10 %` | `4` | Explicar SIEDCO, SDS y Google News RSS y **justificar** cada selección (exclusión de Sumapaz rural y filtro de `993` noticias objetivo). |
 | **3. Estadísticas Descriptivas** | `15 %` | `5` | Mostrar gráfico autocontenido con título, unidades (`por 100k hab.`), leyenda y cifras de control (incluyendo efecto población flotante y tono anual). |
-| **4. Análisis y Storytelling** | `20 %` | `2, 8, 9` | Narrativa unificada que responda la pregunta combinando tasas ($r = +0{,}845$), conteo bruto ($r = -0{,}148$), motos (`58,5 %` periferia) y tono ($r = +0{,}296$, n. s.). |
-| **5. Metodología** | **`30 %`** | `6, 7` | Justificar `K-Means` (`Z-score`, tasas anuales, `ARI = 1`) y `sentometrics` + Elastic Net **sin errores lógicos** (aclarar *in-sample* y co-movimiento temporal $h=1$). |
+| **4. Análisis y Storytelling** | `20 %` | `2, 8, 9` | Narrativa unificada que responda la pregunta combinando tasas ($r = +0{,}845$), conteo bruto ($r = -0{,}148$), motos (`58,5 %` periferia) y tono ($r = +0{,}334$, n. s.). |
+| **5. Metodología** | **`30 %`** | `6, 7` | Justificar `K-Means` (`Z-score`, tasas anuales, `ARI = 1`) y `sentometrics` + Elastic Net **sin errores lógicos** (aclarar *in-sample*, co-movimiento temporal $h=1$ y ventaja OOS frente a AR(1)). |
 | **6. Comunicación y Tiempo** | `10 %` | `1–10` | Cumplir `<= 15:00 min`, transiciones limpias y dominio uniforme de los `6` expositores. |
 
 : {tbl-colwidths="[22,9,11,58]"}
@@ -87,7 +87,7 @@ Cada integrante dispone de **`2 minutos y 30 segundos`** efectivos. Ensayar con 
 1. **Diapositiva 1 · Portada (`0:00 – 0:15`):**
    - Saludo breve al profesor Camilo Ramírez, al profesor Santiago Neira y al Grupo 1. Presentar **Bogo-Atrack**, observatorio que contrasta denuncias oficiales (SIEDCO) y prensa digital (`sentometrics`) en las `19` localidades urbanas de Bogotá entre **enero de 2022 y septiembre de 2026**.
 2. **Diapositiva 2 · Resumen estratégico (`0:15 – 0:55`):**
-   - Dar la respuesta directa desde el primer minuto: el proyecto clasifica `19` localidades en **`3` clústeres** (`silueta 0,5211`), ajusta **`88,99 %`** de varianza mensual dentro de muestra con Elastic Net (`25` de `36` series) y responde la pregunta así: **el volumen de prensa acompaña el riesgo cuando normalizamos por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve más negativo el sentimiento entre localidades ($r = +0{,}296$, n. s.).**
+   - Dar la respuesta directa desde el primer minuto: el proyecto clasifica `19` localidades en **`3` clústeres** (`silueta 0,5211`), ajusta **`84,55 %`** de varianza mensual dentro de muestra con Elastic Net (`21` de `36` series, `-29,9 %` RMSE OOS vs. AR(1)) y responde la pregunta así: **el volumen de prensa acompaña el riesgo cuando normalizamos por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve más negativo el sentimiento entre localidades ($r = +0{,}334$, n. s.).**
 3. **Diapositiva 3 · Pregunta problema y motivación (`0:55 – 2:30`):**
    - Formular la pregunta explícita (hurtos a personas, residencias y motocicletas frente a volumen y tono mediático en `19` localidades, `2022–sept. 2026`) y justificar la elección sobre homicidios con Restrepo y Moreno (2007).
    - Recorrer los **3 canales económicos**: (1) asimetría de información y gasto privado en vigilancia; (2) desamenidad inmobiliaria sobre arriendos e inversión; y (3) presión ciudadana sobre asignación policial.
@@ -107,7 +107,7 @@ Cada integrante dispone de **`2 minutos y 30 segundos`** efectivos. Ensayar con 
 1. **Diapositiva 5 · Estadísticas Descriptivas y EDA (`5:00 – 7:30`):**
    - Señalar el gráfico de ranking (en colores coherentes con los 3 perfiles): media anual distrital no ponderada en panel (`n = 95`) de **`3.255,8`/100k hab.** (`3.069,9` personas, `112,4` residencias y `73,5` motos).
    - **Explicar con precisión el sesgo de denominador:** las proyecciones SDS miden población **residente**, mientras el centro ampliado (**Los Mártires `9.743,6`** con pico `15.719,5` en 2024; **La Candelaria `8.781,6`**) recibe población flotante diaria, superando por más de ocho veces a **Usme (`761,2`)**.
-   - Destacar la estabilidad del tono en prensa (`67,0 %` a `78,4 %` negativo por año; promedio `-0,2613` por artículo en las `993` notas objetivo y media distrital `-0,265` por localidad).
+   - Destacar la estabilidad del tono en prensa (`67,9 %` a `78,4 %` negativo por año; promedio `-0,2634` por artículo en las `993` notas objetivo y media distrital `-0,268` por localidad).
    - **Frase de entrega:** *"Como hurto a personas domina en escala sobre residencias y motos, Sergio explica cómo estandarizamos con K-Means y convertimos el texto en series mensuales."*
 
 ## Turno 4: Sergio Alejandro López (`7:30 – 10:00` · Diapositiva 6 y mitad izquierda de 7)
@@ -117,22 +117,22 @@ Cada integrante dispone de **`2 minutos y 30 segundos`** efectivos. Ensayar con 
      - **Por qué tasas anuales (`19` filas) y no mensuales (`1.083`):** fija una covariable territorial estable (`c_centro`, `c_comercial`, `c_residencial`); en panel mensual `10` de `19` localidades cambian de grupo (`20` meses en cero motos y `4` en cero residencias), y bajo `Z-score` promediar los `57` meses da correlación `1,0000`, silueta `0,5211` y $\text{ARI} = 1{,}0000$.
      - **Por qué `Z-score` (`silueta 0,5211`, `0` negativas) frente a `Min-Max` (`0,5614`) o `PCA 2D` (`0,5539`):** las siluetas se evalúan sobre su propia matriz reescalada, pero las tres recetas producen la **misma partición `13 / 5 / 1` ($\text{ARI} = 1{,}0000$)** al igual que `AGNES Ward.D2`; `Z-score` conserva lectura directa en desviaciones estándar sin anclarse a extremos ni descartar `3,11 %` de `PC3`. Nombrar brevemente Los Mártires (solo, comercial/automotor), los `5` céntricos y `13` residenciales/periféricos.
 2. **Diapositiva 7 · Primer bloque (`9:20 – 10:00`):**
-   - Explicar la cadena `sento_corpus()` (`993` notas, `6` *features* binarias sin guiones) $\rightarrow$ `nrc_es` (`4.388`) + `crimen_es` (`105` palabras bogotanas) + `30` reglas `valenceIn` $\rightarrow$ `proportionalPol` (necesario porque `2026` promedia `18,7` palabras frente a `>400` en `2023–2025`, $r = 0{,}7233$ con TF-IDF) $\rightarrow$ diseño parsimonioso de **$M = 36$ series** (< $N = 51$ meses) con ventana `lag = 6` (`linear`, `exponential0.5`, `beta22`).
+   - Explicar la cadena `sento_corpus()` (`993` notas, `6` *features* binarias sin guiones) $\rightarrow$ `nrc_es` (`4.388`) + `crimen_es` (`105` palabras bogotanas) + `30` reglas `valenceIn` $\rightarrow$ `proportionalPol` (necesario porque `2026` promedia `18,7` palabras frente a `>400` en `2023–2025`, $r = 0{,}7285$ con TF-IDF) $\rightarrow$ diseño parsimonioso de **$M = 36$ series** (< $N = 51$ meses) con ventana `lag = 6` (`linear`, `exponential0.5`, `beta22`).
    - **Frase de entrega:** *"Olga muestra ahora cómo estima Elastic Net ese bloque de 36 series frente a SIEDCO real y cuáles son los hallazgos principales."*
 
 ## Turno 5: Olga Lucía Ramírez (`10:00 – 12:30` · Mitad derecha Slide 7 y Slide 8)
 
 1. **Diapositiva 7 · Elastic Net y coeficientes (`10:00 – 11:05`):**
-   - Presentar ajuste mensual (gráfico inferior izquierdo): calibración BIC ($\alpha^* = 0{,}5$, $\lambda^* = 0{,}2521$, `25/36` series activas), `R² = 88,99 %` y $\text{RMSE} = 9{,}78$ sobre la tasa mensual agregada distrital de SIEDCO (`154,1`/100k promedio). Top pesos en `crimen_es--c_centro--linear` (`+124,8`) y `crimen_es--tema_hurto_residencias--beta22` (`+99,8`).
+   - Presentar ajuste mensual (gráfico inferior izquierdo): calibración BIC ($\alpha^* = 0{,}8$, $\lambda^* = 0{,}3341$, `21/36` series activas), `R² in-sample = 84,55 %` y $\text{RMSE} = 11{,}57$ sobre la tasa mensual agregada distrital de SIEDCO (`154,1`/100k promedio), junto con validación OOS (`RMSE_OOS = 24,35` vs. `34,71` en AR(1), `-29,9 %`). Principales pesos en `nrc_es--c_residencial--linear` (`-88,2`), `nrc_es--tema_hurto_personas--exponential0.5` (`+83,4`) y `crimen_es--tema_hurto_personas--linear` (`+78,5`).
 
 ::: {.callout-important}
 ## Frase de blindaje obligatoria para cuidar el `30 %` de Metodología (`N5`)
-**"Este $R^2 = 88{,}99\%$ corresponde al ajuste dentro de muestra (`in-sample`) sobre `51` meses observados. Muestra que las señales acumuladas de prensa sincronizan con el ciclo mensual real de denuncias ($h = 1$), no que las noticias causen el hurto ni que estemos validando predicción fuera de muestra."**
+**"Este $R^2_{\text{in-sample}} = 84{,}55\%$ corresponde al ajuste dentro de muestra sobre `51` meses observados. Muestra que las señales acumuladas de prensa sincronizan con el ciclo mensual real de denuncias ($h = 1$), no que las noticias causen el hurto; además, en validación fuera de muestra (`do.iter = TRUE`), el modelo reduce el RMSE en `29,9 %` frente a un benchmark AR(1) (`24,35` vs. `34,71`)."**
 :::
 
 2. **Diapositiva 8 · Resultados y Storytelling (`11:05 – 12:30`):**
    - Contrastar Panel A vs. Panel B: correlación per cápita fuerte (**$r = +0{,}845$**) vs. conteo bruto negativo (**$r = -0{,}148$**; `69,2 %` de las notas cae en localidades Residenciales y Periféricas como Bosa, Suba y Engativá).
-   - Resaltar **dos hallazgos específicos**: (1) en **motocicletas** (`rho = +0,374`), cinco localidades periféricas suman el `58,5 %` de denuncias (`14.215` de `24.300`) por tenencia residencial y *halado* en vía pública (SDM/ProBogotá, 2023), con mínima cobertura per cápita; (2) en **tono neto**, la relación transversal no se vuelve más negativa con mayores tasas (**$r = +0{,}296$, n. s.** en total; **$r = +0{,}361$** en personas), porque noticias de capturas moderan el tono en el centro y Suba frente a Tunjuelito (`-0,396`).
+   - Resaltar **dos hallazgos específicos**: (1) en **motocicletas** (`rho = +0,374`), cinco localidades periféricas suman el `58,5 %` de denuncias (`14.215` de `24.300`) por tenencia residencial y *halado* en vía pública (SDM/ProBogotá, 2023), con mínima cobertura per cápita; (2) en **tono neto**, la relación transversal no se vuelve más negativa con mayores tasas (**$r = +0{,}334$, n. s.** en total; **$r = +0{,}398$** en personas), porque noticias de capturas moderan el tono en el centro y Suba (`-0,186`) frente a Teusaquillo (`-0,402`) y Tunjuelito (`-0,397`).
    - **Frase de entrega:** *"Para ver todas estas capas reunidas en una herramienta abierta y replicable, Juan José cierra con la arquitectura de `master.R` y `Bogo-Atrack`."*
 
 ## Turno 6: Juan José Echeverry (`12:30 – 15:00` · Diapositivas 9 y 10)

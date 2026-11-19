@@ -174,7 +174,7 @@ Configura la estimación del modelo predictivo.
 * **Parámetros utilizados en `scripts/03_analisis_sentometrics.R`:**
   * `model = "gaussian"`: Familia lineal gaussiana con penalización Elastic Net ($L_1$ y $L_2$; Zou y Hastie, 2005) vía `glmnet`.
   * `type = "BIC"`: Calibración de los hiperparámetros $(\alpha^*, \lambda^*)$ mediante el Criterio de Información Bayesiano (BIC), más parsimonioso que CV con $N = 51$ meses efectivos.
-  * `alphas = c(0.2, 0.5, 0.8)`: Rejilla de búsqueda para el balance entre Ridge ($\alpha = 0$) y LASSO ($\alpha = 1$). El óptimo seleccionado por BIC resulta en $\alpha^* = 0.5$ ($\lambda^* = 0.2521$, $25/36$ series activas, $R^2 = 0.8899$).
+  * `alphas = c(0.2, 0.5, 0.8)`: Rejilla de búsqueda para el balance entre Ridge ($\alpha = 0$) y LASSO ($\alpha = 1$). El óptimo seleccionado por BIC resulta en $\alpha^* = 0.8$ ($\lambda^* = 0.3341$, $21/36$ series activas, $R^2_{\text{in-sample}} = 0.8455$; en validación *out-of-sample* con `do.iter = TRUE, nSample = 30`, $\text{RMSE}_{\text{OOS}} = 24.347$ frente a $34.713$ en AR(1), $-29.9\%$).
   * `h = 1`: Horizonte de pronóstico a un mes hacia adelante ($y_{t+1}$ en función de $s_t$), evaluando capacidad predictiva adelantada sin contemporaneidad.
   * `do.iter = FALSE`: Estimación conjunta sobre el panel completo (también se evalúa el comparativo contemporáneo $h = 0$).
 

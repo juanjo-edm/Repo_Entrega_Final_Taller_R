@@ -14,7 +14,7 @@ Esta capa documenta los **2 artefactos `.rds` consolidados** en `data/processed/
    * [1.1 `corpus_sento`](#11-corpus_sento-objeto-sento_corpus) (`993` noticias objetivo × `6` features)
    * [1.2 `lexicons_es`](#12-lexicons_es-objeto-sento_lexicons) (`nrc_es`, `crimen_es` y valencia)
    * [1.3 `sentiment_scores`](#13-sentiment_scores-993--15) (`proportionalPol`)
-   * [1.4 `peak_docs`](#14-peak_docs) (`993` en tabla completa, `208` críticas)
+   * [1.4 `peak_docs`](#14-peak_docs) (`993` en tabla completa, `209` críticas)
    * [1.5 `sento_measures`](#15-sento_measures-52--37) (`36` series mensuales)
    * [1.6 `measures_long`](#16-measures_long-1872--9-y-52--37) (`long` y `wide`)
    * [1.7 `global_index`](#17-global_index-52--7) (`serie_global` y `peakdates`)
@@ -81,12 +81,12 @@ names(pipe)
 | `id`, `date`, `word_count` | `character`, `Date`, `numeric` | `993` documentos objetivo | Identificador, fecha y tokens procesados. |
 | `nrc_es--<feature>` (`6` cols) | `numeric` | Puntajes `proportionalPol` | Sentimiento bajo `nrc_es` en las 6 características. |
 | `crimen_es--<feature>` (`6` cols) | `numeric` | Puntajes `proportionalPol` | Sentimiento bajo `crimen_es` en las 6 características. |
-| `attr(..., "comparacion_metodologica")` | `list` (`4` escalares) | `correlacion_propPol_tfidf = 0,7233`, `media_nrc_es = -0,1193`, `media_crimen_es = -0,4034`, `media_combinada = -0,2613` | Comparación metodológica de `proportionalPol` frente a `TFIDF` en el corpus objetivo. |
+| `attr(..., "comparacion_metodologica")` | `list` (`4` escalares) | `correlacion_propPol_tfidf = 0,7285`, `media_nrc_es = -0,1192`, `media_crimen_es = -0,4076`, `media_combinada = -0,2634` | Comparación metodológica de `proportionalPol` frente a `TFIDF` en el corpus objetivo. |
 
 ### 1.4 `peak_docs`
 
-* **Estructura (`5` slots):** `peak_ids_both` (`25`), `peak_ids_neg` (`25`), `peak_ids_pos` (`25`), `tabla_completa` (`993 × 21`) y `top_criticas` (`208 × 21`).
-* **Distribución de `tipo_pico` en `tabla_completa` (`993`):** `"Regular"` (`785`), `"Extremo Negativo Local"` (`88`), `"Extremo Positivo Local"` (`70`), `"Pico Negativo Global"` (`25`), `"Pico Positivo Global"` (`25`). `es_pico_global == TRUE` suma `50` artículos (`943` `FALSE`).
+* **Estructura (`5` slots):** `peak_ids_both` (`25`), `peak_ids_neg` (`25`), `peak_ids_pos` (`25`), `tabla_completa` (`993 × 21`) y `top_criticas` (`209 × 21`).
+* **Distribución de `tipo_pico` en `tabla_completa` (`993`):** `"Regular"` (`784`), `"Extremo Negativo Local"` (`87`), `"Extremo Positivo Local"` (`72`), `"Pico Negativo Global"` (`25`), `"Pico Positivo Global"` (`25`). `es_pico_global == TRUE` suma `50` artículos (`943` `FALSE`).
 
 ### 1.5 `sento_measures` (`52 × 37`)
 
@@ -108,20 +108,20 @@ names(pipe)
 
 ### 1.7 `global_index` (`52 × 7`)
 
-* **`serie_global` (`52 × 7`):** `date` (`2022-06-01`..`2026-09-01`), `globLex ∈ [-0,2861, -0,0055]`, `globFeat ∈ [-0,0954, -0,0018]`, `globTime ∈ [-0,1907, -0,0037]`, `global ∈ [-0,1907, -0,0037]`, `es_pico` (`TRUE = 8`, `FALSE = 44`), `tipo_pico` (`"Normal"` `39`, `"Pico de Alarma / Negatividad"` `8`, `"Pico Positivo / Operatividad"` `5`). Incluye además vectores `Date(8)` `peakdates_both`, `peakdates_neg`, `peakdates_pos`.
+* **`serie_global` (`52 × 7`):** `date` (`2022-06-01`..`2026-09-01`), `globLex ∈ [-0,2852, -0,0085]`, `globFeat ∈ [-0,0951, -0,0028]`, `globTime ∈ [-0,1902, -0,0057]`, `global ∈ [-0,1902, -0,0057]`, `es_pico` (`TRUE = 8`, `FALSE = 44`), `tipo_pico` (`"Normal"` `39`, `"Pico de Alarma / Negatividad"` `8`, `"Pico Positivo / Operatividad"` `5`). Incluye además vectores `Date(8)` `peakdates_both`, `peakdates_neg`, `peakdates_pos`.
 
 ### 1.8 `attributions` (Elastic Net `h = 1`)
 
 * **Variable dependiente ($y_{t+1}$):** Tasa mensual real agregada de hurto distrital calculada directamente desde `SIEDCO.csv` (`panel_delitos_poblacion_mensual.parquet`) para los `51` pares predictivos (`2022-06-01`..`2026-08-01` $\rightarrow$ `2022-07-01`..`2026-09-01`).
-* **Parámetros verificados en `metricas_modelo`:** `alpha_optimo = 0,5`, `lambda_optimo = 0,2521074`, `horizonte_h = 1`, `criterio = "BIC"`, `r2_in_sample = 0,8899`, `rmse = 9,777`, `n_observaciones = 51`, `n_predictores = 36`, `n_activos = 25`.
+* **Parámetros verificados en `metricas_modelo`:** `alpha_optimo = 0,8`, `lambda_optimo = 0,3341228`, `horizonte_h = 1`, `criterio = "BIC"`, `r2_in_sample = 0,8455`, `rmse = 11,574`, `rmse_oos_en = 24,347`, `rmse_oos_ar1 = 34,713`, `reduccion_rmse_vs_ar1 = 29,9`, `n_observaciones = 51`, `n_predictores = 36`, `n_activos = 21`.
 
 | Slot | Clase / Dimensiones | Rango / Valores observados | Descripción |
 | :--- | :---: | :--- | :--- |
-| `modelo` | `sento_model` | `36` predictores, intercepto `275,9945` | Modelo Elastic Net estimado por `sento_model()`. |
+| `modelo` | `sento_model` | `36` predictores, intercepto `244,3737` | Modelo Elastic Net estimado por `sento_model()`. |
 | `attributions_raw` / `norm` | `attributions` (`5` slots) | `lags` (`51 × 7`), `lexicons` (`51 × 3`), `features` (`51 × 7`), `time` (`51 × 4`), `documents` (`list(51)`) | Contribuciones lineales de cada dimensión por fecha. |
-| `attr_long_raw` / `norm` | `data.table` (`561 × 5`) | Bruta: `[-223,3487, 72,5553]`; Norm.: `[-1, 0,4832]` | Versión larga (`51 meses × 11 componentes`: `6` features [`306`], `2` lexicons [`102`], `3` times [`153`]). |
-| `ajuste_temporal` | `tbl_df` (`51 × 4`) | `observado ∈ [76,53, 220,42]`, `predicho ∈ [85,01, 213,83]`, `residual ∈ [-24,47, 18,38]` | Observado mensual SIEDCO vs. predicción `h = 1`. |
-| `coeficientes` | `tbl_df` (`25 × 2`) | `coeficiente ∈ [-65,1728, 124,7662]` | Las `25` series activas seleccionadas (`β ≠ 0`). |
+| `attr_long_raw` / `norm` | `data.table` (`561 × 5`) | Bruta: `[-168,2210, 74,5604]`; Norm.: `[-1, 0,4776]` | Versión larga (`51 meses × 11 componentes`: `6` features [`306`], `2` lexicons [`102`], `3` times [`153`]). |
+| `ajuste_temporal` | `tbl_df` (`51 × 4`) | `observado ∈ [76,53, 220,42]`, `predicho ∈ [87,06, 210,71]`, `residual ∈ [-32,46, 25,54]` | Observado mensual SIEDCO vs. predicción `h = 1`. |
+| `coeficientes` | `tbl_df` (`21 × 2`) | `coeficiente ∈ [-88,2191, 83,3967]` | Las `21` series activas seleccionadas (`β ≠ 0`). |
 
 ### 1.9 `meta`
 
@@ -153,10 +153,10 @@ names(shiny_bundle)
 | `corpus_stats_mes` | `tbl_df` (`57 × 12`) | `corpus_summarize(corpus_sento, by = "month")$stats` (`documents` `4..46`, `meanTokens` `49,50..169,33`) | Estadísticas mensuales del corpus objetivo en **6 (Datos y método)**. |
 | `corpus_stats_anio` | `tbl_df` (`5 × 12`) | `corpus_summarize(corpus_sento, by = "year")$stats` (`documents` `112..282`, `totalTokens` `11.970..36.166`) | Resumen anual del corpus objetivo en **6 (Datos y método)**. |
 | `lexicos_info` | `list` (`4`) | `lexicons_es` + `comparacion_metodologica` (`nrc_es`, `crimen_es`, `valence_shifters`) | Referencia metodológica de los léxicos. |
-| `peak_docs` | `list` (`5`) | `sentometrics_pipeline.rds$peak_docs` (`tabla_completa` `993 × 21`, `top_criticas` `208 × 21`) | Noticias extremas en **2 (Mi localidad)** y tabla DT en **6 (Datos y método)**. |
+| `peak_docs` | `list` (`5`) | `sentometrics_pipeline.rds$peak_docs` (`tabla_completa` `993 × 21`, `top_criticas` `209 × 21`) | Noticias extremas en **2 (Mi localidad)** y tabla DT en **6 (Datos y método)**. |
 | `measures_long` | `tbl_df` (`1.872 × 9`) | `sentometrics_pipeline.rds$measures_long$long` | Selector dinámico de las `36` series mensuales en **5 (Sentometrics y Elastic Net)**. |
 | `global_index` | `list` (`4`) | `sentometrics_pipeline.rds$global_index` | `peakdates_neg` marca fechas críticas en **5 (Sentometrics y Elastic Net)**. |
-| `attributions` | `list` (`5`) | Subconjunto *tidy* de `sentometrics_pipeline.rds$attributions` | Métricas (`R2 = 0,8899`), ajuste observado vs. predicho (`SIEDCO.csv`), coeficientes y contribuciones en **5 (Sentometrics y Elastic Net)**. |
+| `attributions` | `list` (`5`) | Subconjunto *tidy* de `sentometrics_pipeline.rds$attributions` | Métricas (`R2 in-sample = 0,8455`, `RMSE OOS = 24,347`), ajuste observado vs. predicho (`SIEDCO.csv`), coeficientes y contribuciones en **5 (Sentometrics y Elastic Net)**. |
 | `meta_pipeline` | `list` (`7`) | `sentometrics_pipeline.rds$meta` (`3.916` recopiladas, `993` modelo, `6` features, `36` series) | Trazabilidad y contrato de artefactos en **6 (Datos y método)**. |
 | `fecha_generacion` | `POSIXct` (`1`) | `Sys.time()` al exportar | Marca temporal de compilación del bundle. |
 | `horizonte` | `character` (`1`) | `"2022-2026"` | Ventana temporal del análisis. |
