@@ -1,6 +1,6 @@
 ---
 title: "Guía de Estudio y Libreto: Presentación Plenaria en 15 Minutos"
-subtitle: "Rúbrica v2, reparto exacto de tiempos (6 integrantes) y alertas de defensa · Grupo 3 · MECA"
+subtitle: "Deck ejecutivo oscuro de 12 diapositivas (sin párrafos), OOS vs. AR(1), reparto 2:30 × 6 · Grupo 3 · MECA"
 author:
   - "Juan Esteban Carvajal Cruz (202614312)"
   - "Gabriel Arturo Echeverry Castaño (201016705)"
@@ -53,101 +53,92 @@ execute:
 
 # Logística crítica, fechas límite y reglas de rúbrica
 
-El insumo oficial de esta guía es [`presentacion_grupo_3.pptx`](../../entregas/03_presentacion_plenaria/presentacion_grupo_3.pptx) (y su respaldo [`presentacion_grupo_3.pdf`](../../entregas/03_presentacion_plenaria/presentacion_grupo_3.pdf)), evaluada según [`asignaciones_rubrica_plenaria.md`](../../../docs/enunciados/03_asignaciones_y_coevaluacion/asignaciones_rubrica_plenaria.md) (**15 %** de la nota final del curso).
+El insumo oficial de esta guía es [`presentacion_grupo_3.pptx`](../../entregas/03_presentacion_plenaria/presentacion_grupo_3.pptx) (y su respaldo [`presentacion_grupo_3.pdf`](../../entregas/03_presentacion_plenaria/presentacion_grupo_3.pdf)), rediseñado en **12 diapositivas ejecutivas en tema oscuro `Bogo-Atrack`** (solo tarjetas KPI, tablas compactas, gráficos oscuros nativos, íconos y micro-bullets; cero párrafos), evaluado según [`asignaciones_rubrica_plenaria.md`](../../../docs/enunciados/03_asignaciones_y_coevaluacion/asignaciones_rubrica_plenaria.md) (**15 %** de la nota final del curso).
 
 ::: {.callout-warning}
 ## Reglas administrativas con penalización automática
 1. **Envío previo obligatorio (24 horas antes):** remitir la presentación a más tardar el **martes 24 de noviembre de 2026 a las 7:30 p. m.** al equipo pedagógico y a todos los integrantes del **Grupo 1**. Entregar después implica **-30 %** sobre la nota de presentación y co-evaluación.
 2. **Exposición obligatoria de los 6 integrantes:** todo integrante que no exponga al menos un descubrimiento o sección recibe **`0,0`** individual en presentación.
-3. **Topes estrictos de tiempo:** **15 minutos exactos** para exponer (seguidos de 4 min de co-evaluación del Grupo 1, 3 min de Camilo Ramírez y 3 min de Santiago Neira). Exceder `15:00` incluso por menos de un minuto rebaja el criterio de comunicación de `5,0` a `4,0`.
+3. **Topes estrictos de tiempo:** **15 minutos exactos** (`2:30` por integrante; sin compartir diapositivas entre turnos), seguidos de 4 min de co-evaluación del Grupo 1, 3 min de Camilo Ramírez y 3 min de Santiago Neira. Exceder `15:00` incluso por menos de un minuto rebaja comunicación de `5,0` a `4,0`.
 4. **Regla de redondeo hacia abajo:** la escala por criterio solo permite `5,0`, `4,5`, `4,0`, `3,0`, `2,0` y `1,0`. Si la sustentación queda entre dos niveles, el jurado asigna el **nivel inferior**.
 :::
 
-## Ponderación y qué decide el `5,0` en cada criterio
+## Ponderación y mapa de las 12 diapositivas
 
 $$\text{Nota presentación} = 0{,}15 N_1 + 0{,}10 N_2 + 0{,}15 N_3 + 0{,}20 N_4 + 0{,}30 N_5 + 0{,}10 N_6$$
 
 | Criterio | Peso | Diapositivas | Qué exige el `5,0` y qué lo baja a `4,5` |
 | :--- | :---: | :---: | :--- |
-| **1. Motivación** | `15 %` | `2, 3` | Argumentar pregunta, 3 canales económicos y **contexto completo** (periodo `2022–sept. 2026`, `19` localidades urbanas, hurto patrimonial). Omitir un dato de contexto baja a `4,5`. |
-| **2. Datos y Fuentes** | `10 %` | `4` | Explicar SIEDCO, SDS y Google News RSS y **justificar** cada selección (exclusión de Sumapaz rural y filtro de `993` noticias objetivo). |
-| **3. Estadísticas Descriptivas** | `15 %` | `5` | Mostrar gráfico autocontenido con título, unidades (`por 100k hab.`), leyenda y cifras de control (incluyendo efecto población flotante y tono anual). |
-| **4. Análisis y Storytelling** | `20 %` | `2, 8, 9` | Narrativa unificada que responda la pregunta combinando tasas ($r = +0{,}845$), conteo bruto ($r = -0{,}148$), motos (`58,5 %` periferia) y tono ($r = +0{,}334$, n. s.). |
-| **5. Metodología** | **`30 %`** | `6, 7` | Justificar `K-Means` (`Z-score`, tasas anuales, `ARI = 1`) y `sentometrics` + Elastic Net **sin errores lógicos** (aclarar *in-sample*, co-movimiento temporal $h=1$ y ventaja OOS frente a AR(1)). |
-| **6. Comunicación y Tiempo** | `10 %` | `1–10` | Cumplir `<= 15:00 min`, transiciones limpias y dominio uniforme de los `6` expositores. |
+| **1. Motivación** | `15 %` | `2, 3` | Pregunta, hipótesis y 3 canales económicos alineados con **literatura económica** (*Mastrorocco & Minale 2018*, *Gibbons 2004*, *Restrepo & Moreno 2007*, *CEDE/CAF*) y corte explícito `ene. 2022 – sept. 2026`. |
+| **2. Datos y Fuentes** | `10 %` | `4` | Explicar SIEDCO (`376.185` filas → `684.007` hechos vía `CANTIDAD`), SDS y Google News RSS (`3.916` → `993`), ubicación por hitos barriales y deduplicación dual (`0` duplicados). |
+| **3. Estadísticas Descriptivas** | `15 %` | `5` | Gráfico autocontenido, tabla `2022–sep. 2026` vs. `2022–2025` (`3.255,8` vs. `3.517,1`), unidad de sentimiento (`-0,255` panel / `-0,263` corpus) y los 3 límites (flotante, subregistro y *hotspots*). |
+| **4. Análisis y Storytelling** | `20 %` | `2, 8, 9, 12` | Narrativa unificada sin estigmatización causal: tasas ($r = +0{,}845$; `2022–25`: `+0,809`), conteo bruto ($r = -0{,}148$), motos (`58,5 %`, $\rho = 0{,}374$), tono ($r = +0{,}334$, `p = 0,163`) y cierre económico. |
+| **5. Metodología** | **`30 %`** | `6, 7, 8` | Justificar `K-Means` (`Z-score`, tasas anuales, siluetas `0,571`/`0,496`/`0,000`, `ARI = 1`), `sentometrics` (`36 < 51`) y Elastic Net **in-sample (`84,55 %`) + OOS (`-29,9 %` vs. AR(1))**. |
+| **6. Comunicación y Tiempo** | `10 %` | `1–12` | Cumplir `<= 15:00 min`, `1–3` diapositivas propias por persona, apoyo visual sin párrafos y dominio uniforme de los `6` expositores. |
 
-: {tbl-colwidths="[22,9,11,58]"}
+: {tbl-colwidths="[22,9,13,56]"}
 
-# Libreto minuto a minuto por integrante y diapositiva
+# Libreto minuto a minuto por integrante (`2:30` exactos)
 
-Cada integrante dispone de **`2 minutos y 30 segundos`** efectivos. Ensayar con cronómetro apuntando a **`14:30`** totales deja un colchón de `30` segundos frente a demoras de conexión o cambio de micrófono.
+Como el deck ejecutivo elimina los párrafos de pantalla, **el expositor explica la historia mientras la diapositiva proyecta cifras, tablas y gráficos**. Ensayar apuntando a **`14:30`** totales deja `30` segundos de colchón.
 
 ## Turno 1: Miguelangel Palma (`0:00 – 2:30` · Diapositivas 1, 2 y 3)
 
-1. **Diapositiva 1 · Portada (`0:00 – 0:15`):**
-   - Saludo breve al profesor Camilo Ramírez, al profesor Santiago Neira y al Grupo 1. Presentar **Bogo-Atrack**, observatorio que contrasta denuncias oficiales (SIEDCO) y prensa digital (`sentometrics`) en las `19` localidades urbanas de Bogotá entre **enero de 2022 y septiembre de 2026**.
-2. **Diapositiva 2 · Resumen estratégico (`0:15 – 0:55`):**
-   - Dar la respuesta directa desde el primer minuto: el proyecto clasifica `19` localidades en **`3` clústeres** (`silueta 0,5211`), ajusta **`84,55 %`** de varianza mensual dentro de muestra con Elastic Net (`21` de `36` series, `-29,9 %` RMSE OOS vs. AR(1)) y responde la pregunta así: **el volumen de prensa acompaña el riesgo cuando normalizamos por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve más negativo el sentimiento entre localidades ($r = +0{,}334$, n. s.).**
-3. **Diapositiva 3 · Pregunta problema y motivación (`0:55 – 2:30`):**
-   - Formular la pregunta explícita (hurtos a personas, residencias y motocicletas frente a volumen y tono mediático en `19` localidades, `2022–sept. 2026`) y justificar la elección sobre homicidios con Restrepo y Moreno (2007).
-   - Recorrer los **3 canales económicos**: (1) asimetría de información y gasto privado en vigilancia; (2) desamenidad inmobiliaria sobre arriendos e inversión; y (3) presión ciudadana sobre asignación policial.
-   - **Frase de entrega:** *"Para ver con qué datos medimos esas dos lecturas de la ciudad, Gabriel presenta nuestras fuentes y filtros."*
+1. **Slide 1 · Portada (`0:00 – 0:20`):** presentar al Grupo 3 y **Bogo-Atrack**, señalando desde el inicio la ventana exacta **enero de 2022 – septiembre de 2026** (`19` localidades urbanas) y los `6` turnos de `2:30`.
+2. **Slide 2 · Resumen y Agenda (`0:20 – 1:10`):** abrir con los `3` KPIs (`3` clústeres · `S = 0,521`; `+0,845 vs -0,148`; `R² = 84,55 % · OOS -29,9 % vs AR(1)`) y los `3` bullets de respuesta directa: normalizado por población la prensa acompaña el hurto (`+0,845`), en conteo bruto se invierte (`-0,148`) y el tono no se endurece (`p = 0,163`). Mostrar el reparto de los `6` expositores.
+3. **Slide 3 · Pregunta, Hipótesis y Canales (`1:10 – 2:30`):** explicar el alcance descriptivo-predictivo (sin atribuir causalidad reputacional), cómo se controla el corte parcial de `2026` (`9` meses) y los `3` canales con respaldo económico: (1) asimetría informativa (*Mastrorocco & Minale, 2018*), (2) desamenidad urbana y hurtos patrimoniales (*Gibbons, 2004*; *Restrepo & Moreno, 2007*) y (3) bienes públicos y *hotspots* (*Mejía et al., 2015*; *Blattman et al., 2021*).
+   - **Entrega:** *"Gabriel presenta ahora las fuentes públicas y cómo aseguramos comparabilidad sin doble conteo."*
 
 ## Turno 2: Gabriel Arturo Echeverry (`2:30 – 5:00` · Diapositiva 4)
 
-1. **Diapositiva 4 · Datos y Fuentes (`2:30 – 5:00`):**
-   - Explicar el enlace por `codigo_localidad` y mes (`2022-01` a `2026-09`) de **tres fuentes**:
-     - **SIEDCO (SDSCJ):** `376.185` microdatos crudos filtrados a **`684.007` denuncias** (`627.299` personas, `32.408` residencias, `24.300` motos) en un panel continuo de `1.083` filas (`19 × 57`). Aprovechar el contraste de incentivos de denuncia (alto subregistro en personas vs. mínimo en motos por exigencia de seguro y Fiscalía).
-     - **Demografía SDS y GeoJSON:** estandariza por `100.000` habitantes residentes y justifica excluir **Sumapaz** (`código 20`, rural de páramo) y código `99` sin localización.
-     - **Google News RSS:** scraping propio (`3.916` notas únicas tras limpieza HTML y reglas anti-homonimia contra *Santa Fe* fútbol, *Bosa* Italia y *San Cristóbal* Venezuela). Justificar por qué `sentometrics` se restringe a las **`993` noticias objetivo (`es_objetivo_3mod = TRUE`)**: para igualar exactamente el numerador frente a SIEDCO sin contaminar con noticias de homicidio o automotores.
-   - **Frase de entrega:** *"Con las fuentes homologadas por población, Juan Esteban presenta los estadísticos descriptivos y la advertencia del centro ampliado."*
+1. **Slide 4 · Datos, Fuentes y Homologación (`2:30 – 5:00`):**
+   - **SIEDCO (SDSCJ):** aclarar que `SIEDCO.csv` contiene `376.185` filas agrupadas cuya variable `CANTIDAD` suma **`684.007` hechos** (`627.299` personas, `32.408` residencias, `24.300` motos) en `1.083` filas (`19 × 57` meses).
+   - **Demografía SDS + WGS84:** excluye Sumapaz (`20`) y sin localización (`99`); separa explícitamente el corte `2026` (`2.210,5` en `9` meses frente a `3.517,1` en `2022–2025`).
+   - **Google News RSS:** explicar ubicación geográfica (consultas RSS por localidad + filtros anti-homonimia + hitos barriales: `131` de `993` en confianza `Alta`), **deduplicación dual** por enlace y titular (`0` duplicados en notas multi-localidad) y empate exacto de numeradores (`3.916 → 993` objetivo).
+   - **Entrega:** *"Con las bases homologadas, Juan Esteban muestra el EDA y los límites de medición territorial."*
 
 ## Turno 3: Juan Esteban Carvajal (`5:00 – 7:30` · Diapositiva 5)
 
-1. **Diapositiva 5 · Estadísticas Descriptivas y EDA (`5:00 – 7:30`):**
-   - Señalar el gráfico de ranking (en colores coherentes con los 3 perfiles): media anual distrital no ponderada en panel (`n = 95`) de **`3.255,8`/100k hab.** (`3.069,9` personas, `112,4` residencias y `73,5` motos).
-   - **Explicar con precisión el sesgo de denominador:** las proyecciones SDS miden población **residente**, mientras el centro ampliado (**Los Mártires `9.743,6`** con pico `15.719,5` en 2024; **La Candelaria `8.781,6`**) recibe población flotante diaria, superando por más de ocho veces a **Usme (`761,2`)**.
-   - Destacar la estabilidad del tono en prensa (`67,9 %` a `78,4 %` negativo por año; promedio `-0,2634` por artículo en las `993` notas objetivo y media distrital `-0,268` por localidad).
-   - **Frase de entrega:** *"Como hurto a personas domina en escala sobre residencias y motos, Juan José explica cómo estandarizamos con K-Means y convertimos el texto en series mensuales."*
+1. **Slide 5 · Estadísticas Descriptivas y EDA (`5:00 – 7:30`):**
+   - Leer el gráfico de ranking y la tabla compacta: media `3.255,8` (`2022–sep. 2026`) frente a `3.517,1` (`2022–2025`), y aclarar la unidad de sentimiento (`-0,255` en panel `n = 95` vs. `-0,263` sobre las `993` notas).
+   - Recorrer las **tres tarjetas de límites de medición** (clave para Ítem 6 de retroalimentación): (1) **población flotante** (Los Mártires `9.744` >10× Usme `761` por denominador residente), (2) **subregistro diferencial** (tasas menores en periferia también reflejan barreras de denuncia) y (3) **hotspots intralocales** (`2,5–4,6 %` de cuadras concentran `50 %` del delito, *Mejía et al., 2015*).
+   - **Entrega:** *"Juan José explica cómo tipificamos las 19 localidades con K-Means y transformamos las 993 noticias en series mensuales."*
 
-## Turno 4: Juan José Echeverry (`7:30 – 10:00` · Diapositiva 6 y mitad izquierda de 7)
+## Turno 4: Juan José Echeverry (`7:30 – 10:00` · Diapositivas 6 y 7)
 
-1. **Diapositiva 6 · Tipología K-Means (`7:30 – 9:20`):**
-   - Defender las **dos decisiones metodológicas clave**:
-     - **Por qué tasas anuales (`19` filas) y no mensuales (`1.083`):** fija una covariable territorial estable (`c_centro`, `c_comercial`, `c_residencial`); en panel mensual `10` de `19` localidades cambian de grupo (`20` meses en cero motos y `4` en cero residencias), y bajo `Z-score` promediar los `57` meses da correlación `1,0000`, silueta `0,5211` y $\text{ARI} = 1{,}0000$.
-     - **Por qué `Z-score` (`silueta 0,5211`, `0` negativas) frente a `Min-Max` (`0,5614`) o `PCA 2D` (`0,5539`):** las siluetas se evalúan sobre su propia matriz reescalada, pero las tres recetas producen la **misma partición `13 / 5 / 1` ($\text{ARI} = 1{,}0000$)** al igual que `AGNES Ward.D2`; `Z-score` conserva lectura directa en desviaciones estándar sin anclarse a extremos ni descartar `3,11 %` de `PC3`. Nombrar brevemente Los Mártires (solo, comercial/automotor), los `5` céntricos y `13` residenciales/periféricos.
-2. **Diapositiva 7 · Primer bloque (`9:20 – 10:00`):**
-   - Explicar la cadena `sento_corpus()` (`993` notas, `6` *features* binarias sin guiones) $\rightarrow$ `nrc_es` (`4.388`) + `crimen_es` (`105` palabras bogotanas) + `30` reglas `valenceIn` $\rightarrow$ `proportionalPol` (necesario porque `2026` promedia `18,7` palabras frente a `>400` en `2023–2025`, $r = 0{,}7285$ con TF-IDF) $\rightarrow$ diseño parsimonioso de **$M = 36$ series** (< $N = 51$ meses) con ventana `lag = 6` (`linear`, `exponential0.5`, `beta22`).
-   - **Frase de entrega:** *"Olga muestra ahora cómo estima Elastic Net ese bloque de 36 series frente a SIEDCO real y cuáles son los hallazgos principales."*
+1. **Slide 6 · K-Means, Sensibilidad y Siluetas $S(i)$ (`7:30 – 8:50`):**
+   - Justificar tasas anuales (`19` filas fijan etiqueta estable; en mensual `10/19` cambian de grupo; invariancia `ARI = 1` con `57` meses y excluyendo `2026`) y elección de `Z-score` frente a `Min-Max` (`0,561`) y `PCA 2D` (`0,554`), que producen la misma partición (`ARI = 1,000`, al igual que `AGNES`).
+   - Señalar la tabla superior de **siluetas por clúster** (global `0,521`, `0` negativas): *Residencial y Periférico* (`13`, `0,571`), *Céntrico e Institucional* (`5`, `0,496`) y *Comercial y Automotor* (`1`, Los Mártires, `0,000` unitario).
+2. **Slide 7 · Diseño NLP `sentometrics` (`8:50 – 10:00`):**
+   - Recorrer los `4` pasos superiores: `993` notas y `6` features binarias → `nrc_es` + `crimen_es` (`105` localismos con tildes y eñes depuradas) + `30` reglas `valenceIn` (`proportionalPol`, $r = 0{,}729$ con `TF-IDF`) → `lag = 6` en `3` curvas (`36` series) → reducción de `364` a `36` series (< `51` meses).
+   - Señalar la gráfica inferior de polaridad estable (`67,9 %` a `78,4 %` negativa anual; `75,3 %` global en corpus `n = 993`).
+   - **Entrega:** *"Olga presenta los resultados del modelo Elastic Net (incluyendo su validación fuera de muestra) y el contraste espacial frente a SIEDCO."*
 
-## Turno 5: Olga Lucía Ramírez (`10:00 – 12:30` · Mitad derecha Slide 7 y Slide 8)
+## Turno 5: Olga Lucía Ramírez (`10:00 – 12:30` · Diapositivas 8 y 9)
 
-1. **Diapositiva 7 · Elastic Net y coeficientes (`10:00 – 11:05`):**
-   - Presentar ajuste mensual (gráfico inferior izquierdo): calibración BIC ($\alpha^* = 0{,}8$, $\lambda^* = 0{,}3341$, `21/36` series activas), `R² in-sample = 84,55 %` y $\text{RMSE} = 11{,}57$ sobre la tasa mensual agregada distrital de SIEDCO (`154,1`/100k promedio), junto con validación OOS (`RMSE_OOS = 24,35` vs. `34,71` en AR(1), `-29,9 %`). Principales pesos en `nrc_es--c_residencial--linear` (`-88,2`), `nrc_es--tema_hurto_personas--exponential0.5` (`+83,4`) y `crimen_es--tema_hurto_personas--linear` (`+78,5`).
+1. **Slide 8 · Modelo Elastic Net (`10:00 – 11:15`):**
+   - Destacar los `4` KPIs (`R² in-sample = 84,55 %`, **`OOS: -29,9 % vs AR(1)`** [`24,35` vs. `34,71`], `α* = 0,8 / λ* = 0,334`, `21/36` series activas), la curva mensual con meses en español y los mayores pesos en `nrc_es · c_residencial · linear` (`-88,2`), `nrc_es · tema_hurto_personas · exponential0.5` (`+83,4`) y `crimen_es · tema_hurto_personas · linear` (`+78,5`).
 
 ::: {.callout-important}
 ## Frase de blindaje obligatoria para cuidar el `30 %` de Metodología (`N5`)
-**"Este $R^2_{\text{in-sample}} = 84{,}55\%$ corresponde al ajuste dentro de muestra sobre `51` meses observados. Muestra que las señales acumuladas de prensa sincronizan con el ciclo mensual real de denuncias ($h = 1$), no que las noticias causen el hurto; además, en validación fuera de muestra (`do.iter = TRUE`), el modelo reduce el RMSE en `29,9 %` frente a un benchmark AR(1) (`24,35` vs. `34,71`)."**
+**"Distinguimos dos métricas: dentro de muestra Elastic Net explica `84,55 %` de la varianza (`RMSE = 11,57`) con `21` series activas, y en validación iterativa fuera de muestra (`do.iter = TRUE`, `21` pronósticos OOS) reduce el error en `29,9 %` frente a un *benchmark* `AR(1)` (`24,35` vs. `34,71`). Esto evidencia sincronía predictiva temporal (`h = 1`), no causalidad de la prensa sobre el delito."**
 :::
 
-2. **Diapositiva 8 · Resultados y Storytelling (`11:05 – 12:30`):**
-   - Contrastar Panel A vs. Panel B: correlación per cápita fuerte (**$r = +0{,}845$**) vs. conteo bruto negativo (**$r = -0{,}148$**; `69,2 %` de las notas cae en localidades Residenciales y Periféricas como Bosa, Suba y Engativá).
-   - Resaltar **dos hallazgos específicos**: (1) en **motocicletas** (`rho = +0,374`), cinco localidades periféricas suman el `58,5 %` de denuncias (`14.215` de `24.300`) por tenencia residencial y *halado* en vía pública (SDM/ProBogotá, 2023), con mínima cobertura per cápita; (2) en **tono neto**, la relación transversal no se vuelve más negativa con mayores tasas (**$r = +0{,}334$, n. s.** en total; **$r = +0{,}398$** en personas), porque noticias de capturas moderan el tono en el centro y Suba (`-0,186`) frente a Teusaquillo (`-0,402`) y Tunjuelito (`-0,397`).
-   - **Frase de entrega:** *"Para ver todas estas capas reunidas en una herramienta abierta y replicable, Sergio cierra con la arquitectura de `master.R` y `Bogo-Atrack`."*
+2. **Slide 9 · Storytelling Espacial (`11:15 – 12:30`):**
+   - Explicar Panel A vs. Panel B (`+0,845` en tasas frente a `-0,148` en conteo bruto; chequeo años completos `2022–2025`: `+0,809` vs. `-0,067`), destacando la línea punteada OLS.
+   - Subrayar **motocicletas** (`58,5 %` de denuncias en `5` periféricas, $\rho = 0{,}374$): como tiene subregistro mínimo por póliza/seguro, demuestra asimetría de visibilidad mediática. Cerrar con la **paradoja del tono** (`r = +0,334`, `p = 0,163` n. s.; `+0,398` en personas, donde noticias de capturas moderan el centro y Suba `-0,186` frente a Teusaquillo `-0,402` y Tunjuelito `-0,397`).
+   - **Entrega:** *"Sergio muestra ahora cómo opera Bogo-Atrack en Shiny, la trazabilidad de la retroalimentación y nuestras conclusiones."*
 
-## Turno 6: Sergio Alejandro López (`12:30 – 15:00` · Diapositivas 9 y 10)
+## Turno 6: Sergio Alejandro López (`12:30 – 15:00` · Diapositivas 10, 11 y 12)
 
-1. **Diapositiva 9 · `Bogo-Atrack` y Reproducibilidad (`12:30 – 14:15`):**
-   - Mostrar cómo `scripts/master.R` orquesta el pipeline completo con rutas relativas `{here}` hasta empaquetar dos artefactos livianos (`sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds` de `0,87` MB), permitiendo que `app/app.R` responda sin recalcular modelos ni geometrías en vivo.
-   - Recorrer la identidad visual (`ámbar = SIEDCO`, `azul = prensa`) y las `6` pestañas interactivas: `Panorama` sincronizado, `Mi localidad`, `Hurto vs. prensa` en cuadrantes, `Clusters 3D`, `Sentometrics y Elastic Net` y `Datos y método`. *(Si hay tiempo dentro de `1:45`, abrir la app real 20–30 segundos o usar la captura de la diapositiva para no arriesgar el reloj.)*
-2. **Diapositiva 10 · Incorporación de Retroalimentación y Cierre (`14:15 – 15:00`):**
-   - Resumir en cuatro puntos rápidos la respuesta a Entrega 1: (1) formalización de `3` canales económicos; (2) contagio reputacional en titulares por localidad ante *hotspots*; (3) subregistro asimétrico (`personas` vs. `motos`) y sesgo residente; (4) salto metodológico hacia `K-Means` validado + `Elastic Net`. Cerrar agradeciendo antes de **`15:00`**.
+1. **Slide 10 · `Bogo-Atrack` y Reproducibilidad (`12:30 – 13:30`):**
+   - Mostrar las **dos capturas reales** (`Panorama` con `-0,255` / `76,2 %` + nueva tabla interactiva de **siluetas $S(i)$** en `Clusters`), la tabla de `6` pestañas y el flujo `scripts/master.R` → `2` archivos `.rds` (`0,87 MB`) → `app/app.R`. *(Si quedan >`1:45` y hay buena conexión, hacer 20–30 s de demo en vivo; si no, apoyarse directo en las dos vistas de la diapositiva.)*
+2. **Slide 11 · Trazabilidad de Retroalimentación (`13:30 – 14:20`):**
+   - Recorrer en tabla los **6 ítems** de la Entrega 1 y señalar la evidencia exacta de cada corrección en la presentación, el documento final y la app.
+3. **Slide 12 · Conclusiones e Implicaciones Económicas (`14:20 – 15:00`):**
+   - Cerrar conectando los resultados con los `3` canales económicos (información comercial, equidad patrimonial en motocicletas periféricas y focalización de patrullaje basada en SIEDCO + *hotspots*) y abrir a co-evaluación del Grupo 1 antes de **`15:00`**.
 
-# Checklist express para ensayo y co-evaluación hoy (`18 nov`)
+# Checklist express de ensayo
 
-- **Hoy miércoles 18 de noviembre, 6:25 p. m. (Co-evaluación Grupo 1 · 4 min):**
-  - Revisar [`output/entregas/02_coevaluacion_grupo_1/guia_coevaluacion_grupo_1.md`](../../entregas/02_coevaluacion_grupo_1/guia_coevaluacion_grupo_1.md) y tener abierta [`plantilla_coevaluacion_grupo_1.docx`](../../entregas/02_coevaluacion_grupo_1/plantilla_coevaluacion_grupo_1.docx).
-  - Recordar los 4 pesos: **Resumen `25 %`** + **$\ge 2$ comentarios positivos fundamentados `25 %`** + **$\ge 2$ mejoras concretas y viables fundamentadas `30 %`** + **tono y tiempo $\le 4$ min `20 %`**. Deben estar presentes los **6 integrantes** del Grupo 3.
-- **Ensayo del domingo 22 o lunes 23 de noviembre:**
-  - Hacer al menos `2` corridas completas con cronómetro verificando transiciones sin repetir lo que ya dijo el compañero anterior y cuidando que Diapositiva 7 no absorba tiempo de Diapositivas 8–10.
-  - Subir `.pptx` y `.pdf` antes del **martes 24 nov, 7:30 p. m.**
+- Hacer al menos `2` corridas completas con cronómetro verificando `2:30` exactos por persona y transiciones sin repetir lo ya dicho.
+- Enviar `presentacion_grupo_3.pptx` y `presentacion_grupo_3.pdf` al equipo pedagógico y al Grupo 1 antes del **martes 24 de noviembre a las 7:30 p. m.**

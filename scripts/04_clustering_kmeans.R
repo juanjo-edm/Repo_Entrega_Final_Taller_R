@@ -383,12 +383,17 @@ p_ranking <- df_clusters |>
     expand = expansion(mult = c(0, 0.14))
   ) +
   labs(
-    title = "Tasa promedio anual de hurto total por localidad (2022–sept. 2026)",
-    subtitle = "Tasas por cada 100.000 habitantes (SIEDCO mensual consolidado)",
-    x = NULL, y = "Tasa promedio anual por 100.000 hab."
+    title = "Tasa promedio anual de hurto total por localidad (ene. 2022 – sept. 2026)",
+    subtitle = "Tasas por cada 100.000 habitantes residentes (media anual de 3 modalidades; 2026 parcial ene–sep)",
+    x = NULL, y = "Tasa promedio anual por 100.000 hab.",
+    caption = "Fuente: Cálculos propios con SIEDCO (SDSCJ, corte sept. 2026) y proyecciones poblacionales SDS."
   ) +
   theme_minimal(base_size = 10) +
-  theme(legend.position = "bottom", plot.title = element_text(face = "bold"))
+  theme(
+    legend.position = "bottom",
+    plot.title = element_text(face = "bold"),
+    plot.caption = element_text(size = 8.2, color = "#475569")
+  )
 
 ggsave(file.path(ruta_salida_figuras, "kmeans_ranking_tasa_total.png"),
        p_ranking, width = 8.5, height = 5.4, dpi = 300, bg = "white")
@@ -481,19 +486,35 @@ if (file.exists(archivo_geo)) {
     left_join(df_clusters, by = c("CMIULOCAL" = "codigo_localidad"))
 
   p_mapa <- ggplot(mapa_loc) +
-    geom_sf(aes(fill = cluster_nombre), color = "white", linewidth = 0.4) +
-    geom_sf_text(aes(label = localidad), size = 2.4, color = "white", fontface = "bold") +
+    geom_sf(aes(fill = cluster_nombre), color = "white", linewidth = 0.45) +
+    geom_label_repel(
+      aes(label = localidad, geometry = geometry),
+      stat = "sf_coordinates",
+      size = 2.45, fontface = "bold", color = "#0F172A",
+      fill = alpha("white", 0.86), label.size = 0.18,
+      label.padding = unit(0.14, "lines"),
+      box.padding = 0.25, point.padding = 0.15,
+      min.segment.length = 0.1, segment.color = "#475569", segment.size = 0.35,
+      max.overlaps = Inf, force = 2.5, seed = 42
+    ) +
     scale_fill_manual(values = paleta_clusters, name = "Perfil territorial") +
+    coord_sf(clip = "off") +
     labs(
       title = "Distribución espacial de clústeres de hurto en Bogotá",
-      subtitle = "19 localidades urbanas (K-Means Z-score, K* = 3)"
+      subtitle = "19 localidades urbanas · K-Means Z-score (K* = 3 · silueta media = 0,521)",
+      caption = "Fuente: Cálculos propios con SIEDCO (SDSCJ, ene. 2022 – sept. 2026) y polígonos WGS84."
     ) +
     theme_void(base_size = 10) +
-    theme(legend.position = "bottom", plot.title = element_text(face = "bold", hjust = 0.5),
-          plot.subtitle = element_text(hjust = 0.5))
+    theme(
+      legend.position = "bottom",
+      plot.margin = margin(10, 18, 10, 18),
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(hjust = 0.5, size = 9, color = "#475569"),
+      plot.caption = element_text(hjust = 0.5, size = 8, color = "#64748B", margin = margin(t = 6))
+    )
 
   ggsave(file.path(ruta_salida_figuras, "kmeans_mapa_clusters.png"),
-         p_mapa, width = 6.5, height = 7.2, dpi = 300, bg = "white")
+         p_mapa, width = 7.2, height = 7.6, dpi = 300, bg = "white")
 }
 
 message("✔ Figuras de clustering actualizadas en: ", ruta_salida_figuras)
