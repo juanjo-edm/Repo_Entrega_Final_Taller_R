@@ -99,28 +99,44 @@ lexicos_info <- list(
   comparacion_metodo = attr(sentiment_scores, "comparacion_metodologica")
 )
 
+## 4.3 Carga del clustering territorial de sentimiento y contraste vs. hurtos ----
+archivo_sent_clusters <- file.path(ruta_datos_clean, "clusters_sentimiento_kmeans.parquet")
+archivo_tab_contraste <- here::here("output", "tables", "tabla_contraste_clusters_hurto_sentimiento.csv")
+archivo_tab_conting   <- here::here("output", "tables", "tabla_contingencia_hurto_vs_sentimiento.csv")
+
+if (!file.exists(archivo_sent_clusters)) {
+  stop("No se encontró '", archivo_sent_clusters, "'. Ejecute primero scripts/07_clustering_sentimiento.R")
+}
+
+clusters_sentimiento_obj <- list(
+  perfiles     = arrow::read_parquet(archivo_sent_clusters),
+  contraste    = readr::read_csv(archivo_tab_contraste, show_col_types = FALSE),
+  contingencia = readr::read_csv(archivo_tab_conting, show_col_types = FALSE)
+)
+
 # 5. Empaquetado y Serialización del Bundle Consolidado ----
 
 bundle_shiny <- list(
-  panel_localidades = panel_con_clusters,
-  clusters_perfiles = df_clusters,
-  geometrias        = geo_simplificada,
-  corpus_stats_mes  = as_tibble(resumen_corpus_mes$stats),
-  corpus_stats_anio = as_tibble(resumen_corpus_anio$stats),
-  lexicos_info      = lexicos_info,
-  peak_docs         = peak_docs_obj,
-  measures_long     = as_tibble(measures_long_obj$long),
-  global_index      = global_index_obj,
-  attributions      = list(
+  panel_localidades    = panel_con_clusters,
+  clusters_perfiles    = df_clusters,
+  clusters_sentimiento = clusters_sentimiento_obj,
+  geometrias           = geo_simplificada,
+  corpus_stats_mes     = as_tibble(resumen_corpus_mes$stats),
+  corpus_stats_anio    = as_tibble(resumen_corpus_anio$stats),
+  lexicos_info         = lexicos_info,
+  peak_docs            = peak_docs_obj,
+  measures_long        = as_tibble(measures_long_obj$long),
+  global_index         = global_index_obj,
+  attributions         = list(
     attr_long_raw   = as_tibble(attributions_obj$attr_long_raw),
     attr_long_norm  = as_tibble(attributions_obj$attr_long_norm),
     ajuste_temporal = attributions_obj$ajuste_temporal,
     coeficientes    = attributions_obj$coeficientes,
     metricas_modelo = attributions_obj$metricas_modelo
   ),
-  meta_pipeline     = pipeline_sento$meta,
-  fecha_generacion  = Sys.time(),
-  horizonte         = "2022-2026"
+  meta_pipeline        = pipeline_sento$meta,
+  fecha_generacion     = Sys.time(),
+  horizonte            = "2022-2026"
 )
 
 archivo_bundle_rds <- file.path(ruta_datos_clean, "datos_consolidados_shiny.rds")

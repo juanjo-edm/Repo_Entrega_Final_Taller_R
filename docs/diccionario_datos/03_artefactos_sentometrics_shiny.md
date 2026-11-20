@@ -132,10 +132,10 @@ Lista de `7` metadatos de trazabilidad: `fecha_generacion`, `n_noticias_recopila
 ## 2. `datos_consolidados_shiny.rds`
 
 * **Ruta relativa:** `data/processed/datos_consolidados_shiny.rds`
-* **Formato / Clase en R:** `list` autocontenida de `13` componentes
+* **Formato / Clase en R:** `list` autocontenida de `14` componentes
 * **Propósito y uso:** Empaqueta en un único artefacto ligero todas las tablas, geometrías simplificadas y salidas analíticas necesarias para que el tablero interactivo [`app/app.R`](../../app/app.R) arranque de forma autónoma sin estimar modelos al inicio.
 * **Linaje:**
-  * **Generado por:** [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R) (combinando `panel_consolidado_localidad_anual.parquet`, `clusters_localidades_kmeans.parquet`, `localidades_bogota_raw.geojson` simplificado con `dTolerance = 0.0005` en `EPSG:4326` y `sentometrics_pipeline.rds`).
+  * **Generado por:** [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R) (combinando `panel_consolidado_localidad_anual.parquet`, `clusters_localidades_kmeans.parquet`, `clusters_sentimiento_kmeans.parquet`, `localidades_bogota_raw.geojson` simplificado con `dTolerance = 0.0005` en `EPSG:4326` y `sentometrics_pipeline.rds`).
   * **Consumido por:** [`app/app.R`](../../app/app.R) (único archivo de datos cargado al inicio de la aplicación).
 
 ```r
@@ -143,12 +143,13 @@ shiny_bundle <- readRDS(here::here("data", "processed", "datos_consolidados_shin
 names(shiny_bundle)
 ```
 
-### 2.1 Inventario de los 13 Componentes y Uso por Pestaña en Shiny
+### 2.1 Inventario de los 14 Componentes y Uso por Pestaña en Shiny
 
 | Slot | Clase / Dimensiones | Origen exacto | Consumo en [`app/app.R`](../../app/app.R) |
 | :--- | :---: | :--- | :--- |
 | `panel_localidades` | `tbl_df` (`95 × 24`) | `panel_consolidado_localidad_anual` (`20` cols) + `cluster_id`, `cluster_nombre`, `perfil_seguridad`, `silueta_localidad` | Pestañas **1 (Panorama)**, **2 (Mi localidad)**, **3 (Hurto vs. prensa)** y **4 (Clusters)**. |
-| `clusters_perfiles` | `tbl_df` (`19 × 11`) | `clusters_localidades_kmeans.parquet` | Perfiles y vista tridimensional en **4 (Clusters)**. |
+| `clusters_perfiles` | `tbl_df` (`19 × 11`) | `clusters_localidades_kmeans.parquet` | Perfiles, siluetas y vista tridimensional en **4 (Clusters)**. |
+| `clusters_sentimiento` | `list` (`3` tablas) | `clusters_sentimiento_kmeans.parquet` + CSVs de contraste y contingencia (`scripts/07_clustering_sentimiento.R`) | Módulo **Contraste: sentimiento vs. hurtos** en **4 (Clusters)** y contrato en **6 (Datos y método)**. |
 | `geometrias` | `sf` (`19 × 13`, `WGS 84`) | `localidades_bogota_raw.geojson` unido a `clusters_localidades_kmeans` + `geometry` simplificada | Polígonos base de los mapas Leaflet en **1 (Panorama)** y **4 (Clusters)**. |
 | `corpus_stats_mes` | `tbl_df` (`57 × 12`) | `corpus_summarize(corpus_sento, by = "month")$stats` (`documents` `4..46`, `meanTokens` `49,50..169,33`) | Estadísticas mensuales del corpus objetivo en **6 (Datos y método)**. |
 | `corpus_stats_anio` | `tbl_df` (`5 × 12`) | `corpus_summarize(corpus_sento, by = "year")$stats` (`documents` `112..282`, `totalTokens` `11.970..36.166`) | Resumen anual del corpus objetivo en **6 (Datos y método)**. |

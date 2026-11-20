@@ -242,4 +242,15 @@ muestra_val <- readr::read_csv(
 
 ---
 
+## 9. `tabla_clustering_sentimiento_perfiles.csv`, `tabla_contraste_clusters_hurto_sentimiento.csv` y `tabla_contingencia_hurto_vs_sentimiento.csv`
+
+* **Rutas relativas:**
+  * `output/tables/tabla_clustering_sentimiento_perfiles.csv` (`19 × 33`)
+  * `output/tables/tabla_contraste_clusters_hurto_sentimiento.csv` (`8 × 13`)
+  * `output/tables/tabla_contingencia_hurto_vs_sentimiento.csv` (`3 × 5`)
+* **Propósito y uso:** Documentan el agrupamiento `K-Means` (`Z-score`, `{recipes}`, `nstart = 50`, cero circularidad) sobre el sentimiento puro de `sentometrics` (`sent_nrc`, `sent_crimen`, `prop_neg`) y su contraste multivariado frente a los clústeres de hurtos SIEDCO ($K^* = 3$) mediante `ARI`, `NMI`, prueba exacta de Fisher y prueba de Mantel (`9.999` permutaciones), incluyendo el control de tasas de cobertura per cápita (`ARI = +0,555`, $p = 0,0029$) frente a la independencia estadística del tono puro (`ARI = -0,103`, $p = 0,8076$, Mantel $r = -0,025$).
+* **Linaje:** Generados por [`scripts/07_clustering_sentimiento.R`](../../scripts/07_clustering_sentimiento.R); consumidos por [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R), [`notebook/metodologia/02_modelado_clustering_sentometrics.qmd`](../../notebook/metodologia/02_modelado_clustering_sentometrics.qmd) (Sección 6.7) y [`output/entregas/04_documento_final/documento_final_grupo_3.qmd`](../../output/entregas/04_documento_final/documento_final_grupo_3.qmd) (Anexo Tabla 6).
+
+---
+
 > ⬅️ Volver al [índice del diccionario](./README.md) | Ir al [README principal](../../README.md)

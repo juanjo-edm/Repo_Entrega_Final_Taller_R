@@ -3409,9 +3409,386 @@ Al cruzar las tres comparaciones de la @tbl-correlacion-modalidades con las figu
    * Un estudio de ProBogotá Región (2023) documenta que cerca del `90 %` de los viajes en motocicleta se origina en estratos 1, 2 y 3 de la periferia, con recorridos promedio de `10,4` km (`50` minutos) hacia zonas de empleo, donde la moto suple rutas troncales y funciona como vehículo de trabajo o reparto.
    * Reportes de la SDSCJ y la Policía Metropolitana de Bogotá (MEBOG) indican que cerca de 7 de cada 10 hurtos de motocicletas se cometen por «halado» sobre vehículos estacionados en vía pública, bahías o frentes de casas sin parqueadero vigilado. Eso deja más expuesto el parque residencial en barrios populares de la periferia y alimenta ventas clandestinas de repuestos en zonas comerciales céntricas.
 
+## Clustering territorial del sentimiento (`sentometrics`) y contraste frente a los clústeres de hurtos {#sec-clustering-sentimiento}
+
+Para cerrar el contraste espacial con rigor multivariado, evaluamos si las 19 localidades urbanas se agrupan de la misma forma al clasificar su **tono mediático** calculado con `sentometrics` frente a los tres clústeres de hurtos obtenidos en la Sección 3 (@sec-kmeans). Dos decisiones de diseño garantizan la validez del ejercicio:
+
+1. **Cero circularidad:** los puntajes documentales `score_nrc_es`, `score_crimen_es` y `sentimiento_categoria` sobre las `r fmt_es_6(n_3mod_6, 0)` noticias objetivo provienen exclusivamente del texto y los léxicos de `sentometrics` (`compute_sentiment()`), sin incorporar las etiquetas territoriales de hurtos.
+2. **Elección de dimensiones frente al espejo por 3 modalidades:** agrupar directamente el sentimiento desagregado por modalidad (`sent_personas`, `sent_residencias`, `sent_motos`, Especificación **E**) deja fuera a **Usme** (`0` noticias de motocicletas, `18/19` localidades) y vuelve inestable la distancia euclidiana por localidades con una o dos notas (Santa Fe queda aislada en un grupo `17 / 1` con $\text{ARI}_{\text{KM–PAM}} = 0{,}028$). Por ello adoptamos como especificación principal el **perfil de sentimiento puro** sobre las `19` localidades completas (**Especificación A**: `sent_nrc`, `sent_crimen` y `prop_neg`, estandarizados con `{recipes}` en `Z-score` bajo los mismos parámetros `nstart = 50` y `set.seed(20261014)`), y lo contrastamos contra las variantes **B**, **D**, **E** y un **control de volumen de cobertura per cápita** en las tres modalidades (**Especificación F**).
+
+```{r}
+#| label: tbl-contraste-clusters-sentimiento
+#| tbl-cap: "Contraste multivariado entre los clústeres de hurtos SIEDCO (K* = 3) y cinco especificaciones de clustering mediático en Z-score (ARI, NMI, prueba exacta de Fisher y prueba de Mantel con 9.999 permutaciones)"
+## 6.7 Clustering de sentimiento (sentometrics) y contraste frente a hurtos ----
+
+### 6.7.1 Construcción del perfil territorial de sentimiento puro (19 localidades) ----
+perfil_sent_loc_6 <- df_noticias_enriquecida |>
+  group_by(localidad) |>
+  summarise(
+    n_docs_3mod = n(),
+    sent_neto   = mean(sentimiento_score, na.rm = TRUE),
+    sent_nrc    = mean(score_nrc_es, na.rm = TRUE),
+    sent_crimen = mean(score_crimen_es, na.rm = TRUE),
+    prop_neg    = mean(sentimiento_categoria == "Negativo", na.rm = TRUE) * 100,
+    prop_pos    = mean(sentimiento_categoria == "Positivo", na.rm = TRUE) * 100,
+    sent_sd     = sd(sentimiento_score, na.rm = TRUE),
+    .groups     = "drop"
+  )
+
+matriz_contraste_6 <- df_clusters |>
+  select(
+    codigo_localidad,
+    localidad,
+    poblacion_prom,
+    tasa_personas_prom,
+    tasa_resid_prom,
+    tasa_motos_prom,
+    tasa_total_prom,
+    cluster_hurto_id     = cluster_id,
+    cluster_hurto_nombre = cluster_nombre,
+    silueta_hurto        = silueta_localidad
+  ) |>
+  left_join(perfil_sent_loc_6, by = "localidad") |>
+  left_join(
+    datos_corr_mod |>
+      select(
+        localidad,
+        tasa_noti_personas = tasa_noti_personas_prom,
+        tasa_noti_resid    = tasa_noti_resid_prom,
+        tasa_noti_motos    = tasa_noti_motos_prom,
+        tasa_noti_100k     = tasa_noti_3mod_prom,
+        sent_personas      = sent_noti_personas,
+        sent_residencias   = sent_noti_resid,
+        sent_motos         = sent_noti_motos
+      ),
+    by = "localidad"
+  ) |>
+  arrange(codigo_localidad)
+
+stopifnot(
+  nrow(matriz_contraste_6) == 19L,
+  all(!is.na(matriz_contraste_6$sent_nrc)),
+  all(!is.na(matriz_contraste_6$sent_crimen)),
+  all(!is.na(matriz_contraste_6$prop_neg))
+)
+
+### 6.7.2 Funciones declarativas de estandarización ({recipes}), NMI y Mantel ----
+escalar_zscore_6 <- function(df_entrada, columnas) {
+  receta_z <- recipes::recipe(~ ., data = df_entrada |> select(all_of(columnas))) |>
+    recipes::step_normalize(recipes::all_numeric_predictors())
+
+  mat_z <- recipes::prep(receta_z) |>
+    recipes::bake(new_data = NULL) |>
+    as.matrix()
+
+  rownames(mat_z) <- df_entrada$localidad
+  mat_z
+}
+
+calcular_nmi_6 <- function(part_a, part_b) {
+  tab  <- table(part_a, part_b)
+  prob <- tab / sum(tab)
+  pa   <- rowSums(prob)
+  pb   <- colSums(prob)
+  ha   <- -sum(pa[pa > 0] * log(pa[pa > 0]))
+  hb   <- -sum(pb[pb > 0] * log(pb[pb > 0]))
+  mi   <- 0
+  for (i in seq_len(nrow(prob))) {
+    for (j in seq_len(ncol(prob))) {
+      if (prob[i, j] > 0) {
+        mi <- mi + prob[i, j] * log(prob[i, j] / (pa[i] * pb[j]))
+      }
+    }
+  }
+  mi / sqrt(ha * hb)
+}
+
+calcular_mantel_6 <- function(dist_a, dist_b, n_perm = 9999L) {
+  ma    <- as.matrix(dist_a)
+  mb    <- as.matrix(dist_b)
+  va    <- ma[lower.tri(ma)]
+  vb    <- mb[lower.tri(mb)]
+  r_obs <- stats::cor(va, vb)
+
+  set.seed(20261014)
+  n_obs  <- nrow(ma)
+  r_perm <- replicate(n_perm, {
+    idx <- sample.int(n_obs)
+    stats::cor(va, mb[idx, idx][lower.tri(mb)])
+  })
+  list(r = r_obs, p = mean(abs(r_perm) >= abs(r_obs)))
+}
+
+vars_hurto_6 <- c("tasa_personas_prom", "tasa_resid_prom", "tasa_motos_prom")
+
+evaluar_espec_6 <- function(df_base, codigo, etiqueta, vars, k_eval) {
+  sub_df <- df_base |>
+    select(localidad, cluster_hurto_id, cluster_hurto_nombre, all_of(vars_hurto_6), all_of(vars)) |>
+    drop_na()
+
+  mat_med    <- escalar_zscore_6(sub_df, vars)
+  dist_med   <- stats::dist(mat_med, method = "euclidean")
+  dist_hur   <- stats::dist(escalar_zscore_6(sub_df, vars_hurto_6), method = "euclidean")
+  mantel_res <- calcular_mantel_6(dist_hur, dist_med, n_perm = 9999L)
+
+  purrr::map_dfr(k_eval, function(k_val) {
+    set.seed(20261014)
+    km_fit  <- stats::kmeans(mat_med, centers = k_val, nstart = 50, iter.max = 100)
+    sil_obj <- cluster::silhouette(km_fit$cluster, dist_med)
+    pam_fit <- cluster::pam(dist_med, k = k_val)
+    agn_fit <- stats::cutree(stats::as.hclust(cluster::agnes(dist_med, method = "ward")), k = k_val)
+    f_p     <- stats::fisher.test(table(km_fit$cluster, sub_df$cluster_hurto_nombre))$p.value
+
+    tibble(
+      codigo             = codigo,
+      especificacion     = etiqueta,
+      localidades        = nrow(sub_df),
+      k                  = k_val,
+      silueta_media      = round(mean(sil_obj[, 3]), 4),
+      siluetas_negativas = sum(sil_obj[, 3] < 0),
+      ari_vs_hurtos      = round(mclust::adjustedRandIndex(km_fit$cluster, sub_df$cluster_hurto_id), 4),
+      nmi_vs_hurtos      = round(calcular_nmi_6(km_fit$cluster, sub_df$cluster_hurto_id), 4),
+      fisher_p           = round(f_p, 4),
+      mantel_r           = round(mantel_res$r, 4),
+      mantel_p           = round(mantel_res$p, 4),
+      ari_km_vs_pam      = round(mclust::adjustedRandIndex(km_fit$cluster, pam_fit$clustering), 4),
+      ari_km_vs_agnes    = round(mclust::adjustedRandIndex(km_fit$cluster, agn_fit), 4)
+    )
+  })
+}
+
+tabla_contraste_clusters <- bind_rows(
+  evaluar_espec_6(matriz_contraste_6, "A", "Sentimiento puro (nrc_es + crimen_es + % neg.)", c("sent_nrc", "sent_crimen", "prop_neg"), c(2L, 3L)),
+  evaluar_espec_6(matriz_contraste_6, "B", "Dos léxicos puros (nrc_es + crimen_es)", c("sent_nrc", "sent_crimen"), c(2L, 3L)),
+  evaluar_espec_6(matriz_contraste_6, "D", "Sentimiento + tasa de cobertura (/100k)", c("sent_nrc", "sent_crimen", "prop_neg", "tasa_noti_100k"), c(3L)),
+  evaluar_espec_6(matriz_contraste_6, "E", "Sentimiento por 3 modalidades (Usme = NA)", c("sent_personas", "sent_residencias", "sent_motos"), c(2L, 3L)),
+  evaluar_espec_6(matriz_contraste_6, "F", "Control: tasas cobertura prensa 3 mod. (/100k)", c("tasa_noti_personas", "tasa_noti_resid", "tasa_noti_motos"), c(3L))
+)
+
+knitr::kable(
+  tabla_contraste_clusters |>
+    transmute(
+      `Esp.`        = codigo,
+      `Especificación mediática (Z-score)` = especificacion,
+      Loc.          = localidades,
+      K             = k,
+      Silueta       = fmt_es_6(silueta_media, 3),
+      `Neg.`        = siluetas_negativas,
+      `ARI hurtos`  = fmt_es_6(ari_vs_hurtos, 3),
+      NMI           = fmt_es_6(nmi_vs_hurtos, 3),
+      `Fisher p`    = fmt_es_6(fisher_p, 4),
+      `Mantel r`    = fmt_es_6(mantel_r, 3),
+      `Mantel p`    = fmt_es_6(mantel_p, 4)
+    ),
+  align = c("c", "l", "r", "r", "r", "r", "r", "r", "r", "r", "r")
+)
+```
+
+```{r}
+#| label: tbl-contingencia-hurto-sentimiento
+#| tbl-cap: "Matriz de contingencia 3 x 3 entre los clústeres de sentimiento puro (Especificación A, K = 3) y los clústeres territoriales de hurtos SIEDCO (K* = 3; n = 19 localidades)"
+### 6.7.3 Estimación K = 3 determinística de sentimiento puro y matriz de contingencia ----
+matriz_sent_z_6 <- escalar_zscore_6(matriz_contraste_6, c("sent_nrc", "sent_crimen", "prop_neg"))
+dist_sent_z_6   <- stats::dist(matriz_sent_z_6, method = "euclidean")
+
+set.seed(20261014)
+km_sent_k3_6  <- stats::kmeans(matriz_sent_z_6, centers = 3L, nstart = 50, iter.max = 100)
+sil_sent_k3_6 <- cluster::silhouette(km_sent_k3_6$cluster, dist_sent_z_6)
+
+centroides_sent_6 <- matriz_contraste_6 |>
+  mutate(cluster_raw = km_sent_k3_6$cluster) |>
+  group_by(cluster_raw) |>
+  summarise(
+    prop_neg_med    = mean(prop_neg),
+    sent_crimen_med = mean(sent_crimen),
+    .groups         = "drop"
+  )
+
+id_sent_adverso_6 <- centroides_sent_6 |>
+  slice_max(prop_neg_med, n = 1, with_ties = FALSE) |>
+  pull(cluster_raw)
+
+id_sent_crim_6 <- centroides_sent_6 |>
+  filter(cluster_raw != id_sent_adverso_6) |>
+  slice_min(sent_crimen_med, n = 1, with_ties = FALSE) |>
+  pull(cluster_raw)
+
+id_sent_mod_6 <- setdiff(centroides_sent_6$cluster_raw, c(id_sent_adverso_6, id_sent_crim_6))
+
+orden_sent_6 <- c(
+  "Tono muy adverso (doble léxico)",
+  "Tono adverso criminológico",
+  "Tono moderado (balance operativo)"
+)
+
+df_clusters_sentimiento <- matriz_contraste_6 |>
+  mutate(
+    cluster_sent_id = case_when(
+      km_sent_k3_6$cluster == id_sent_adverso_6 ~ 1L,
+      km_sent_k3_6$cluster == id_sent_crim_6    ~ 2L,
+      km_sent_k3_6$cluster == id_sent_mod_6     ~ 3L
+    ),
+    cluster_sent_nombre = factor(
+      case_when(
+        cluster_sent_id == 1L ~ orden_sent_6[1],
+        cluster_sent_id == 2L ~ orden_sent_6[2],
+        cluster_sent_id == 3L ~ orden_sent_6[3]
+      ),
+      levels = orden_sent_6
+    ),
+    silueta_sentimiento = round(as.numeric(sil_sent_k3_6[, 3]), 4)
+  ) |>
+  arrange(cluster_sent_id, sent_neto)
+
+stopifnot(
+  nrow(df_clusters_sentimiento) == 19L,
+  sum(df_clusters_sentimiento$silueta_sentimiento < 0) == 0L
+)
+
+tabla_contingencia_sent <- df_clusters_sentimiento |>
+  mutate(cluster_hurto_nombre = factor(cluster_hurto_nombre, levels = orden_clusters)) |>
+  count(cluster_sent_nombre, cluster_hurto_nombre, .drop = FALSE) |>
+  pivot_wider(names_from = cluster_hurto_nombre, values_from = n, values_fill = 0L) |>
+  mutate(
+    Total = `Céntrico e Institucional` + `Comercial y Automotor` + `Residencial y Periférico`
+  ) |>
+  rename(`Clúster de sentimiento (K = 3)` = cluster_sent_nombre)
+
+fila_a2_6 <- tabla_contraste_clusters |> filter(codigo == "A", k == 2L)
+fila_a3_6 <- tabla_contraste_clusters |> filter(codigo == "A", k == 3L)
+fila_f3_6 <- tabla_contraste_clusters |> filter(codigo == "F", k == 3L)
+
+knitr::kable(tabla_contingencia_sent, align = c("l", "r", "r", "r", "r"))
+```
+
+```{r}
+#| label: fig-mapa-hurto-vs-sentimiento
+#| fig-cap: "Contraste geográfico entre los clústeres territoriales de hurtos SIEDCO (izquierda) y los clústeres de sentimiento puro de sentometrics (derecha; K = 3, Z-score)"
+#| fig-alt: "Dos mapas coropléticos de las 19 localidades urbanas de Bogotá colocados lado a lado. El mapa izquierdo clasifica los perfiles de hurto SIEDCO (13 Residencial y Periférico, 5 Céntrico e Institucional y 1 Comercial y Automotor en Los Mártires). El mapa derecho clasifica el sentimiento puro de sentometrics en tres grupos (10 Tono moderado, 6 Tono adverso criminológico y 3 Tono muy adverso en Fontibón, Rafael Uribe Uribe y Tunjuelito), evidenciando que las fronteras de tono mediático no reproducen la estructura céntrica de los hurtos (ARI = -0,103, Fisher p = 0,808)."
+#| fig-width: 10.6
+#| fig-height: 6.8
+### 6.7.4 Mapa comparativo lado a lado (cowplot + sf + ggrepel) ----
+geo_contraste_6 <- geo_bogota |>
+  select(codigo_localidad, geometry) |>
+  left_join(df_clusters_sentimiento, by = "codigo_localidad") |>
+  mutate(
+    cluster_hurto_nombre = factor(cluster_hurto_nombre, levels = orden_clusters),
+    cluster_sent_nombre  = factor(cluster_sent_nombre, levels = orden_sent_6)
+  )
+
+pts_etq_6   <- suppressWarnings(sf::st_point_on_surface(geo_contraste_6))
+coords_6    <- sf::st_coordinates(pts_etq_6)
+geo_etq_6   <- sf::st_drop_geometry(geo_contraste_6) |>
+  mutate(lon = coords_6[, 1], lat = coords_6[, 2])
+
+bbox_6 <- sf::st_bbox(geo_contraste_6)
+xpad_6 <- (bbox_6["xmax"] - bbox_6["xmin"]) * 0.48
+xlim_6 <- c(bbox_6["xmin"] - xpad_6, bbox_6["xmax"] + xpad_6)
+
+paleta_hurto_6 <- c(
+  "Céntrico e Institucional" = "#D97706",
+  "Comercial y Automotor"    = "#B91C1C",
+  "Residencial y Periférico" = "#1B365D"
+)
+
+paleta_sent_6 <- c(
+  "Tono muy adverso (doble léxico)"   = "#991B1B",
+  "Tono adverso criminológico"        = "#2563EB",
+  "Tono moderado (balance operativo)" = "#0F766E"
+)
+
+tema_contraste_6 <- theme_void(base_size = 9.4) +
+  theme(
+    legend.position  = "bottom",
+    legend.direction = "vertical",
+    legend.title     = element_text(face = "bold", size = 8.4),
+    legend.text      = element_text(size = 8.0),
+    plot.title       = element_text(face = "bold", size = 10.2, hjust = 0.5, color = "#0F172A"),
+    plot.subtitle    = element_text(size = 8.2, hjust = 0.5, color = "#475569", margin = margin(b = 5)),
+    plot.margin      = margin(6, 12, 4, 12)
+  )
+
+p_izq_6 <- ggplot(geo_contraste_6) +
+  geom_sf(aes(fill = cluster_hurto_nombre), color = "white", linewidth = 0.35) +
+  geom_label_repel(
+    data = geo_etq_6,
+    aes(x = lon, y = lat, label = localidad),
+    size = 2.05, fontface = "bold", color = "#0F172A",
+    fill = alpha("white", 0.90), label.size = 0.16,
+    label.padding = unit(0.10, "lines"),
+    box.padding = 0.22, point.padding = 0.08, force = 2.2,
+    segment.color = "#475569", segment.size = 0.24,
+    max.overlaps = Inf, seed = 20261014
+  ) +
+  coord_sf(xlim = xlim_6, expand = FALSE) +
+  scale_fill_manual(values = paleta_hurto_6, name = "Perfil SIEDCO (hurtos)") +
+  labs(
+    title    = "A. Clústeres de hurtos SIEDCO (K* = 3)",
+    subtitle = "Silueta = 0,521 · 0 negativas (13 / 5 / 1)"
+  ) +
+  tema_contraste_6
+
+p_der_6 <- ggplot(geo_contraste_6) +
+  geom_sf(aes(fill = cluster_sent_nombre), color = "white", linewidth = 0.35) +
+  geom_label_repel(
+    data = geo_etq_6,
+    aes(x = lon, y = lat, label = localidad),
+    size = 2.05, fontface = "bold", color = "#0F172A",
+    fill = alpha("white", 0.90), label.size = 0.16,
+    label.padding = unit(0.10, "lines"),
+    box.padding = 0.22, point.padding = 0.08, force = 2.2,
+    segment.color = "#475569", segment.size = 0.24,
+    max.overlaps = Inf, seed = 20261014
+  ) +
+  coord_sf(xlim = xlim_6, expand = FALSE) +
+  scale_fill_manual(values = paleta_sent_6, name = "Perfil sentometrics (tono puro)") +
+  labs(
+    title    = "B. Clústeres de sentimiento (K = 3)",
+    subtitle = sprintf("Silueta = %s · 0 negativas (10 / 6 / 3)", fmt_es_6(fila_a3_6$silueta_media, 3))
+  ) +
+  tema_contraste_6
+
+encabezado_6 <- cowplot::ggdraw() +
+  cowplot::draw_label(
+    "Contraste espacial: clústeres de hurtos (SIEDCO) vs. sentimiento mediático (sentometrics)",
+    fontface = "bold", size = 11.4, x = 0.5, y = 0.68, hjust = 0.5, colour = "#0F172A"
+  ) +
+  cowplot::draw_label(
+    sprintf(
+      "Sentimiento puro vs. hurtos: ARI = %s, Fisher p = %s, Mantel r = %s | Control cobertura/100k: ARI = +%s (p = %s)",
+      fmt_es_6(fila_a3_6$ari_vs_hurtos, 3),
+      fmt_es_6(fila_a3_6$fisher_p, 3),
+      fmt_es_6(fila_a3_6$mantel_r, 3),
+      fmt_es_6(fila_f3_6$ari_vs_hurtos, 3),
+      fmt_es_6(fila_f3_6$fisher_p, 4)
+    ),
+    size = 8.4, x = 0.5, y = 0.22, hjust = 0.5, colour = "#334155"
+  )
+
+pie_6 <- cowplot::ggdraw() +
+  cowplot::draw_label(
+    "Fuente: SIEDCO (SDSCJ), SDS y sentometrics (993 notas objetivo, ene. 2022 - sept. 2026). K-Means Z-score ({recipes}, nstart = 50).",
+    size = 7.8, x = 0.5, y = 0.5, hjust = 0.5, colour = "#64748B"
+  )
+
+cowplot::plot_grid(
+  encabezado_6,
+  cowplot::plot_grid(p_izq_6, p_der_6, ncol = 2, align = "hv"),
+  pie_6,
+  ncol = 1,
+  rel_heights = c(0.11, 0.84, 0.05)
+)
+```
+
+La @tbl-contraste-clusters-sentimiento, la @tbl-contingencia-hurto-sentimiento y la @fig-mapa-hurto-vs-sentimiento aportan evidencia multivariada concluyente frente a la pregunta central:
+
+1. **Los clústeres de sentimiento puro son estadísticamente independientes de los clústeres de hurtos:** en la Especificación **A** (`nrc_es`, `crimen_es` y `%` de notas negativas), tanto en $K = 2$ (silueta `r fmt_es_6(fila_a2_6$silueta_media, 3)`, $\text{ARI} = `r fmt_es_6(fila_a2_6$ari_vs_hurtos, 3)`$, Fisher $p = `r fmt_es_6(fila_a2_6$fisher_p, 3)`$) como en $K = 3$ (silueta `r fmt_es_6(fila_a3_6$silueta_media, 3)`, `0` siluetas negativas, estabilidad $\text{ARI}_{\text{KM–AGNES}} = `r fmt_es_6(fila_a3_6$ari_km_vs_agnes, 3)`$ y $\text{ARI}_{\text{KM–PAM}} = `r fmt_es_6(fila_a3_6$ari_km_vs_pam, 3)`$), la concordancia con la partición de hurtos es nula ($\text{ARI} = `r fmt_es_6(fila_a3_6$ari_vs_hurtos, 3)`$, $\text{NMI} = `r fmt_es_6(fila_a3_6$nmi_vs_hurtos, 3)`$, Fisher $p = `r fmt_es_6(fila_a3_6$fisher_p, 3)`$). La prueba de Mantel sobre matrices de distancia (`9.999` permutaciones) confirma la misma ortogonalidad ($r = `r fmt_es_6(fila_a3_6$mantel_r, 3)`$, $p = `r fmt_es_6(fila_a3_6$mantel_p, 3)`$).
+2. **Contraste decisivo frente al volumen de cobertura per cápita (Especificación F):** cuando agrupamos las 19 localidades por sus tasas de noticias por 100.000 habitantes en las tres modalidades (`r_pers`, `r_resid`, `r_motos`), la geografía mediática **sí coincide significativamente** con los clústeres de hurtos ($\text{ARI} = +`r fmt_es_6(fila_f3_6$ari_vs_hurtos, 3)`$, Fisher $p = `r fmt_es_6(fila_f3_6$fisher_p, 4)`$, Mantel $r = +`r fmt_es_6(fila_f3_6$mantel_r, 3)`$, $p = `r fmt_es_6(fila_f3_6$mantel_p, 4)`$). Esto valida en un espacio multivariado que la convergencia entre prensa y delito opera por **intensidad de cobertura per cápita**, no por **endurecimiento del tono**.
+3. **Lectura territorial de los tres perfiles de tono ($K = 3$):** el grupo *Tono muy adverso (doble léxico)* reúne `3` localidades periféricas (Fontibón, Rafael Uribe Uribe y Tunjuelito; `85,6 %` negativas); *Tono adverso criminológico* agrupa `6` territorios con fuerte carga en `crimen_es` (Engativá, Kennedy, La Candelaria, Teusaquillo, Usaquén y Usme; `79,1 %` negativas); y *Tono moderado (balance operativo)* reúne `10` localidades heterogéneas donde convergen centros comerciales de alto hurto (Chapinero, Los Mártires, Santa Fe, Barrios Unidos) con periferias extensas (Suba, Bosa, Ciudad Bolívar) porque las notas de capturas e intervenciones policiales atenúan el promedio léxico (`70,4 %` negativas).
+
 ## Integración hacia el tablero R Shiny ("Bogo-Atrack")
 
-Para que `app/app.R` responda sin retrasos y sin leer archivos GeoJSON ni estimar modelos en cada visita de usuario, `scripts/03_analisis_sentometrics.R` consolida toda la corrida de `sentometrics` en `data/processed/sentometrics_pipeline.rds` y `scripts/05_export_insumos_shiny.R` empaqueta esos resultados junto con el panel consolidado, los clústeres `K-Means` y los polígonos en WGS84 en un único archivo binario para el tablero (`data/processed/datos_consolidados_shiny.rds`). Al abrirse la aplicación, *Panorama* dibuja los polígonos y permite alternar indicadores, *Clusters* incluye el mapa territorial y el gráfico tridimensional interactivo de las 19 localidades en `plotly`, *Sentometrics* explora las `r fmt_es_6(ncol(medidas_sento$measures) - 1, 0)` series mensuales sobre las `r fmt_es_6(quanteda::ndoc(corpus_sento), 0)` noticias objetivo y cada clic actualiza las gráficas y titulares extremos (`peakdocs`).
+Para que `app/app.R` responda sin retrasos y sin leer archivos GeoJSON ni estimar modelos en cada visita de usuario, `scripts/03_analisis_sentometrics.R` consolida la corrida de `sentometrics` en `data/processed/sentometrics_pipeline.rds`, `scripts/07_clustering_sentimiento.R` precalcula el contraste multivariado de sentimiento frente a hurtos (`data/processed/clusters_sentimiento_kmeans.parquet`) y `scripts/05_export_insumos_shiny.R` empaqueta todos los resultados junto con el panel consolidado, los clústeres `K-Means` y los polígonos en WGS84 en un único archivo binario (`data/processed/datos_consolidados_shiny.rds`). Al abrirse la aplicación, *Panorama* dibuja los polígonos y permite alternar indicadores, *Clusters* integra el mapa territorial, el cubo 3D en `plotly`, la tabla de siluetas $S(i)$ y el módulo interactivo de **Contraste Hurtos vs. Sentimiento (`ARI`, Fisher y Mantel)**, mientras *Sentometrics* explora las `r fmt_es_6(ncol(medidas_sento$measures) - 1, 0)` series mensuales sobre las `r fmt_es_6(quanteda::ndoc(corpus_sento), 0)` noticias objetivo.
 
 # Verificación de consistencia y conclusiones {#sec-conclusiones}
 
@@ -3424,21 +3801,25 @@ Como cierre de la ejecución en memoria, revisamos la clase S3 y el tamaño de c
 #| tbl-cap: "Auditoría programática de los objetos analíticos generados en memoria durante la compilación"
 # 7. Auditoría de consistencia sobre objetos calculados en memoria ----
 objetos_sesion <- list(
-  df_clusters         = df_clusters,
-  corpus_sento        = corpus_sento,
-  lexicons_es         = lexicons_es,
-  sentiment_scores    = sentiment_scores,
-  objeto_peak_docs    = objeto_peak_docs,
-  medidas_sento       = medidas_sento,
-  df_measures_long    = df_measures_long,
-  objeto_global_index = objeto_global_index,
-  objeto_attributions = objeto_attributions,
-  panel_consolidado   = panel_consolidado,
-  geo_bogota          = geo_bogota
+  df_clusters              = df_clusters,
+  df_clusters_sentimiento  = df_clusters_sentimiento,
+  tabla_contraste_clusters = tabla_contraste_clusters,
+  corpus_sento             = corpus_sento,
+  lexicons_es              = lexicons_es,
+  sentiment_scores         = sentiment_scores,
+  objeto_peak_docs         = objeto_peak_docs,
+  medidas_sento            = medidas_sento,
+  df_measures_long         = df_measures_long,
+  objeto_global_index      = objeto_global_index,
+  objeto_attributions      = objeto_attributions,
+  panel_consolidado        = panel_consolidado,
+  geo_bogota               = geo_bogota
 )
 
 descripciones_obj <- c(
-  "Asignaciones K-Means (K* = 3) y ancho de silueta por localidad",
+  "Asignaciones K-Means de hurtos (K* = 3) y ancho de silueta por localidad",
+  "Asignaciones K-Means de sentimiento puro (K = 3, sentometrics) y silueta S(i)",
+  "Contraste multivariado hurtos vs. sentimiento y cobertura (ARI, NMI, Fisher, Mantel)",
   "Corpus objetivo (3 modalidades de hurto) con 6 covariables binarias (3 clústeres + 3 modalidades)",
   "Diccionarios combinados (nrc_es + crimen_es) y modificadores de valencia",
   "Puntajes de polaridad documental (proportionalPol)",
@@ -3490,7 +3871,7 @@ El cruce de denuncias oficiales, análisis de texto y regresión regularizada de
 
 1. La partición en $K^* = 3$ clústeres (silueta promedio `r fmt_es_6(max(diagnostico_k$silueta_media), 4)`, con cero siluetas negativas) distingue zonas urbanas con perfiles distintos de hurto. El grupo *Céntrico e Institucional* (`5` localidades) concentra tasas altas en hurto a personas por su población flotante diaria (hasta `r scales::comma(round(get_loc_mod("La Candelaria", "tasa_personas_prom")))` por 100.000 habitantes en La Candelaria). El grupo *Comercial y Automotor* queda representado únicamente por **Los Mártires**, que encabeza las tasas relativas en personas (`r scales::comma(round(get_loc_mod("Los Mártires", "tasa_personas_prom")))`) y en motocicletas (`r fmt_es_6(get_loc_mod("Los Mártires", "tasa_motos_prom"), 1)` por 100.000 habitantes). Las `13` localidades de *Residencial y Periférico* (entre ellas Antonio Nariño, con `r fmt_es_6(get_loc_mod("Antonio Nariño", "tasa_motos_prom"), 1)` denuncias de motos por 100.000 habitantes) muestran tasas totales moderadas por habitante, pero concentran la mayor población afectada en términos absolutos y el `r fmt_es_6(motos_top5_pct_6, 1)` % de los hurtos de motocicletas en sus cinco localidades más pobladas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba, en línea con los orígenes de viaje y tenencia medidos por la Encuesta de Movilidad 2023 de la SDM).
 2. Sumar `crimen_es` a `nrc_es` junto con modificadores de valencia evitó invertir el signo de frases con negación y permitió aislar con `peakdocs()` los episodios extremos dentro de las `r fmt_es_6(n_3mod_6, 0)` noticias directamente comparables con las tres modalidades del panel.
-3. Sobre ese corpus objetivo y el diseño parsimonioso de `36` series ($M < N = 51$), Elastic Net seleccionó `r metricas_mod$n_activos` series mensuales activas y explicó el `r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)` de la varianza mensual de la tasa distrital de hurto registrada en `SIEDCO.csv` a un mes ($h = 1$). Al desagregar los mapas por modalidad en tasas por 100.000 habitantes, denuncias y noticias muestran una correlación positiva ($r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][4], 3)`$ en las tres modalidades y $r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][1], 3)`$ en personas). En conteos brutos esa relación desaparece ($r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][4], 3)`$) porque las notas absolutas se acumulan en localidades populosas como Bosa, Suba, Engativá, Kennedy y Ciudad Bolívar. Por último, el sentimiento neto promedio tiende a ser más negativo en sectores residenciales e intermedios que en el centro ($r = `r fmt_es_6(tabla_corr_modalidades[["r (sent.)"]][1], 3)`$ en personas), donde las noticias de capturas moderan el balance diario.
+3. Sobre ese corpus objetivo y el diseño parsimonioso de `36` series ($M < N = 51$), Elastic Net seleccionó `r metricas_mod$n_activos` series mensuales activas y explicó el `r scales::percent(metricas_mod$r2_in_sample, accuracy = 0.01)` de la varianza mensual de la tasa distrital de hurto registrada en `SIEDCO.csv` a un mes ($h = 1$). Al desagregar los mapas por modalidad en tasas por 100.000 habitantes, denuncias y noticias muestran una correlación positiva ($r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][4], 3)`$ en las tres modalidades y $r = `r fmt_es_6(tabla_corr_modalidades[["r (tasa)"]][1], 3)`$ en personas). En conteos brutos esa relación desaparece ($r = `r fmt_es_6(tabla_corr_modalidades[["r (conteo)"]][4], 3)`$) porque las notas absolutas se acumulan en localidades populosas como Bosa, Suba, Engativá, Kennedy y Ciudad Bolívar. Por último, el sentimiento neto promedio tiende a ser más negativo en sectores residenciales e intermedios que en el centro ($r = `r fmt_es_6(tabla_corr_modalidades[["r (sent.)"]][1], 3)`$ en personas), y al agrupar las 19 localidades por sentimiento puro con `sentometrics` ($K = 3$, silueta `r fmt_es_6(fila_a3_6$silueta_media, 3)`, cero negativas), sus clústeres son estadísticamente independientes de los de hurtos ($\text{ARI} = `r fmt_es_6(fila_a3_6$ari_vs_hurtos, 3)`$, Fisher $p = `r fmt_es_6(fila_a3_6$fisher_p, 3)`$, Mantel $r = `r fmt_es_6(fila_a3_6$mantel_r, 3)`$), en contraste directo con el agrupamiento por tasas de cobertura per cápita ($\text{ARI} = +`r fmt_es_6(fila_f3_6$ari_vs_hurtos, 3)`$, $p = `r fmt_es_6(fila_f3_6$fisher_p, 4)`$).
 
 ## Limitaciones de la investigación
 

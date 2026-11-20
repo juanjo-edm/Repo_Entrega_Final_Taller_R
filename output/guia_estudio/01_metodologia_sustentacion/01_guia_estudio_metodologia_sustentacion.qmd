@@ -271,9 +271,10 @@ kable(
 | Limpieza de noticias y 13 DAI | `03_noticias/` `procesamiento_noticias.R` | Regex anti-homonimia, `es_objetivo_3mod` | `noticias_procesadas.parquet` (`3.916` / `993`) |
 | Clustering $K^*=3$ y sensibilidad | `04_clustering_kmeans.R` | `kmeans(..., nstart=50)`, `recipe()`, `agnes()`, `pam()` | `clusters_localidades_kmeans.parquet`, CSVs |
 | Léxicos, `36` series y Elastic Net | `03_analisis_sentometrics.R` | `sento_corpus()`, `compute_sentiment()`, `sento_measures()`, `sento_model()`, `attributions()` | `sentometrics_pipeline.rds`, `panel_consolidado_localidad_anual.parquet` |
+| Clustering de sentimiento vs. hurtos | `07_clustering_sentimiento.R` | `recipe()`, `kmeans(nstart=50)`, `adjustedRandIndex()`, `fisher.test()`, Mantel (`9.999` perm.) | `clusters_sentimiento_kmeans.parquet`, `tabla_contraste_clusters_hurto_sentimiento.csv`, mapa |
 | Descriptivos del corpus | `06_descriptivos_corpus.R` | Longitudinal `2022–2026` por año | `tabla_descriptivos_corpus.csv` |
 | Empaquetado Shiny | `05_export_insumos_shiny.R` | `corpus_summarize()`, `st_simplify()`, `saveRDS()` | `datos_consolidados_shiny.rds` (`0,87` MB) |
-| Orquestación integral | `scripts/master.R` | `here::here()`, `source(..., local = new.env())` | Valida ambos `.rds` finales |
+| Orquestación integral | `scripts/master.R` | `here::here()`, `source(..., local = new.env())` (`7` etapas) | Valida `.parquet` y `.rds` finales |
 
 : {tbl-colwidths="[18,26,26,30]"}
 
@@ -283,7 +284,7 @@ kable(
 
 *Nota: los scripts de procesamiento residen bajo `scripts/02_procesamiento/` y los de modelado/orquestación directamente en `scripts/`.*
 
-# Banco ampliado de 20 preguntas de sustentación
+# Banco ampliado de 21 preguntas de sustentación
 
 ## Bloque A · Preguntas estructurales de método (1–11)
 
@@ -320,7 +321,7 @@ kable(
 11. **¿Cómo se leen los mapas de sentimiento neto en el cuaderno y en Shiny?**
     En los mapas de tasas y conteos el tono claro marca mayor magnitud; en sentimiento neto, en cambio, azul oscuro señala promedios **más negativos** (predominio de robos sin balance favorable, como Teusaquillo `-0,402` y Tunjuelito `-0,397`), mientras azul claro indica promedios menos negativos o positivos por mayor peso de noticias de capturas/operativos.
 
-## Bloque B · Preguntas difíciles esperadas de jurado y co-evaluadores (12–20)
+## Bloque B · Preguntas difíciles esperadas de jurado y co-evaluadores (12–21)
 
 12. **Si `sento_model()` predice denuncias ($y_{t+1}$) usando sentimiento ($S_t$), ¿no invierte el sentido de su pregunta problema?**
     La pregunta es de **correspondencia** (*cómo se relacionan*), no un modelo estructural causal unidireccional. La relación espacial (*denuncias $\rightarrow$ cobertura*) se evalúa en las correlaciones transversales y en las 36 series, mientras `sento_model()` contrasta en el agregado mensual si la señal acumulada de prensa (`h = 1`, `lag = 6`) guarda información sincrónica y predictiva sobre el ciclo mensual real de denuncias en Bogotá.
@@ -348,3 +349,6 @@ kable(
 
 20. **¿Qué sesgos introduce usar `Google News RSS`, corte a septiembre de `2026` y denominadores residentes?**
     Tres acotamientos que documentamos abiertamente: (a) `2026` solo abarca `9` meses (por eso trabajamos con tasas mensuales o promedios comparables y mostramos la longitud textual reducida de `2026` en `tabla_descriptivos_corpus.csv`); (b) RSS indexa prensa digital abierta y no radio ni redes sociales locales; y (c) el censo residente infla las tasas del centro comercial frente a la periferia por la población flotante diaria.
+
+21. **¿Los clústeres de sentimiento calculados con `sentometrics` coinciden con los clústeres de hurtos (Sección 6.7)?**
+    **No: son estadísticamente independientes**, lo que confirma de forma multivariada la tesis del proyecto. Al aplicar `K-Means` con la misma receta `Z-score` (`{recipes}`, `nstart = 50`, cero circularidad porque `score_nrc_es` y `score_crimen_es` dependen solo del texto) sobre el sentimiento puro de las `19` localidades (`sent_nrc`, `sent_crimen` y `prop_neg`), en $K = 3$ (silueta `0,401`, `0` negativas, estabilidad $\text{ARI}_{\text{KM–AGNES}} = 0{,}853$) la concordancia frente a los clústeres de hurtos es nula ($\text{ARI} = -0{,}103$, $\text{NMI} = 0{,}106$, Fisher $p = 0{,}808$, Mantel $r = -0{,}025$, $p = 0{,}864$; igual en $K = 2$ con $\text{ARI} = -0{,}017$). En contraste directo, al agrupar las `19` localidades por **tasas de cobertura de prensa por 100.000 habitantes** en las tres modalidades (Control **F**), sí se reproducen significativamente los clústeres de hurtos ($\text{ARI} = +0{,}555$, Fisher $p = 0{,}0029$, Mantel $r = +0{,}581$, $p = 0{,}0061$). Descartamos agrupar sentimiento desagregado por 3 modalidades (**E**) porque Usme tiene `0` noticias de motos (`NA`, `18/19`) y Santa Fe queda aislada en `17 / 1` por `1–2` notas positivas.

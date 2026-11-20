@@ -249,13 +249,13 @@ ggplot(df_long, aes(x = tasa_total_prom, y = y_val)) +
         strip.text = element_text(face = "bold", size = 8.6, color = "#1B365D"))
 ```
 
-**Tercero**, el hurto de motocicletas exhibe la concordancia ordinal más débil ($\rho = 0{,}374$): cinco localidades periféricas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba) concentran el `58,5 %` de las `24.300` denuncias (`14.215` casos), asociadas a la alta tenencia residencial (`~90 %` de viajes en moto en estratos 1 a 3 según SDM y ProBogotá, 2023) y al *halado* en vía pública, pero reciben baja cobertura per cápita frente a Los Mártires o Antonio Nariño. Como este delito tiene subregistro mínimo, la brecha confirma asimetría de visibilidad mediática. **Cuarto**, el sentimiento neto en hurto a personas correlaciona positivamente con la tasa ($r = +0{,}398$): Teusaquillo (`-0,402`, `90,3 %` negativas) y Tunjuelito (`-0,397`, `89,5 %` negativas) acumulan reportes de robos sin balance operativo, mientras en el centro y Suba (`-0,186`) las notas de capturas moderan el promedio.
+**Tercero**, el hurto de motocicletas exhibe la concordancia ordinal más débil ($\rho = 0{,}374$): cinco localidades periféricas (Kennedy, Ciudad Bolívar, Engativá, Bosa y Suba) concentran el `58,5 %` de las `24.300` denuncias (`14.215` casos), asociadas a la alta tenencia residencial (`~90 %` de viajes en moto en estratos 1 a 3 según SDM y ProBogotá, 2023) y al *halado* en vía pública, pero reciben baja cobertura per cápita frente a Los Mártires o Antonio Nariño. Como este delito tiene subregistro mínimo, la brecha confirma asimetría de visibilidad mediática. **Cuarto**, el sentimiento neto en hurto a personas correlaciona positivamente con la tasa ($r = +0{,}398$): Teusaquillo (`-0,402`, `90,3 %` negativas) y Tunjuelito (`-0,397`, `89,5 %` negativas) acumulan reportes de robos sin balance operativo, mientras en el centro y Suba (`-0,186`) las notas de capturas moderan el promedio. Más aún, al agrupar las `19` localidades por sentimiento puro (`nrc_es`, `crimen_es`, `%` neg.; `Z-score`, $K = 3$, silueta `0,401`, cero negativas y cero circularidad), los clústeres de tono son estadísticamente independientes de los de hurtos ($\text{ARI} = -0{,}103$, Fisher $p = 0{,}808$, Mantel $r = -0{,}025$), mientras el agrupamiento control por tasas de cobertura per cápita sí converge ($\text{ARI} = +0{,}555$, $p = 0{,}0029$, Mantel $r = +0{,}581$; @tbl-anexo-contraste-sent y @fig-anexo-contraste-mapas).
 
-**Síntesis e implicaciones económicas.** El volumen de prensa acompaña la geografía del delito al normalizar por población ($r = +0{,}845$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y no vuelve estadísticamente más negativo el sentimiento entre localidades ($r = +0{,}334$, $p = 0{,}163$); es decir, la divergencia mediática opera por visibilidad selectiva y peso demográfico más que por endurecimiento del tono. Económicamente, esta evidencia muestra tres consecuencias prácticas: los agentes que leen titulares sin ajustar por población sobreestiman la exposición relativa en periferias masivas y subestiman focos en corredores comerciales; en motocicletas, el bajo peso mediático en periferias invisibiliza una pérdida patrimonial concentrada en estratos 1 a 3; y las decisiones de asignación policial y prevención requieren combinar registros administrativos y métricas de cobertura en lugar de guiarse solo por agenda noticiosa.
+**Síntesis e implicaciones económicas.** El volumen de prensa acompaña la geografía del delito al normalizar por población ($r = +0{,}845$; $\text{ARI} = +0{,}555$), pero se desacopla en volumen absoluto ($r = -0{,}148$) y forma clústeres de sentimiento independientes de los hurtos ($r = +0{,}334$, $p = 0{,}163$; $\text{ARI} = -0{,}103$); la divergencia opera por visibilidad selectiva más que por endurecimiento del tono. Económicamente, leer titulares sin ajustar por población sobrestima la exposición relativa en periferias masivas; en motocicletas, la baja cobertura per cápita invisibiliza pérdidas patrimoniales de estratos 1 a 3; y la asignación policial requiere cruzar registros oficiales y cobertura en vez de seguir solo la agenda noticiosa.
 
 # Resultados en `Bogo-Atrack` (Shiny), Retroalimentación y Referencias
 
-El flujo íntegro se reproduce desde una sesión limpia ejecutando `scripts/master.R` con rutas relativas `{here}`, consolidando `data/processed/sentometrics_pipeline.rds` y `data/processed/datos_consolidados_shiny.rds` (`0,87 MB`). Sobre este paquete, `app/app.R` despliega **Bogo-Atrack** en seis pestañas sincronizadas (*Panorama*, *Mi localidad*, *Hurto vs. prensa*, *Clusters* 3D + siluetas, *Sentometrics y Elastic Net*, y *Datos y método*), usando ámbar para denuncias SIEDCO y azul para prensa. La aplicación permite: (1) alternar mapa y `Top 5` entre denuncias y prensa por año y modalidad; (2) explorar los `4` cuadrantes dinámicos $(\bar{X}, \bar{Y})$; (3) rotar el cubo tridimensional $K$-Means (`Z-score` y tasas) sincronizado bidireccionalmente con la **tabla interactiva de siluetas $S(i)$** (`Por localidad (19)` y `Resumen por clúster (3)`); y (4) auditar el ajuste *in-sample* y OOS (`-29,9 %` frente a AR(1)) junto con las atribuciones mensuales. La @fig-shiny-doc muestra dos vistas reales del aplicativo (tablas de respaldo en @tbl-anexo-modalidades a @tbl-anexo-escalamientos).
+El flujo íntegro se reproduce desde una sesión limpia ejecutando `scripts/master.R` (`7` etapas, incluyendo `07_clustering_sentimiento.R`) con rutas `{here}`, consolidando `sentometrics_pipeline.rds` y `datos_consolidados_shiny.rds` (`0,87 MB`). Sobre este paquete, `app/app.R` despliega **Bogo-Atrack** en seis pestañas sincronizadas (*Panorama*, *Mi localidad*, *Hurto vs. prensa*, *Clusters*, *Sentometrics y Elastic Net*, y *Datos y método*), con ámbar para SIEDCO y azul para prensa. Permite: (1) alternar mapa y `Top 5` por año y modalidad; (2) explorar los `4` cuadrantes $(\bar{X}, \bar{Y})$; (3) rotar el cubo 3D $K$-Means sincronizado con la **tabla de siluetas $S(i)$** y el módulo de **Contraste: sentimiento vs. hurtos** (mapa de tono, matriz $3 \times 3$ y `ARI`/Fisher/Mantel); y (4) auditar el ajuste *in-sample* y OOS (`-29,9 %` frente a AR(1)). La @fig-shiny-doc muestra dos vistas reales del aplicativo (respaldo en @tbl-anexo-modalidades a @tbl-anexo-contraste-sent).
 
 ::: {#fig-shiny-doc layout="[[48, -4, 48]]"}
 ![Pestaña Panorama: mapa SIEDCO, 4 KPIs y Top 5](../../../output/figures/shiny_panorama_bogo_atrack.png){#fig-shiny-pan width=100%}
@@ -378,3 +378,34 @@ kable(
 
 Figuras complementarias de cartografía territorial y estabilidad anual de polaridad mediática (ene. 2022 – sept. 2026).
 :::
+
+\newpage
+
+```{r}
+#| label: tbl-anexo-contraste-sent
+#| tbl-pos: "H"
+#| tbl-cap: "Contraste multivariado entre clústeres de hurtos SIEDCO (K* = 3) y clustering mediático (sentometrics vs. cobertura per cápita, Z-score)"
+contr_s <- read_csv(
+  here::here("output", "tables", "tabla_contraste_clusters_hurto_sentimiento.csv"),
+  show_col_types = FALSE
+) |>
+  transmute(
+    `Esp.` = codigo,
+    `Especificación mediática (Z-score)` = especificacion,
+    `Loc.` = localidades,
+    K = k,
+    Silueta = round(silueta_media, 3),
+    `Neg.` = siluetas_negativas,
+    `ARI hurtos` = round(ari_vs_hurtos, 3),
+    NMI = round(nmi_vs_hurtos, 3),
+    `Fisher p` = round(fisher_p, 4),
+    `Mantel r` = round(mantel_r, 3)
+  )
+
+kable(
+  contr_s,
+  format.args = list(big.mark = ".", decimal.mark = ",")
+)
+```
+
+![Contraste espacial lado a lado: clústeres de hurtos SIEDCO (izquierda) frente a clústeres de sentimiento puro de sentometrics (derecha; K = 3, Z-score; ARI = -0,103, Fisher p = 0,808, Mantel r = -0,025)](../../../output/figures/kmeans_mapa_hurto_vs_sentimiento.png){#fig-anexo-contraste-mapas width=94%}

@@ -23,21 +23,21 @@ t_inicio <- Sys.time()
 # 2. Etapa de Procesamiento de Datos Crudos a Limpios (Sub-equipo 1) ----
 
 ## 2.1 Procesamiento de delitos oficiales mensuales (SIEDCO / SDSCJ) ----
-cat("[1/6] Procesando microdatos mensuales oficiales de delitos (SIEDCO.csv)...\n")
+cat("[1/7] Procesando microdatos mensuales oficiales de delitos (SIEDCO.csv)...\n")
 source(
   here::here("scripts", "02_procesamiento", "01_delitos", "procesamiento_delitos.R"),
   local = new.env()
 )
 
 ## 2.2 Procesamiento demográfico y cálculo de tasas mensuales por 100k hab. (SDS) ----
-cat("[2/6] Integrando proyecciones de población (SDS) y tasas mensuales por 100k hab...\n")
+cat("[2/7] Integrando proyecciones de población (SDS) y tasas mensuales por 100k hab...\n")
 source(
   here::here("scripts", "02_procesamiento", "02_poblacion", "procesamiento_poblacion.R"),
   local = new.env()
 )
 
 ## 2.3 Limpieza NLP del corpus de noticias y clasificación DAI ----
-cat("[3/6] Procesando corpus de prensa y clasificación DAI (SDSCJ)...\n")
+cat("[3/7] Procesando corpus de prensa y clasificación DAI (SDSCJ)...\n")
 source(
   here::here("scripts", "02_procesamiento", "03_noticias", "procesamiento_noticias.R"),
   local = new.env()
@@ -46,21 +46,28 @@ source(
 # 3. Etapa de Modelado Territorial y NLP Sentometrics (Sub-equipo 2) ----
 
 ## 3.1 Agrupamiento espacial no supervisado K-Means (K* = 3) ----
-cat("[4/6] Ejecutando agrupamiento territorial K-Means (K* = 3)...\n")
+cat("[4/7] Ejecutando agrupamiento territorial K-Means (K* = 3)...\n")
 source(
   here::here("scripts", "04_clustering_kmeans.R"),
   local = new.env()
 )
 
 ## 3.2 Pipeline cuantitativo de Sentometrics (993 docs x 36 series) y Elastic Net ----
-cat("[5/6] Ejecutando pipeline de Sentometrics (sentometrics_pipeline.rds)...\n")
+cat("[5/7] Ejecutando pipeline de Sentometrics (sentometrics_pipeline.rds)...\n")
 source(
   here::here("scripts", "03_analisis_sentometrics.R"),
   local = new.env()
 )
 
-## 3.3 Descriptivos del corpus (T-08) y empaquetado de insumos Shiny ----
-cat("[6/6] Generando descriptivos del corpus (T-08) y bundle Shiny (datos_consolidados_shiny.rds)...\n")
+## 3.3 Clustering territorial de sentimiento (sentometrics) y contraste vs. hurtos ----
+cat("[6/7] Ejecutando clustering de sentimiento (sentometrics) y contraste vs. hurtos...\n")
+source(
+  here::here("scripts", "07_clustering_sentimiento.R"),
+  local = new.env()
+)
+
+## 3.4 Descriptivos del corpus (T-08) y empaquetado de insumos Shiny ----
+cat("[7/7] Generando descriptivos del corpus (T-08) y bundle Shiny (datos_consolidados_shiny.rds)...\n")
 source(
   here::here("scripts", "06_descriptivos_corpus.R"),
   local = new.env()
@@ -70,8 +77,9 @@ source(
   local = new.env()
 )
 
-# Control de auditoría: verificar exactamente los 2 artefactos .rds vigentes
+# Control de auditoría: verificar artefactos clave vigentes
 stopifnot(
+  file.exists(here::here("data", "processed", "clusters_sentimiento_kmeans.parquet")),
   file.exists(here::here("data", "processed", "sentometrics_pipeline.rds")),
   file.exists(here::here("data", "processed", "datos_consolidados_shiny.rds"))
 )

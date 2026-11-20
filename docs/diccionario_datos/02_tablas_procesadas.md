@@ -263,4 +263,17 @@ panel_maestro <- arrow::read_parquet(
 
 ---
 
+## 6. `clusters_sentimiento_kmeans.parquet`
+
+* **Ruta relativa:** `data/processed/clusters_sentimiento_kmeans.parquet`
+* **Formato / Clase en R:** Apache Parquet (`tbl_df`, `data.frame`)
+* **Dimensiones verificadas:** `19` filas × `33` columnas (`19` localidades urbanas completas)
+* **Llave primaria (`PK`):** `codigo_localidad`
+* **Propósito y uso:** Almacena las asignaciones `K-Means` (`Z-score` con `{recipes}`, `nstart = 50`, `set.seed(20261014)`) sobre el perfil de sentimiento puro de `sentometrics` (`sent_nrc`, `sent_crimen` y `prop_neg`, libre de circularidad frente a los clústeres de hurtos), sus coeficientes de silueta `S(i)` (`silueta_sentimiento`, media `0,4013`, `0` negativas en `K = 3`: `10 / 6 / 3`) y las variables auxiliares usadas para el contraste multivariado contra `clusters_localidades_kmeans.parquet` (`ARI = -0,1026`, Fisher `p = 0,8076`, Mantel `r = -0,0251`).
+* **Linaje:**
+  * **Generado por:** [`scripts/07_clustering_sentimiento.R`](../../scripts/07_clustering_sentimiento.R).
+  * **Consumido por:** [`scripts/05_export_insumos_shiny.R`](../../scripts/05_export_insumos_shiny.R) (`bundle_shiny$clusters_sentimiento`) y [`app/app.R`](../../app/app.R) (Pestaña 4 *Clusters*).
+
+---
+
 * **Siguiente documento:** [`03_artefactos_sentometrics_shiny.md`](./03_artefactos_sentometrics_shiny.md) — Artefactos S3 de `sentometrics`, modelo Elastic Net y bundle de Shiny.

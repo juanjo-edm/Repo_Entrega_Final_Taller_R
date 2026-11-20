@@ -126,13 +126,13 @@ Como el deck ejecutivo elimina los párrafos de pantalla, **el expositor explica
 
 2. **Slide 9 · Storytelling Espacial (`11:15 – 12:30`):**
    - Explicar Panel A vs. Panel B (`+0,845` en tasas frente a `-0,148` en conteo bruto; chequeo años completos `2022–2025`: `+0,809` vs. `-0,067`), destacando la línea punteada OLS.
-   - Subrayar **motocicletas** (`58,5 %` de denuncias en `5` periféricas, $\rho = 0{,}374$): como tiene subregistro mínimo por póliza/seguro, demuestra asimetría de visibilidad mediática. Cerrar con la **paradoja del tono** (`r = +0,334`, `p = 0,163` n. s.; `+0,398` en personas, donde noticias de capturas moderan el centro y Suba `-0,186` frente a Teusaquillo `-0,402` y Tunjuelito `-0,397`).
+   - Subrayar **motocicletas** (`58,5 %` de denuncias en `5` periféricas, $\rho = 0{,}374$): como tiene subregistro mínimo por póliza/seguro, demuestra asimetría de visibilidad mediática. Cerrar con la **paradoja del tono y contraste multivariado de clústeres**: el sentimiento puro forma clústeres estadísticamente independientes de los hurtos ($\text{ARI} = -0{,}103$, Fisher $p = 0{,}808$, Mantel $r = -0{,}025$) frente al control por tasas de cobertura de prensa ($\text{ARI} = +0{,}555$, $p = 0{,}0029$); en personas ($r = +0{,}398$), Teusaquillo (`-0,402`) y Tunjuelito (`-0,397`) son más duros mientras capturas moderan centro y Suba (`-0,186`).
    - **Entrega:** *"Sergio muestra ahora cómo opera Bogo-Atrack en Shiny, la trazabilidad de la retroalimentación y nuestras conclusiones."*
 
 ## Turno 6: Sergio Alejandro López (`12:30 – 15:00` · Diapositivas 10, 11 y 12)
 
 1. **Slide 10 · `Bogo-Atrack` y Reproducibilidad (`12:30 – 13:30`):**
-   - Mostrar las **dos capturas reales** (`Panorama` con `-0,255` / `76,2 %` + nueva tabla interactiva de **siluetas $S(i)$** en `Clusters`), la tabla de `6` pestañas y el flujo `scripts/master.R` → `2` archivos `.rds` (`0,87 MB`) → `app/app.R`. *(Si quedan >`1:45` y hay buena conexión, hacer 20–30 s de demo en vivo; si no, apoyarse directo en las dos vistas de la diapositiva.)*
+   - Mostrar las **dos capturas reales** (`Panorama` con `-0,255` / `76,2 %` + `Clusters` con siluetas $S(i)$ y nuevo módulo de **Contraste: sentimiento vs. hurtos**), la tabla de `6` pestañas y el flujo `scripts/master.R` (`7` etapas) → `2` archivos `.rds` (`0,87 MB`) → `app/app.R`. *(Si quedan >`1:45` y hay buena conexión, hacer 20–30 s de demo en vivo; si no, apoyarse directo en las dos vistas de la diapositiva.)*
 2. **Slide 11 · Trazabilidad de Retroalimentación (`13:30 – 14:20`):**
    - Recorrer en tabla los **6 ítems** de la Entrega 1 y señalar la evidencia exacta de cada corrección en la presentación, el documento final y la app.
 3. **Slide 12 · Conclusiones e Implicaciones Económicas (`14:20 – 15:00`):**

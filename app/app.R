@@ -60,6 +60,9 @@ datos_app <- readRDS(ruta_bundle)
 
 panel_localidades <- as_tibble(datos_app$panel_localidades) # localidad x año
 clusters_perfiles <- as_tibble(datos_app$clusters_perfiles) # perfiles K-means
+clusters_sent_perfiles <- as_tibble(datos_app$clusters_sentimiento$perfiles)
+clusters_sent_contraste <- as_tibble(datos_app$clusters_sentimiento$contraste)
+clusters_sent_contingencia <- as_tibble(datos_app$clusters_sentimiento$contingencia)
 geo_localidades <- datos_app$geometrias # polígonos (sf)
 corpus_stats_mes <- as_tibble(datos_app$corpus_stats_mes) # corpus_summarize mes
 corpus_stats_anio <- as_tibble(datos_app$corpus_stats_anio) # corpus_summarize año
@@ -128,6 +131,24 @@ colores_cluster_iluminado <- c(
   "Céntrico e Institucional" = "#E2CCFF",
   "Comercial y Automotor" = "#FF9E85",
   "Residencial y Periférico" = "#75FFF0"
+)
+
+colores_cluster_sentimiento <- c(
+  "Tono muy adverso (doble léxico)" = "#EF5350",
+  "Tono adverso criminológico" = "#5B9BFF",
+  "Tono moderado (balance operativo)" = "#2EC4B6"
+)
+
+fila_sent_a3 <- clusters_sent_contraste |>
+  filter(codigo == "A", k == 3L)
+fila_sent_f3 <- clusters_sent_contraste |>
+  filter(codigo == "F", k == 3L)
+
+badge_contraste_sent_txt <- paste0(
+  "Tono: ARI ",
+  gsub("\\.", ",", sprintf("%.3f", fila_sent_a3$ari_vs_hurtos)),
+  " (n. s.) · Prensa/100k: +",
+  gsub("\\.", ",", sprintf("%.3f", fila_sent_f3$ari_vs_hurtos))
 )
 
 ambar <- "#F0A43A"
@@ -1081,6 +1102,65 @@ ui <- page_navbar(
       footer = tags$small(
         style = paste0("color:", gris_texto, ";"),
         "Haz clic en cualquier fila para resaltar o restablecer ese clúster en el mapa, las tarjetas y el cubo 3D. Ordena o busca localidades directamente en la tabla."
+      )
+    ),
+    navset_card_underline(
+      id = "card_contraste_sentimiento",
+      full_screen = TRUE,
+      title = tags$div(
+        class = "d-flex align-items-center flex-wrap gap-2",
+        span("Contraste: sentimiento vs. hurtos"),
+        tooltip(
+          tags$span(
+            style = paste0(
+              "display:inline-flex; align-items:center; justify-content:center; ",
+              "width:18px; height:18px; border-radius:50%; border:1px solid ",
+              gris_texto,
+              "; color:",
+              gris_texto,
+              "; font-size:11px; font-weight:700; cursor:help;"
+            ),
+            tabindex = "0",
+            role = "img",
+            `aria-label` = "Ayuda sobre el contraste entre clústeres de sentimiento y hurtos",
+            "?"
+          ),
+          "K-Means Z-score ({recipes}, K = 3) sobre sentimiento puro documental (nrc_es, crimen_es y % negativas; cero circularidad) contrastado frente a los clústeres SIEDCO mediante ARI, NMI, Fisher y Mantel."
+        ),
+        tags$span(
+          class = "badge rounded-pill",
+          style = paste0(
+            "background-color: #141D2B; color: ",
+            azul,
+            "; border: 1px solid ",
+            azul,
+            "; font-weight: 500; font-size: 0.75rem; padding: 4px 9px;"
+          ),
+          badge_contraste_sent_txt
+        )
+      ),
+      nav_panel(
+        title = "Mapa y matriz 3 × 3",
+        value = "sent_mapa_matriz",
+        layout_columns(
+          col_widths = c(6, 6),
+          leafletOutput("mapa_clusters_sentimiento", height = "430px"),
+          plotlyOutput("heatmap_contingencia_sent", height = "430px")
+        )
+      ),
+      nav_panel(
+        title = "Contraste (5 esp.)",
+        value = "sent_estadisticos",
+        DTOutput("tabla_contraste_sent_hurto", fill = FALSE)
+      ),
+      nav_panel(
+        title = "Localidades (19)",
+        value = "sent_por_localidad",
+        DTOutput("tabla_loc_clusters_sent", fill = FALSE)
+      ),
+      footer = tags$small(
+        style = paste0("color:", gris_texto, ";"),
+        "Los clústeres de sentimiento puro son estadísticamente independientes de los de hurtos (ARI = -0,103, Fisher p = 0,808, Mantel r = -0,025), mientras que el control por volumen de prensa per cápita sí converge (ARI = +0,555, p = 0,0029)."
       )
     )
   ),
@@ -2366,6 +2446,246 @@ server <- function(input, output, session) {
     alternar_grupo_resaltado(datos_silueta$por_cluster$cluster_nombre[idx])
   })
 
+  output$mapa_clusters_sentimiento <- renderLeaflet({
+    capa_sent <- geo_localidades |>
+      select(codigo_localidad, geometry) |>
+      inner_join(clusters_sent_perfiles, by = "codigo_localidad")
+
+    etiquetas_sent <- lapply(seq_len(nrow(capa_sent)), function(i) {
+      cl_s <- capa_sent$cluster_sent_nombre[i]
+      cl_h <- capa_sent$cluster_hurto_nombre[i]
+      HTML(paste0(
+        "<div style='font-family: Archivo, sans-serif; color: #E9EDF2; line-height: 1.35;'>",
+        "<strong style='font-size: 14px; color: ",
+        unname(colores_cluster_sentimiento[cl_s]),
+        ";'>",
+        capa_sent$localidad[i],
+        "</strong><br>",
+        "<span style='color: #9AA4B2; font-size: 12px;'>Clúster sentimiento: </span>",
+        "<strong>",
+        cl_s,
+        "</strong><br>",
+        "<span style='color: #9AA4B2; font-size: 12px;'>Clúster hurtos (SIEDCO): </span>",
+        "<strong style='color: ",
+        unname(colores_cluster[cl_h]),
+        ";'>",
+        cl_h,
+        "</strong><br>",
+        "<span style='color: #9AA4B2; font-size: 11.5px;'>Silueta S(i) tono: ",
+        formato(capa_sent$silueta_sentimiento[i], 3),
+        " · % neg.: ",
+        formato(capa_sent$prop_neg[i], 1),
+        " %<br>nrc_es: ",
+        formato(capa_sent$sent_nrc[i], 3),
+        " · crimen_es: ",
+        formato(capa_sent$sent_crimen[i], 3),
+        "</span></div>"
+      ))
+    })
+
+    opciones_lbl <- labelOptions(
+      style = list(
+        "background-color" = "#171B22",
+        "border" = paste0("1px solid ", azul),
+        "border-radius" = "8px",
+        "padding" = "8px 10px",
+        "box-shadow" = "0 4px 14px rgba(0,0,0,0.65)"
+      ),
+      direction = "auto",
+      opacity = 0.96
+    )
+
+    leaflet(capa_sent) |>
+      agregar_mapa_base() |>
+      addPolygons(
+        layerId = ~localidad,
+        fillColor = unname(colores_cluster_sentimiento[capa_sent$cluster_sent_nombre]),
+        fillOpacity = 0.84,
+        color = "#1F2630",
+        weight = 1.6,
+        highlightOptions = highlightOptions(
+          weight = 3.0,
+          color = "#FFFFFF",
+          fillOpacity = 0.96,
+          bringToFront = TRUE
+        ),
+        label = etiquetas_sent,
+        labelOptions = opciones_lbl
+      ) |>
+      addLegend(
+        position = "bottomright",
+        colors = unname(colores_cluster_sentimiento),
+        labels = names(colores_cluster_sentimiento),
+        title = "Clúster sentimiento (K = 3)",
+        opacity = 0.92
+      )
+  })
+
+  output$heatmap_contingencia_sent <- renderPlotly({
+    orden_h <- c(
+      "Céntrico e Institucional",
+      "Comercial y Automotor",
+      "Residencial y Periférico"
+    )
+    orden_s <- rev(c(
+      "Tono muy adverso (doble léxico)",
+      "Tono adverso criminológico",
+      "Tono moderado (balance operativo)"
+    ))
+
+    celdas <- clusters_sent_perfiles |>
+      mutate(
+        cluster_hurto_nombre = factor(cluster_hurto_nombre, levels = orden_h),
+        cluster_sent_nombre = factor(cluster_sent_nombre, levels = orden_s)
+      ) |>
+      group_by(cluster_sent_nombre, cluster_hurto_nombre, .drop = FALSE) |>
+      summarise(
+        n = n(),
+        locs = if_else(
+          n() > 0,
+          paste(sort(localidad), collapse = ", "),
+          "Ninguna"
+        ),
+        .groups = "drop"
+      )
+
+    fig_hm <- plot_ly(
+      data = celdas,
+      x = ~cluster_hurto_nombre,
+      y = ~cluster_sent_nombre,
+      z = ~n,
+      type = "heatmap",
+      colorscale = list(
+        c(0, "#13171E"),
+        c(0.45, "#1E3A5F"),
+        c(1, "#F0A43A")
+      ),
+      showscale = FALSE,
+      hovertemplate = paste0(
+        "<b>Sentimiento:</b> %{y}<br>",
+        "<b>Hurtos SIEDCO:</b> %{x}<br>",
+        "<b>Localidades (%{z}):</b> %{customdata}<extra></extra>"
+      ),
+      customdata = ~locs
+    )
+
+    for (i in seq_len(nrow(celdas))) {
+      fig_hm <- fig_hm |>
+        add_annotations(
+          x = celdas$cluster_hurto_nombre[i],
+          y = celdas$cluster_sent_nombre[i],
+          text = paste0("<b>", celdas$n[i], "</b>"),
+          showarrow = FALSE,
+          font = list(
+            color = if (celdas$n[i] >= 5L) "#0E1116" else "#F8FAFC",
+            size = 16,
+            family = "Archivo"
+          )
+        )
+    }
+
+    fig_hm |>
+      layout(
+        title = list(
+          text = "Matriz de contingencia 3 × 3 (ARI = -0,103 · Fisher p = 0,808)",
+          font = list(size = 12.5, color = "#E9EDF2")
+        ),
+        xaxis = list(
+          title = "Clúster de hurtos (SIEDCO)",
+          tickfont = list(size = 10, color = "#E9EDF2"),
+          titlefont = list(size = 11, color = gris_texto)
+        ),
+        yaxis = list(
+          title = "",
+          tickfont = list(size = 10, color = "#E9EDF2")
+        ),
+        margin = list(l = 185, r = 18, t = 44, b = 58),
+        paper_bgcolor = "rgba(0,0,0,0)",
+        plot_bgcolor = "#13171E"
+      ) |>
+      config(displayModeBar = FALSE)
+  })
+
+  output$tabla_contraste_sent_hurto <- renderDT({
+    df_cont <- clusters_sent_contraste |>
+      transmute(
+        `Esp.` = codigo,
+        `Especificación mediática (Z-score)` = especificacion,
+        `Loc.` = localidades,
+        K = k,
+        Silueta = silueta_media,
+        `Neg.` = siluetas_negativas,
+        `ARI vs. hurtos` = ari_vs_hurtos,
+        NMI = nmi_vs_hurtos,
+        `Fisher p` = fisher_p,
+        `Mantel r` = mantel_r,
+        `Mantel p` = mantel_p
+      )
+
+    DT::datatable(
+      df_cont,
+      rownames = FALSE,
+      selection = "none",
+      fillContainer = FALSE,
+      style = "bootstrap5",
+      class = "table table-hover table-sm align-middle mb-0",
+      options = list(dom = "t", pageLength = 10, ordering = TRUE, scrollX = TRUE)
+    ) |>
+      DT::formatRound(
+        c("Silueta", "ARI vs. hurtos", "NMI", "Mantel r"),
+        digits = 3, dec.mark = ",", mark = "."
+      ) |>
+      DT::formatRound(
+        c("Fisher p", "Mantel p"),
+        digits = 4, dec.mark = ",", mark = "."
+      )
+  })
+
+  output$tabla_loc_clusters_sent <- renderDT({
+    df_loc_s <- clusters_sent_perfiles |>
+      transmute(
+        Localidad = localidad,
+        `Clúster hurtos (SIEDCO)` = paste0(
+          "<span style='display:inline-block;width:9px;height:9px;border-radius:50%;",
+          "background:", unname(colores_cluster[cluster_hurto_nombre]),
+          ";margin-right:6px;'></span>",
+          cluster_hurto_nombre
+        ),
+        `Clúster sentimiento (K = 3)` = paste0(
+          "<span style='display:inline-block;width:9px;height:9px;border-radius:50%;",
+          "background:", unname(colores_cluster_sentimiento[cluster_sent_nombre]),
+          ";margin-right:6px;'></span>",
+          cluster_sent_nombre
+        ),
+        `Silueta tono S(i)` = silueta_sentimiento,
+        `nrc_es` = sent_nrc,
+        `crimen_es` = sent_crimen,
+        `% neg.` = prop_neg
+      )
+
+    DT::datatable(
+      df_loc_s,
+      rownames = FALSE,
+      escape = FALSE,
+      selection = "none",
+      fillContainer = FALSE,
+      style = "bootstrap5",
+      class = "table table-hover table-sm align-middle mb-0",
+      options = list(
+        dom = "ft",
+        pageLength = 19,
+        ordering = TRUE,
+        scrollX = TRUE,
+        language = list(search = "Buscar:")
+      )
+    ) |>
+      DT::formatRound(
+        c("Silueta tono S(i)", "nrc_es", "crimen_es"),
+        digits = 3, dec.mark = ",", mark = "."
+      ) |>
+      DT::formatRound("% neg.", digits = 1, dec.mark = ",", mark = ".")
+  })
+
   ## 6.5 Pestaña 5: Sentometrics y Elastic Net ----
 
   output$kpi_r2_modelo <- renderText({
@@ -2569,8 +2889,9 @@ server <- function(input, output, session) {
       "sentometrics_pipeline.rds"    , "sento_measures"   , "sento_measures"   , "36 series mensuales (6 features × 2 léxicos × 3 curvas temporales, lag = 6 meses)."                                    ,
       "sentometrics_pipeline.rds"    , "measures_long"    , "list (long/wide)" , "1.872 observaciones mensuales (52 meses × 36 series) auditadas con measures_fill()."                                   ,
       "sentometrics_pipeline.rds"    , "global_index"     , "list/data.table"  , "Índice distrital agregado (do.global = TRUE) y 8 fechas pico con peakdates()."                                         ,
-      "sentometrics_pipeline.rds"    , "attributions"     , "sento_model"      , "Modelo Elastic Net (BIC, h = 1) contra la tasa mensual real SIEDCO y atribuciones marginales."                         ,
-      "datos_consolidados_shiny.rds" , "bundle_shiny"     , "list"             , paste0("Único paquete liviano (", tam_bundle, " MB) que carga app/app.R con paneles, geometrías, series y resultados.")
+      "sentometrics_pipeline.rds"    , "attributions"         , "sento_model"      , "Modelo Elastic Net (BIC, h = 1) contra la tasa mensual real SIEDCO y atribuciones marginales."                         ,
+      "datos_consolidados_shiny.rds" , "clusters_sentimiento" , "list (3 tablas)"  , "Clústeres K-Means de sentimiento puro (K = 3), matriz 3 × 3 y contraste ARI/Fisher/Mantel vs. hurtos."                 ,
+      "datos_consolidados_shiny.rds" , "bundle_shiny"         , "list"             , paste0("Único paquete liviano (", tam_bundle, " MB) que carga app/app.R con paneles, geometrías, series y resultados.")
     )
 
     datatable(
